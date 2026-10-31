@@ -1,0 +1,36 @@
+{
+  "url": "http://127.0.0.1:8081/",
+  "viewports": {
+    "desktop": {
+      "width": 1280,
+      "height": 800,
+      "status": 200,
+      "title": "Field Jog",
+      "hasCanvas": false,
+      "bodyTextLen": 958,
+      "bodyTextHash": "0315a02d9f3bf25f5b512c87906cf3fd631eeed9a7a3d31993b7b04e3b92ac79",
+      "bodyTextPrefix": "UNOFFICIAL COMPANION Field Jog A scratch-deck shell that lines u",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/built-now.png"
+    },
+    "mobile": {
+      "width": 390,
+      "height": 844,
+      "status": 200,
+      "title": "Field Jog",
+      "hasCanvas": false,
+      "bodyTextLen": 958,
+      "bodyTextHash": "0315a02d9f3bf25f5b512c87906cf3fd631eeed9a7a3d31993b7b04e3b92ac79",
+      "bodyTextPrefix": "UNOFFICIAL COMPANION Field Jog A scratch-deck shell that lines u",
+      "horizontalOverflow": false,
+      "consoleErrors": [],
+      "pageErrors": [],
+      "screenshot": "/workspace/screenshots/built-now-mobile.png"
+    }
+  },
+  "brandWarnings": [],
+  "authWarnings": [],
+  "verdictFile": "/workspace/screenshots/built-now.json"
+}

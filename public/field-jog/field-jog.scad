@@ -3,11 +3,12 @@
 // Teenage Engineering EP-133 (240 x 176 x 16) and EP-136 (240 x 88 x 16).
 // Not a TE product, and not a copy of the Frisk Fader / Scratch Ninja STL.
 //
-// Default size 120 x 240 x 26 mm.
-//   Height matches the EP row so the top and bottom edges line up.
-//   Width is wider than a Sidekick because a real 76 mm (3 inch) platter
-//   does not fit in 88 mm. Thickness is 26 mm because a bearing, a magnet
-//   and a crossfader have to live under the skin. 16 mm is not possible.
+// Default size 88 x 240 x 26 mm, the Sidekick footprint.
+//   240 mm is the long edge, so it lines up with an EP-133 or a Sidekick.
+//   88 mm is the width. The 76 mm platter is centered, with 6 mm of deck
+//   on each side. The knob sits above the platter, because it will not
+//   fit beside a 3 inch jog in 88 mm. Thickness stays 26 mm: a bearing,
+//   a magnet and a fader lock do not fit in 16 mm.
 //
 // OpenSCAD customizer: change `part` to export one piece.
 //   openscad -D 'part="top"' -o top.stl field-jog.scad
@@ -18,7 +19,7 @@
 part = "all"; // [all, section, top, bottom, platter, fader, fader_lock, knob, button, plus, tab, foot]
 
 /* [Body] */
-W = 120;
+W = 88;
 H = 240;
 body_h = 26;
 skin = 6.2;
@@ -38,8 +39,8 @@ shaft_hole = 5.6;     // ledge hole, clears an M3 shank, supports the bearing ra
 
 /* [Fader] */
 fader_slot_w = 8.0;
-fader_slot_l = 68;
-fader_y0 = 28;
+fader_slot_l = 64;
+fader_y0 = 26;
 fader_stem_w = 7.2;
 fader_stem_l = 13.0;
 fader_stem_below = 3.6;
@@ -65,24 +66,21 @@ foot_d = 8.2;
 foot_h = 1.15;
 foot_inset = 16;
 
-// LEGO Technic pin holes, same 8 mm grid as the EP-133 side.
-// Four on the left edge, four on the right, so two units pin together.
-// Centers sit on 4 + 8*i, which is where a 240 mm EP edge puts its holes.
-// Height is 8 mm off the bottom face: centered in a 16 mm EP side, so a
-// pin lines up when both boxes are sitting on a desk.
-technic_pitch = 8;
-technic_n = 4;
+// LEGO Technic pin holes on both long edges.
+// Centers measured from the bottom end (y = 0, the fader end):
+// 16, 25, 48, 216, 224. Height is 8 mm off the bottom face, so a pin
+// meets a 16 mm EP side when both boxes sit on a desk.
 technic_d = 5.0;       // 4.8 mm pin. 5.0 is a firm fit after typical PLA undersize
 technic_depth = 8.2;   // blind. A friction pin's gripping half is about 8 mm
 technic_z = 8.0;
-technic_y0 = 4 + technic_pitch * 13; // 108, 116, 124, 132
+technic_ys = [16, 25, 48, 216, 224];
 
-platter_cx = 14 + platter_d / 2;
-platter_cy = 150;
-knob_x = W - 18;
-knob_y = platter_cy + 22;
+platter_cx = W / 2;
+platter_cy = 148;
+knob_x = W - 14;
+knob_y = H - 22;
 fader_cx = W / 2;
-name_rule_y = platter_cy + platter_d / 2 + 16;
+name_rule_y = platter_cy + platter_d / 2 + 8;
 
 encoder_pad_top = 8.8;
 encoder_pad_w = 26;
@@ -93,9 +91,9 @@ pico_l = 51;
 pico_x0 = W / 2 - pico_w / 2;
 pico_y0 = H - wall - pico_l - 1.2;
 
-btn_y = 62;
-btn_x1 = 26;
-btn_x2 = W - 26;
+btn_y = 58;
+btn_x1 = 17;
+btn_x2 = W - 17;
 btn_well = 13.2;
 btn_hole = 6.0;
 
@@ -143,28 +141,26 @@ module foot_positions() {
 
 // Local rib so a pin has a real bore. The side wall alone is only 2.6 mm.
 module technic_ribs() {
-    y0 = technic_y0 - technic_d / 2 - 2.4;
-    y1 = technic_y0 + (technic_n - 1) * technic_pitch + technic_d / 2 + 2.4;
-    z1 = technic_z + technic_d / 2 + 2.2;
-    // left
-    translate([wall - eps, y0, floor_t - eps])
-        cube([technic_depth + 1.6 - wall, y1 - y0, z1 - floor_t]);
-    // right
-    translate([W - technic_depth - 1.6, y0, floor_t - eps])
-        cube([technic_depth + 1.6 - wall + eps, y1 - y0, z1 - floor_t]);
+    rib_x = technic_depth + 1.4 - wall;
+    for (y = technic_ys) {
+        y0 = y - technic_d / 2 - 1.5;
+        y1 = y + technic_d / 2 + 1.5;
+        z1 = technic_z + technic_d / 2 + 1.6;
+        translate([wall - eps, y0, floor_t - eps])
+            cube([rib_x, y1 - y0, z1 - floor_t]);
+        translate([W - wall - rib_x, y0, floor_t - eps])
+            cube([rib_x + eps, y1 - y0, z1 - floor_t]);
+    }
 }
 
 module technic_bores() {
-    for (i = [0:technic_n - 1]) {
-        y = technic_y0 + i * technic_pitch;
-        // left, mouth at x = 0
+    for (y = technic_ys) {
         translate([-eps, y, technic_z])
             rotate([0, 90, 0])
                 cylinder(h = technic_depth + eps, d = technic_d, $fn = 40);
         translate([-eps, y, technic_z])
             rotate([0, 90, 0])
                 cylinder(h = 0.7, d1 = technic_d + 1.4, d2 = technic_d, $fn = 40);
-        // right, mouth at x = W
         translate([W - technic_depth, y, technic_z])
             rotate([0, 90, 0])
                 cylinder(h = technic_depth + eps, d = technic_d, $fn = 40);
@@ -293,35 +289,35 @@ module top_plate() {
                 cylinder(d = 2.8, h = skin + 2 * eps, $fn = 18);
         }
 
-        // nameplate rule
-        translate([16, name_rule_y, body_h - 0.45])
-            cube([W - 32, 0.7, 0.5]);
+        // nameplate rule. Stops short of the side walls.
+        translate([10, name_rule_y, body_h - 0.45])
+            cube([W - 20, 0.7, 0.5]);
 
         // orange bar pocket
-        translate([16, name_rule_y + 3.2, body_h - 0.65])
-            cube([24, 2.3, 0.7]);
+        translate([10, name_rule_y + 2.6, body_h - 0.65])
+            cube([18, 2.2, 0.7]);
 
-        // USB tab pocket
-        translate([W - 40, H - 22, body_h - 0.65])
+        // USB tab pocket, top-left, clear of the knob
+        translate([8, H - 16, body_h - 0.65])
             cube([24, 8, 0.7]);
         translate([platter_cx, platter_cy, body_h - 0.4])
             for (a = [0:30:330])
                 rotate([0, 0, a])
-                    translate([platter_d / 2 + platter_clear / 2 + 1.6, -0.35, 0])
-                        cube([4.0, 0.7, 0.45]);
+                    translate([platter_d / 2 + platter_clear / 2 + 1.1, -0.3, 0])
+                        cube([2.6, 0.6, 0.45]);
 
-        // type
-        translate([16, name_rule_y + 18, body_h - 0.48])
+        // type. Smaller than the 120 mm deck so the word clears the knob.
+        translate([10, name_rule_y + 14, body_h - 0.48])
             linear_extrude(0.52)
-                text("SCRATCH", size = 11, font = "Liberation Sans:style=Bold",
+                text("SCRATCH", size = 8, font = "Liberation Sans:style=Bold",
                      halign = "left", valign = "baseline", spacing = 1.02);
-        translate([16, name_rule_y + 7.2, body_h - 0.42])
+        translate([10, name_rule_y + 6.4, body_h - 0.42])
             linear_extrude(0.46)
-                text("スクラッチ", size = 5.2, font = "IPAGothic",
+                text("スクラッチ", size = 4.2, font = "IPAGothic",
                      halign = "left", valign = "baseline");
-        translate([W - 22, midi_y - 1.5, body_h - 0.4])
+        translate([W - 8, midi_y - 1.5, body_h - 0.4])
             linear_extrude(0.42)
-                text("MIDI", size = 3.2, font = "Liberation Sans:style=Bold",
+                text("MIDI", size = 2.8, font = "Liberation Sans:style=Bold",
                      halign = "right", valign = "center", spacing = 1.1);
         translate([btn_x1, btn_y + 12, body_h - 0.4])
             linear_extrude(0.42)
@@ -501,8 +497,8 @@ module assembly_solids() {
         button_placed(btn_x2, btn_y);
     }
     color([0.93, 0.40, 0.09]) {
-        translate([16.2, name_rule_y + 3.35, body_h - 0.6]) orange_bar();
-        translate([W - 39.8, H - 21.8, body_h - 0.6]) usb_tab();
+        translate([10.2, name_rule_y + 2.7, body_h - 0.6]) orange_bar();
+        translate([8.2, H - 15.8, body_h - 0.6]) usb_tab();
     }
     color([0.18, 0.18, 0.18])
         foot_positions()
@@ -572,4 +568,4 @@ echo("ENCODER_PAD_TOP_Z", encoder_pad_top);
 echo("HALL_POST_TOP_Z", hall_z_top);
 echo("PICO_ORIGIN", pico_x0, pico_y0);
 echo("USB_WINDOW_Z", usb_z0, usb_z0 + usb_h);
-echo("TECHNIC", technic_y0, technic_y0 + 8, technic_y0 + 16, technic_y0 + 24, "z", technic_z, "d", technic_d);
+echo("TECHNIC", technic_ys, "z", technic_z, "d", technic_d);

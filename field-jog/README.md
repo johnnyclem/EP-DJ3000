@@ -13,31 +13,28 @@ the cavities so parts you already printed drop in.
 | | EP-136 Sidekick | EP-133 K.O. II | FIELD JOG |
 |---|---|---|---|
 | Height | 240 mm | 240 mm | **240 mm** |
-| Width | 88 mm | 176 mm | **120 mm** |
+| Width | 88 mm | 176 mm | **88 mm** |
 | Thickness | 16 mm | 16 mm | **26 mm** |
 
-The height matches so the top and bottom edges line up with the EPs.
-The width does not match a Sidekick, because a real 76 mm platter does not
-fit in 88 mm with a wall and a knob. The body is 26 mm thick because a
-683ZZ bearing, a magnet, and a fader lock have to live under the deck.
-16 mm is not enough. Don't sand it down to match.
+The long edge matches the EPs, and the width matches a Sidekick. The 76 mm
+platter is centered, with 6 mm of deck on each side. The knob moves above
+the platter, because a 16 mm knob will not sit beside a 3 inch jog in 88 mm.
+The body is 26 mm thick because a 683ZZ bearing, a magnet, and a fader lock
+have to live under the deck. 16 mm is not enough. Don't sand it down to match.
 
 A 256 mm bed (Bambu X1 / P1 / A1) fits the 240 mm length. A 220 mm bed
-does not. Open `field-jog.scad` and set `H = 210` if you have to; the
-nameplate just gets shorter. The Technic holes stay on the 8 mm grid
-as long as `H` stays a multiple of 8 and you don't move `technic_y0`.
+does not. The pin holes are measured from the bottom (fader) end.
 
 ## Technic pins
 
-Four holes on the left edge, four on the right. Same idea as the EP-133:
-round LEGO Technic pin holes on an 8 mm pitch, so a real pin joins this
-shell to a K.O. II, a Sidekick, or another Field Jog.
+Five holes on the left edge, five on the right. Round LEGO Technic pin
+holes, so a real pin joins this shell to a K.O. II, a Sidekick, or another
+Field Jog.
 
 | | |
 |---|---|
-| Count | 4 per long side |
-| Pitch | 8 mm |
-| Centers, from the bottom edge | 108, 116, 124, 132 mm |
+| Count | 5 per long side |
+| Centers, from the bottom (fader) end | 16, 25, 48, 216, 224 mm |
 | Height off the desk face | 8 mm (centered on a 16 mm EP side) |
 | Diameter | 5.0 mm (a 4.8 mm pin, after PLA shrink) |
 | Depth | 8.2 mm, blind, with a rib behind the wall |

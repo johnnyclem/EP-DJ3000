@@ -1,5 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 import { ViewerPanel } from "@/components/viewer-panel";
+import { RenderGallery } from "@/components/render-gallery";
 
 export const Route = createFileRoute("/")({ component: Home });
 
@@ -24,25 +25,28 @@ function Home() {
         <p className="font-mono text-xs tracking-widest text-accent uppercase">Unofficial companion</p>
         <h1 className="text-4xl leading-none font-semibold tracking-tight">Field Jog</h1>
         <p className="text-base leading-relaxed text-muted">
-          A scratch-deck shell that lines up with the EP-133 and the Sidekick. Grey deck, orange
-          marks, black jog and fader. Four Technic pin holes on each long side, on the same 8 mm
-          grid as the EP row.
+          A scratch-deck shell in the Sidekick footprint. 88 mm wide, 240 mm long,
+          grey deck, orange marks, black jog and fader. Setup snaps gear onto the
+          amp: left, right, back, and top.
         </p>
       </header>
 
       <ViewerPanel />
 
+      <RenderGallery />
+
       <dl className="grid grid-cols-3 divide-x divide-line border border-line">
         <Spec k="Height" v="240 mm" />
-        <Spec k="Width" v="120 mm" />
+        <Spec k="Width" v="88 mm" />
         <Spec k="Thick" v="26 mm" />
       </dl>
 
       <p className="text-sm leading-relaxed text-muted">
-        Height matches the EP row. It is wider than a Sidekick because a 76 mm platter does not fit
-        in 88 mm, and thicker than 16 mm because the bearing, magnet, and fader lock need a cavity.
-        The pin holes sit 8 mm off the bottom, so a Technic pin meets a K.O. II on the same desk.
-        Centers are 108, 116, 124 and 132 mm up each long side.
+        The long edge matches the EP row, and the width matches a Sidekick. The 76 mm
+        platter is centered, with 6 mm of deck on each side. The knob sits above it.
+        It is 26 mm thick because the bearing, magnet, and fader lock need a cavity.
+        Pin holes are 16, 25, 48, 216 and 224 mm from the fader end, 8 mm off the
+        bottom, on both long sides.
       </p>
 
       <a

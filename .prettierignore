@@ -1,0 +1,9 @@
+# Generated or non-web trees: formatting these would break `tools/gen_protocol.py --check`
+protocol/
+firmware/
+macos/
+drivers/
+tools/
+docs/
+hardware/
+field-jog/

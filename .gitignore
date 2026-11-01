@@ -3,3 +3,10 @@ node_modules/
 .github_repo
 .env
 .env.*
+
+# build outputs
+firmware/**/build*/
+.pio/
+macos/.build/
+macos/*.app
+*.o

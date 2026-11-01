@@ -15,6 +15,13 @@ export default tseslint.config(
       ".nitro/**",
       "node_modules/**",
       "src/routeTree.gen.ts",
+      // Hardware / firmware / DJ-software mapping trees are not part of the web app.
+      "firmware/**",
+      "macos/**",
+      "drivers/**",
+      "tools/**",
+      "protocol/**",
+      "hardware/**",
     ],
   },
   js.configs.recommended,

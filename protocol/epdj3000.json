@@ -1,0 +1,1033 @@
+{
+  "schema": 1,
+  "_comment": "SINGLE SOURCE OF TRUTH for the EP-DJ3000 wire contract. Edit this file, then run `python3 tools/gen_protocol.py` to regenerate the C++/Swift/JS/markdown artifacts. `python3 tools/gen_protocol.py --check` fails if any generated file has drifted. Never hand-edit generated files.",
+  "protocolVersion": 1,
+  "device": {
+    "name": "EP-DJ3000",
+    "usbVendorId": "0x1209",
+    "usbProductId": "0x0001",
+    "usbIdNote": "DEV PLACEHOLDER (pid.codes test PID). Request a real PID from https://pid.codes (open hardware) before sharing units.",
+    "deckNames": [
+      "Deck A",
+      "Deck B"
+    ],
+    "cables": [
+      {
+        "cable": 0,
+        "name": "Deck",
+        "desc": "This unit's own controls, clock and transport. Always present."
+      },
+      {
+        "cable": 1,
+        "name": "TRS MIDI",
+        "desc": "Pass-through to/from the 3.5 mm TRS MIDI jack (external gear, e.g. EP-133 K.O. II)."
+      },
+      {
+        "cable": 2,
+        "name": "Linked deck",
+        "desc": "The peer deck, bridged over the radio link when the peer has no USB host of its own. Silent otherwise."
+      }
+    ]
+  },
+  "midi": {
+    "defaultChannels": [
+      0,
+      1
+    ],
+    "channelsNote": "Zero-based. Deck A = channel 1, Deck B = channel 2 (as shown in DJ software).",
+    "jogTicksPerRev": 1024,
+    "relativeCenter": 64,
+    "relativeNote": "Relative controls are offset-64: value = 64 + delta, delta in [-63, +63]. 64 means no motion. Positive jog delta = platter turned clockwise (when jogInvert = 0).",
+    "controls": [
+      {
+        "id": "jog",
+        "type": "ccRel",
+        "number": 22,
+        "dir": "out",
+        "desc": "Platter motion, relative offset-64. 1024 ticks = one full revolution."
+      },
+      {
+        "id": "crossfader",
+        "type": "cc14",
+        "number": 23,
+        "lsb": 55,
+        "dir": "out",
+        "desc": "Slide pot when faderRole = CROSSFADER. 14-bit: MSB CC 23, LSB CC 55. Always sent MSB first, then LSB; an unchanged half may be skipped."
+      },
+      {
+        "id": "channelVolume",
+        "type": "cc14",
+        "number": 7,
+        "lsb": 39,
+        "dir": "out",
+        "desc": "Slide pot when faderRole = CHANNEL_VOLUME. 14-bit: MSB CC 7, LSB CC 39."
+      },
+      {
+        "id": "pitch",
+        "type": "cc14",
+        "number": 25,
+        "lsb": 57,
+        "dir": "out",
+        "desc": "Slide pot when faderRole = PITCH (tempo fader). 14-bit: MSB CC 25, LSB CC 57."
+      },
+      {
+        "id": "knob",
+        "type": "cc14",
+        "number": 24,
+        "lsb": 56,
+        "dir": "out",
+        "desc": "Orange knob. 14-bit: MSB CC 24, LSB CC 56."
+      },
+      {
+        "id": "bpm",
+        "type": "cc14",
+        "number": 20,
+        "lsb": 52,
+        "dir": "both",
+        "desc": "Tempo, value = BPM x 10 (14-bit, 20.0..300.0 valid). Host->device sets tempo; device->host reports tempo changes in SYNC_MASTER mode."
+      },
+      {
+        "id": "bpmNudge",
+        "type": "ccRel",
+        "number": 21,
+        "dir": "both",
+        "desc": "Tempo change, relative offset-64, one step = 0.1 BPM."
+      },
+      {
+        "id": "transport",
+        "type": "cc",
+        "number": 29,
+        "dir": "both",
+        "desc": "Absolute transport state: 0 = stop, 1 = play, 2 = pause. Unambiguous alternative to toggle notes."
+      },
+      {
+        "id": "cue",
+        "type": "note",
+        "number": 36,
+        "dir": "both",
+        "desc": "CUE button. Out: vel 127 down / 0 up. In: vel > 0 lights the button (deck cue state)."
+      },
+      {
+        "id": "rev",
+        "type": "note",
+        "number": 37,
+        "dir": "both",
+        "desc": "REV button. Out: vel 127 down / 0 up."
+      },
+      {
+        "id": "touch",
+        "type": "note",
+        "number": 38,
+        "dir": "out",
+        "desc": "Platter touched (vel 127) / released (vel 0). Enter/leave scratch mode."
+      },
+      {
+        "id": "play",
+        "type": "note",
+        "number": 39,
+        "dir": "both",
+        "desc": "Play/pause toggle. Out: pulse (127 then 0) on a platter tap when tapPlay = 1. In: vel > 0 = deck is playing (LED feedback)."
+      },
+      {
+        "id": "tap",
+        "type": "note",
+        "number": 41,
+        "dir": "both",
+        "desc": "Tap tempo. In: host taps tempo. Out: sent when a tap is detected in SYNC_MASTER mode."
+      }
+    ],
+    "realtime": {
+      "clock": "0xF8",
+      "start": "0xFA",
+      "continue": "0xFB",
+      "stop": "0xFC",
+      "songPosition": "0xF2",
+      "mtcQuarterFrame": "0xF1",
+      "ppqn": 24,
+      "bpmMinX10": 200,
+      "bpmMaxX10": 3000,
+      "note": "Clock/transport/MTC are only EMITTED when mode = SYNC_MASTER, on the ports in clockOutMask. They are always accepted (cable 0) to track tempo and mirror transport state."
+    },
+    "mtcFpsTypes": [
+      {
+        "id": 0,
+        "name": "FPS_24",
+        "fps": 24.0
+      },
+      {
+        "id": 1,
+        "name": "FPS_25",
+        "fps": 25.0
+      },
+      {
+        "id": 2,
+        "name": "FPS_2997_DROP",
+        "fps": 29.97
+      },
+      {
+        "id": 3,
+        "name": "FPS_30",
+        "fps": 30.0
+      }
+    ]
+  },
+  "sysex": {
+    "_comment": "Frame: F0 7D 45 44 <ver> <deck> <cmd> <packed payload...> <checksum> F7. 7D = non-commercial manufacturer ID, 45 44 = 'E','D'. Payload bytes are packed 8->7 (see PROTOCOL.md). checksum = (-(sum of bytes ver..last payload septet)) & 0x7F. Replies use cmd | 0x40; ACK = 0x7E, NAK = 0x7F (payload [cmd, errorCode]).",
+    "header": [
+      "0x7D",
+      "0x45",
+      "0x44"
+    ],
+    "version": 1,
+    "deckAny": 127,
+    "replyFlag": 64,
+    "ack": 126,
+    "nak": 127,
+    "commands": [
+      {
+        "id": 1,
+        "name": "GET_INFO",
+        "req": "(empty)",
+        "resp": "INFO (0x41): struct Info",
+        "desc": "Identify the unit, firmware, capabilities."
+      },
+      {
+        "id": 2,
+        "name": "GET_CONFIG",
+        "req": "[key u8] (0xFF = dump all)",
+        "resp": "CONFIG (0x42): [key u8, value i32le] (one per key)",
+        "desc": "Read config value(s)."
+      },
+      {
+        "id": 3,
+        "name": "SET_CONFIG",
+        "req": "[key u8, value i32le]",
+        "resp": "ACK | NAK(BAD_KEY/OUT_OF_RANGE)",
+        "desc": "Apply a config value live (not persisted until SAVE_CONFIG)."
+      },
+      {
+        "id": 4,
+        "name": "SAVE_CONFIG",
+        "req": "(empty)",
+        "resp": "ACK | NAK(FLASH_ERROR)",
+        "desc": "Persist the live config to flash."
+      },
+      {
+        "id": 5,
+        "name": "LOAD_DEFAULTS",
+        "req": "(empty)",
+        "resp": "ACK",
+        "desc": "Reset live config to defaults (call SAVE_CONFIG to persist)."
+      },
+      {
+        "id": 6,
+        "name": "STREAM",
+        "req": "[rateHz u8]",
+        "resp": "ACK, then TELEMETRY (0x47) frames",
+        "desc": "Start/stop raw telemetry (0 = off, max 100 Hz). Auto-stops after 5 s without a refresh."
+      },
+      {
+        "id": 7,
+        "name": "CAL_BEGIN",
+        "req": "[kind u8]",
+        "resp": "ACK | NAK(NOT_SUPPORTED)",
+        "desc": "Begin recording extremes of a control (kind = CalKind)."
+      },
+      {
+        "id": 8,
+        "name": "CAL_END",
+        "req": "[kind u8, apply u8]",
+        "resp": "CAL_RESULT (0x48): struct CalResult | NAK(CAL_NOT_ACTIVE/CAL_FAILED)",
+        "desc": "Finish; apply=1 writes the measured range into the live config."
+      },
+      {
+        "id": 9,
+        "name": "SET_DECK",
+        "req": "[deck u8]",
+        "resp": "ACK",
+        "desc": "Set deck A/B, persist, and re-enumerate USB (reboot)."
+      },
+      {
+        "id": 10,
+        "name": "REBOOT",
+        "req": "[mode u8] 0 = normal, 1 = ROM bootloader (firmware update)",
+        "resp": "ACK, then reboot",
+        "desc": "Restart the unit."
+      },
+      {
+        "id": 11,
+        "name": "LINK_STATUS",
+        "req": "(empty)",
+        "resp": "LINK (0x4B): [count u8] + count x struct Peer",
+        "desc": "Peers visible on the radio link."
+      },
+      {
+        "id": 12,
+        "name": "TEST_TONE",
+        "req": "[on u8, freqHz u16le, attenDb u8]",
+        "resp": "ACK | NAK(NOT_SUPPORTED)",
+        "desc": "Play a sine on the DAC output (audio path test). Auto-stops after 10 s."
+      },
+      {
+        "id": 13,
+        "name": "IDENTIFY",
+        "req": "[seconds u8]",
+        "resp": "ACK",
+        "desc": "Flash the status LED so you can tell which physical unit this is."
+      }
+    ],
+    "replies": [
+      {
+        "id": 65,
+        "name": "INFO"
+      },
+      {
+        "id": 66,
+        "name": "CONFIG"
+      },
+      {
+        "id": 71,
+        "name": "TELEMETRY"
+      },
+      {
+        "id": 72,
+        "name": "CAL_RESULT"
+      },
+      {
+        "id": 75,
+        "name": "LINK"
+      }
+    ],
+    "errors": [
+      {
+        "id": 1,
+        "name": "UNKNOWN_CMD"
+      },
+      {
+        "id": 2,
+        "name": "BAD_LENGTH"
+      },
+      {
+        "id": 3,
+        "name": "BAD_CHECKSUM"
+      },
+      {
+        "id": 4,
+        "name": "BAD_KEY"
+      },
+      {
+        "id": 5,
+        "name": "OUT_OF_RANGE"
+      },
+      {
+        "id": 6,
+        "name": "BUSY"
+      },
+      {
+        "id": 7,
+        "name": "NOT_SUPPORTED"
+      },
+      {
+        "id": 8,
+        "name": "CAL_NOT_ACTIVE"
+      },
+      {
+        "id": 9,
+        "name": "CAL_FAILED"
+      },
+      {
+        "id": 10,
+        "name": "FLASH_ERROR"
+      }
+    ]
+  },
+  "enums": {
+    "Deck": [
+      [
+        "A",
+        0
+      ],
+      [
+        "B",
+        1
+      ]
+    ],
+    "Mode": [
+      [
+        "DJ",
+        0
+      ],
+      [
+        "SYNC_MASTER",
+        1
+      ],
+      [
+        "SYNC_FOLLOW",
+        2
+      ]
+    ],
+    "PlatterSource": [
+      [
+        "AS5600",
+        0
+      ],
+      [
+        "TOUCH_RING",
+        1
+      ],
+      [
+        "TOUCH_HOLD_ONLY",
+        2
+      ]
+    ],
+    "FaderRole": [
+      [
+        "CROSSFADER",
+        0
+      ],
+      [
+        "CHANNEL_VOLUME",
+        1
+      ],
+      [
+        "PITCH",
+        2
+      ]
+    ],
+    "FaderCurve": [
+      [
+        "LINEAR",
+        0
+      ],
+      [
+        "SHARP_CUT",
+        1
+      ],
+      [
+        "SMOOTH",
+        2
+      ]
+    ],
+    "KnobRole": [
+      [
+        "GENERIC",
+        0
+      ],
+      [
+        "BPM",
+        1
+      ]
+    ],
+    "DacMode": [
+      [
+        "AUTO",
+        0
+      ],
+      [
+        "OFF",
+        1
+      ],
+      [
+        "ON",
+        2
+      ]
+    ],
+    "LinkBridge": [
+      [
+        "AUTO",
+        0
+      ],
+      [
+        "OFF",
+        1
+      ],
+      [
+        "FORCE",
+        2
+      ]
+    ],
+    "CalKind": [
+      [
+        "FADER",
+        0
+      ],
+      [
+        "KNOB",
+        1
+      ]
+    ],
+    "TransportState": [
+      [
+        "STOPPED",
+        0
+      ],
+      [
+        "PLAYING",
+        1
+      ],
+      [
+        "PAUSED",
+        2
+      ]
+    ],
+    "RebootMode": [
+      [
+        "NORMAL",
+        0
+      ],
+      [
+        "BOOTLOADER",
+        1
+      ]
+    ]
+  },
+  "bitfields": {
+    "Caps": [
+      [
+        "AS5600",
+        0
+      ],
+      [
+        "TOUCH_RING",
+        1
+      ],
+      [
+        "DAC",
+        2
+      ],
+      [
+        "TRS_MIDI",
+        3
+      ],
+      [
+        "LINK",
+        4
+      ],
+      [
+        "USB_AUDIO",
+        5
+      ],
+      [
+        "STATUS_LED",
+        6
+      ]
+    ],
+    "StateFlags": [
+      [
+        "TOUCHED",
+        0
+      ],
+      [
+        "ANGLE_VALID",
+        1
+      ],
+      [
+        "LINK_UP",
+        2
+      ],
+      [
+        "USB_MOUNTED",
+        3
+      ],
+      [
+        "AUDIO_STREAMING",
+        4
+      ],
+      [
+        "DAC_PRESENT",
+        5
+      ],
+      [
+        "BRIDGING",
+        6
+      ]
+    ],
+    "Buttons": [
+      [
+        "CUE",
+        0
+      ],
+      [
+        "REV",
+        1
+      ]
+    ],
+    "ClockPorts": [
+      [
+        "USB",
+        0
+      ],
+      [
+        "TRS",
+        1
+      ],
+      [
+        "LINK",
+        2
+      ]
+    ],
+    "PeerFlags": [
+      [
+        "USB_HOST",
+        0
+      ],
+      [
+        "FORWARDING",
+        1
+      ],
+      [
+        "IS_MASTER",
+        2
+      ]
+    ]
+  },
+  "bitfieldWidths": {
+    "Caps": 16
+  },
+  "config": {
+    "_comment": "All values travel as int32 on the wire. `type` is informational for UIs/storage. Add new keys at the END; ids are permanent.",
+    "keys": [
+      {
+        "id": 0,
+        "name": "deckId",
+        "type": "enum",
+        "enum": "Deck",
+        "min": 0,
+        "max": 1,
+        "default": 0,
+        "desc": "Which deck this unit is (A/B). Sets default MIDI channel and USB name."
+      },
+      {
+        "id": 1,
+        "name": "midiChannel",
+        "type": "u8",
+        "min": 0,
+        "max": 16,
+        "default": 16,
+        "desc": "Zero-based MIDI channel 0..15, or 16 = auto (follow deckId)."
+      },
+      {
+        "id": 2,
+        "name": "mode",
+        "type": "enum",
+        "enum": "Mode",
+        "min": 0,
+        "max": 2,
+        "default": 0,
+        "desc": "DJ controller, standalone clock master, or clock follower."
+      },
+      {
+        "id": 3,
+        "name": "platterSource",
+        "type": "enum",
+        "enum": "PlatterSource",
+        "min": 0,
+        "max": 2,
+        "default": 1,
+        "desc": "How platter rotation is sensed: AS5600 magnetic encoder, segmented capacitive touch ring (conductive PLA), or touch/hold only (no rotation)."
+      },
+      {
+        "id": 4,
+        "name": "jogInvert",
+        "type": "bool",
+        "min": 0,
+        "max": 1,
+        "default": 0,
+        "desc": "Flip jog direction."
+      },
+      {
+        "id": 5,
+        "name": "touchSectors",
+        "type": "u8",
+        "min": 3,
+        "max": 8,
+        "default": 8,
+        "desc": "Number of capacitive sectors in the platter ring."
+      },
+      {
+        "id": 6,
+        "name": "touchOnPermille",
+        "type": "u16",
+        "min": 1,
+        "max": 1000,
+        "default": 12,
+        "desc": "Finger-down threshold, per-mille rise over baseline."
+      },
+      {
+        "id": 7,
+        "name": "touchOffPermille",
+        "type": "u16",
+        "min": 1,
+        "max": 1000,
+        "default": 7,
+        "desc": "Finger-up threshold (hysteresis), per-mille rise over baseline."
+      },
+      {
+        "id": 8,
+        "name": "tapPlay",
+        "type": "bool",
+        "min": 0,
+        "max": 1,
+        "default": 1,
+        "desc": "A quick touch with no movement toggles play/pause."
+      },
+      {
+        "id": 9,
+        "name": "tapMaxMs",
+        "type": "u16",
+        "min": 60,
+        "max": 500,
+        "default": 180,
+        "desc": "Longest touch that still counts as a tap."
+      },
+      {
+        "id": 10,
+        "name": "tapMoveTicks",
+        "type": "u8",
+        "min": 0,
+        "max": 64,
+        "default": 8,
+        "desc": "Platter movement (ticks of 1/1024 rev) allowed during a tap."
+      },
+      {
+        "id": 11,
+        "name": "faderRole",
+        "type": "enum",
+        "enum": "FaderRole",
+        "min": 0,
+        "max": 2,
+        "default": 0,
+        "desc": "What the slide pot controls (changes the CC it sends)."
+      },
+      {
+        "id": 12,
+        "name": "faderRawMin",
+        "type": "u16",
+        "min": 0,
+        "max": 4095,
+        "default": 40,
+        "desc": "12-bit ADC reading at one end of travel."
+      },
+      {
+        "id": 13,
+        "name": "faderRawMax",
+        "type": "u16",
+        "min": 0,
+        "max": 4095,
+        "default": 4055,
+        "desc": "12-bit ADC reading at the other end of travel."
+      },
+      {
+        "id": 14,
+        "name": "faderInvert",
+        "type": "bool",
+        "min": 0,
+        "max": 1,
+        "default": 0,
+        "desc": "Flip fader direction."
+      },
+      {
+        "id": 15,
+        "name": "faderDeadLoPermille",
+        "type": "u16",
+        "min": 0,
+        "max": 400,
+        "default": 15,
+        "desc": "Dead zone at the low end (per-mille of travel)."
+      },
+      {
+        "id": 16,
+        "name": "faderDeadHiPermille",
+        "type": "u16",
+        "min": 0,
+        "max": 400,
+        "default": 15,
+        "desc": "Dead zone at the high end (per-mille of travel)."
+      },
+      {
+        "id": 17,
+        "name": "faderCurve",
+        "type": "enum",
+        "enum": "FaderCurve",
+        "min": 0,
+        "max": 2,
+        "default": 0,
+        "desc": "Response curve; SHARP_CUT gives a scratch-style fast cut."
+      },
+      {
+        "id": 18,
+        "name": "knobRole",
+        "type": "enum",
+        "enum": "KnobRole",
+        "min": 0,
+        "max": 1,
+        "default": 0,
+        "desc": "GENERIC sends CC 24; BPM turns the knob into a tempo control."
+      },
+      {
+        "id": 19,
+        "name": "knobRawMin",
+        "type": "u16",
+        "min": 0,
+        "max": 4095,
+        "default": 0,
+        "desc": "12-bit ADC reading at one end of the knob."
+      },
+      {
+        "id": 20,
+        "name": "knobRawMax",
+        "type": "u16",
+        "min": 0,
+        "max": 4095,
+        "default": 4095,
+        "desc": "12-bit ADC reading at the other end of the knob."
+      },
+      {
+        "id": 21,
+        "name": "knobInvert",
+        "type": "bool",
+        "min": 0,
+        "max": 1,
+        "default": 0,
+        "desc": "Flip knob direction."
+      },
+      {
+        "id": 22,
+        "name": "clockOutMask",
+        "type": "bitfield",
+        "bitfield": "ClockPorts",
+        "min": 0,
+        "max": 7,
+        "default": 3,
+        "desc": "Ports that receive clock/transport/MTC in SYNC_MASTER mode."
+      },
+      {
+        "id": 23,
+        "name": "bpmX10",
+        "type": "u16",
+        "min": 200,
+        "max": 3000,
+        "default": 1200,
+        "desc": "Current tempo x10 (120.0 BPM = 1200)."
+      },
+      {
+        "id": 24,
+        "name": "mtcEnable",
+        "type": "bool",
+        "min": 0,
+        "max": 1,
+        "default": 0,
+        "desc": "Emit MIDI Time Code in SYNC_MASTER mode."
+      },
+      {
+        "id": 25,
+        "name": "mtcFps",
+        "type": "u8",
+        "min": 0,
+        "max": 3,
+        "default": 3,
+        "desc": "MTC frame rate type (see mtcFpsTypes)."
+      },
+      {
+        "id": 26,
+        "name": "dacMode",
+        "type": "enum",
+        "enum": "DacMode",
+        "min": 0,
+        "max": 2,
+        "default": 0,
+        "desc": "USB audio output: AUTO detects a DAC, ON forces it, OFF is MIDI-only. Takes effect after reboot (USB descriptors change)."
+      },
+      {
+        "id": 27,
+        "name": "linkEnable",
+        "type": "bool",
+        "min": 0,
+        "max": 1,
+        "default": 1,
+        "desc": "Enable the unit-to-unit radio link."
+      },
+      {
+        "id": 28,
+        "name": "linkBridge",
+        "type": "enum",
+        "enum": "LinkBridge",
+        "min": 0,
+        "max": 2,
+        "default": 0,
+        "desc": "Forward the peer deck's MIDI over this unit's USB (cable 2). AUTO bridges only when the peer has no USB host."
+      },
+      {
+        "id": 29,
+        "name": "trsMidiEnable",
+        "type": "bool",
+        "min": 0,
+        "max": 1,
+        "default": 1,
+        "desc": "Enable the 3.5 mm TRS MIDI jack (cable 1)."
+      },
+      {
+        "id": 30,
+        "name": "ledBrightness",
+        "type": "u8",
+        "min": 0,
+        "max": 255,
+        "default": 64,
+        "desc": "Status LED brightness."
+      },
+      {
+        "id": 31,
+        "name": "buttonDebounceMs",
+        "type": "u8",
+        "min": 1,
+        "max": 30,
+        "default": 4,
+        "desc": "Button debounce time."
+      }
+    ]
+  },
+  "structs": {
+    "_comment": "Little-endian, packed, no padding. Carried inside SysEx payloads (after 8->7 packing).",
+    "Info": [
+      [
+        "protocolVersion",
+        "u8"
+      ],
+      [
+        "fwMajor",
+        "u8"
+      ],
+      [
+        "fwMinor",
+        "u8"
+      ],
+      [
+        "fwPatch",
+        "u8"
+      ],
+      [
+        "hwRev",
+        "u8"
+      ],
+      [
+        "deck",
+        "u8"
+      ],
+      [
+        "mode",
+        "u8"
+      ],
+      [
+        "platterSource",
+        "u8"
+      ],
+      [
+        "caps",
+        "u16"
+      ],
+      [
+        "serial",
+        "u32"
+      ],
+      [
+        "uptimeS",
+        "u32"
+      ]
+    ],
+    "Telemetry": [
+      [
+        "seq",
+        "u8"
+      ],
+      [
+        "buttons",
+        "u8"
+      ],
+      [
+        "flags",
+        "u8"
+      ],
+      [
+        "transport",
+        "u8"
+      ],
+      [
+        "faderRaw",
+        "u16"
+      ],
+      [
+        "knobRaw",
+        "u16"
+      ],
+      [
+        "faderOut",
+        "u16"
+      ],
+      [
+        "knobOut",
+        "u16"
+      ],
+      [
+        "angle",
+        "u16"
+      ],
+      [
+        "bpmX10",
+        "u16"
+      ],
+      [
+        "jogTotal",
+        "i32"
+      ],
+      [
+        "touchRaw",
+        "u16",
+        8
+      ]
+    ],
+    "CalResult": [
+      [
+        "kind",
+        "u8"
+      ],
+      [
+        "applied",
+        "u8"
+      ],
+      [
+        "rawMin",
+        "u16"
+      ],
+      [
+        "rawMax",
+        "u16"
+      ]
+    ],
+    "Peer": [
+      [
+        "deck",
+        "u8"
+      ],
+      [
+        "flags",
+        "u8"
+      ],
+      [
+        "rssi",
+        "i8"
+      ],
+      [
+        "reserved",
+        "u8"
+      ],
+      [
+        "rttUs",
+        "u16"
+      ],
+      [
+        "offsetUs",
+        "i32"
+      ]
+    ]
+  }
+}

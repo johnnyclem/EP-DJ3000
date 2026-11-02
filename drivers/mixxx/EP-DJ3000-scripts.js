@@ -28,8 +28,8 @@ var EPDJ3000Mixxx = {};
 
 // What CC 23/55 controls, i.e. a unit set to faderRole = CROSSFADER. "crossfader" ->
 // [Master],crossfader; "volume" -> deck volume; "rate" -> deck tempo slider. The
-// unit's default faderRole is CHANNEL_VOLUME (CC 7/39) and PITCH sends CC 25/57:
-// those are always deck volume / deck rate, whatever this is set to.
+// unit's default faderRole is PITCH (CC 25/57) and CHANNEL_VOLUME sends CC 7/39:
+// those are always deck rate / deck volume, whatever this is set to.
 EPDJ3000Mixxx.FADER_ROLE = "crossfader";
 
 // REV button: "roll" = [ChannelN],reverseroll while held (momentary reverse that

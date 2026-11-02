@@ -1,4 +1,4 @@
-// USB audio (UAC2, asynchronous) rate matching: the USB 1 ms frame clock and the I2S bit clock come from
+// USB audio (UAC1, asynchronous) rate matching: the USB 1 ms frame clock and the I2S bit clock come from
 // different oscillators, so the sample FIFO between them slowly fills or drains. The device tells the host
 // how many samples per frame it really consumes (feedback endpoint, FeedbackController). For hosts that
 // ignore the feedback, DriftCompensator slips single samples at the I2S end instead.
@@ -83,7 +83,7 @@ class StaticSpscAudioRing : private detail::RingStorage<N>, public SpscAudioRing
 // limited per update and bounded to +/-1% of nominal.
 //
 // Output format is Q16.16 samples per frame (48 kHz nominal = 48.0 = 0x300000). toUsb10_14() converts to
-// what a full-speed UAC2 feedback endpoint sends (10.14, three bytes, little-endian).
+// what a full-speed UAC1 feedback endpoint sends (10.14, three bytes, little-endian).
 //
 // Call reset() whenever streaming (re)starts: the integrator must not carry a stale drift estimate across
 // a stop, and a stopped stream drains the ring, which would otherwise wind the controller up.

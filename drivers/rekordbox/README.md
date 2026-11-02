@@ -69,11 +69,11 @@ Numbers are from `protocol/epdj3000.json`. Deck A unit shown (channel 1); the De
 |---|---|---|---|---|
 | `play` | Note 39 pulse (tap) | `PlayPause` / Button, LED out | active | a shipped DDJ-FLX10 row quoted in the [spec][spec]; [Numark thread][numark] |
 | `cue` | Note 36 | `Cue` / Button, LED out | active | DDJ-FLX4 row on [skills.lc][skills]; [Numark thread][numark] |
-| `pitch` | CC 25 / 57 | `TempoSlider` / KnobSliderHiRes | active | DDJ-FLX4 row on [skills.lc][skills]; [Numark thread][numark] |
+| `pitch` | CC 25 / 57 (default role) | `TempoSlider` / KnobSliderHiRes | active | DDJ-FLX4 row on [skills.lc][skills]; [Numark thread][numark] |
 | `crossfader` | CC 23 / 55 | `CrossFader` / KnobSliderHiRes | active | DDJ-FLX4 row on [skills.lc][skills]; [Numark thread][numark] |
 | `knob` | CC 24 / 56 | `Gain` / KnobSliderHiRes | active | DDJ-FLX4 row on [skills.lc][skills] only |
 | `rev` | Note 37 | `Reverse` / Button | disabled, UNVERIFIED name | a command list on [skills.lc][skills], no row |
-| `channelVolume` | CC 7 / 39 (default role) | `ChannelFader` / KnobSliderHiRes | disabled, UNVERIFIED name | a command list on [skills.lc][skills], no row |
+| `channelVolume` | CC 7 / 39 | `ChannelFader` / KnobSliderHiRes | disabled, UNVERIFIED name | a command list on [skills.lc][skills], no row |
 | `touch` | Note 38 | `JogTouch` / JogTouch | disabled, experimental | named by [DJ TechTools 2017][jog2017]; type name from the [67-file census](https://github.com/guillain/DJ-MIDI-Studio/pull/354) |
 | `jog` | CC 22 relative | `JogScratch` / JogRotate | disabled, experimental | the [spec][spec] quotes a `JogScratch,...,JogRotate,B022,...,RO` row from a shipped file |
 
@@ -81,9 +81,10 @@ Not mapped: `bpm`, `bpmNudge`, `tap`, `transport`. The unit only sends them in i
 modes, which have nothing to do with rekordbox. `knob` is `Gain` only because it is a command name I
 could verify; it is an arbitrary choice for an orange knob, re-learn it to whatever you like. The
 slide pot sends exactly one of the three fader pairs, chosen by the unit's `faderRole`; all three rows
-exist, only one ever receives data. The unit's default `faderRole` is `CHANNEL_VOLUME`, whose `ChannelFader` row is
-disabled (unverified command name), so a default unit's pot does nothing in rekordbox until you set it to `PITCH`
-or `CROSSFADER` (active rows) or enable that row after confirming the name in the ADD menu.
+exist, only one ever receives data. The unit's default `faderRole` is `PITCH` (CC 25 / 57), whose `TempoSlider` row is
+active, so a factory unit's pot is a tempo fader in rekordbox with nothing to set. `CHANNEL_VOLUME` is the role whose
+`ChannelFader` row is disabled (unverified command name): its pot does nothing until you enable that row after confirming
+the name in the ADD menu.
 
 How the rows address a single-deck unit, in case you edit them: `input` is the code on channel 0, the
 unit's channel goes into that deck's column, other deck columns are empty (`9027,0,,,` = Deck 1;
@@ -95,10 +96,13 @@ carries the channel in the code (`B017` / `B117`) and no deck columns, like the 
 Same idea as `docs/ARCHITECTURE.md` section 1: each unit is a controller plus its own USB sound
 card, and the EP-136 mixes in hardware.
 
-1. **Slide pot as tempo fader.** The unit's default `faderRole` is `CHANNEL_VOLUME` (CC 7 / 39), whose
-   `ChannelFader` row is disabled (see [What is mapped](#what-is-mapped)). With an external mixer, rekordbox's
-   crossfader and channel faders do nothing audible anyway. Set `faderRole` to `PITCH` (config key 11, value 2) and
-   save to get a tempo fader.
+1. **Slide pot as tempo fader.** Nothing to set: the unit's default `faderRole` is `PITCH` (CC 25 / 57), which the
+   active `TempoSlider` row maps. That is the factory role because it is the one that does something in this rig: with an
+   external mixer, rekordbox's crossfader and channel faders do nothing audible anyway, so `CHANNEL_VOLUME` (whose
+   `ChannelFader` row is disabled, see [What is mapped](#what-is-mapped)) and `CROSSFADER` would leave the pot dead.
+   The other roles are for rigs without an external mixer, and are one SysEx frame (`docs/BRINGUP.md` section 2b):
+   set `faderRole` to `CHANNEL_VOLUME` (config key 11, value 1) or `CROSSFADER` (config key 11, value 0), and back
+   to the default with `faderRole` to `PITCH` (config key 11, value 2); `SAVE_CONFIG` keeps it.
 2. **Mixer mode.** Preferences > Audio > **Mixer Mode: External** ("use an external DJ mixer/DJ
    controller"). The [rekordbox manual][manual] (pp. 235-236) says this gives *six outputs: track
    decks 1 through 4, sampler deck and preview*, assigned under **Output channels**.
@@ -182,9 +186,9 @@ from third-party documentation. Codes are Deck A / Deck B (channel 1 / 2).
 |---|---|---|---|---|
 | `play` | DECK, `PlayPause` | Button | tap the platter, or learn with the PLAY note | `9027` / `9127` |
 | `cue` | DECK, `Cue` | Button | press CUE | `9024` / `9124` |
-| `pitch` | DECK, `TempoSlider` | Knob/Slider (0h-3FFFh) | sweep the pot (needs `faderRole` = PITCH) | `B019` / `B119` |
+| `pitch` | DECK, `TempoSlider` | Knob/Slider (0h-3FFFh) | sweep the pot (default `faderRole` = PITCH) | `B019` / `B119` |
 | `crossfader` | MIXER, `CrossFader` | Knob/Slider (0h-3FFFh) | sweep the pot (needs `faderRole` = CROSSFADER) | `B017` / `B117` |
-| `channelVolume` | MIXER, channel fader | Knob/Slider (0h-3FFFh) | sweep the pot (default `faderRole` = CHANNEL_VOLUME) | `B007` / `B107` |
+| `channelVolume` | MIXER, channel fader | Knob/Slider (0h-3FFFh) | sweep the pot (needs `faderRole` = CHANNEL_VOLUME) | `B007` / `B107` |
 | `knob` | MIXER, any knob function | Knob/Slider (0h-3FFFh) | turn the orange knob | `B018` / `B118` |
 | `rev` | DECK, any reverse function | Button | press REV | `9025` / `9125` |
 | `touch` | not in the UI | - | - | `9026` / `9126` |
@@ -199,7 +203,7 @@ rekordbox proposes if it is unclear, and compare with the exported CSV.)
 
 1. Import (above), open PERFORMANCE mode, load a track on deck 1.
 2. Tap the platter: deck 1 plays/pauses. Does the unit's LED feedback follow the deck state?
-3. CUE: set and return. REV: nothing yet (disabled row). Tempo pot (set `faderRole` to `PITCH` first): moves deck
+3. CUE: set and return. REV: nothing yet (disabled row). Tempo pot (the default role): moves deck
    1's tempo, in the direction you expect (flip with `faderInvert`).
 4. Export again: did rekordbox keep your disabled and RO rows, change any, or reorder? That tells you what
    it parsed.

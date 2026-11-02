@@ -272,7 +272,7 @@ public enum ConfigTable {
         ConfigDesc(key: .tapPlay, name: "tapPlay", minValue: 0, maxValue: 1, defaultValue: 1, summary: "A quick touch with no movement toggles play/pause."),
         ConfigDesc(key: .tapMaxMs, name: "tapMaxMs", minValue: 60, maxValue: 500, defaultValue: 180, summary: "Longest touch that still counts as a tap."),
         ConfigDesc(key: .tapMoveTicks, name: "tapMoveTicks", minValue: 0, maxValue: 64, defaultValue: 8, summary: "Platter movement (ticks of 1/1024 rev) allowed during a tap."),
-        ConfigDesc(key: .faderRole, name: "faderRole", minValue: 0, maxValue: 2, defaultValue: 1, summary: "What the slide pot controls (changes the CC it sends). Default CHANNEL_VOLUME: each deck cuts its own channel, so two units never fight over one crossfader."),
+        ConfigDesc(key: .faderRole, name: "faderRole", minValue: 0, maxValue: 2, defaultValue: 2, summary: "What the slide pot controls (changes the CC it sends). Default PITCH: the CDJ-style tempo slider, which is audible in every DJ app even with an external mixer, and two units never fight over one control. CHANNEL_VOLUME is a per-deck scratch cut (only audible where the app's deck outputs are post-fader, e.g. Mixxx); CROSSFADER suits a single software mixer."),
         ConfigDesc(key: .faderRawMin, name: "faderRawMin", minValue: 0, maxValue: 4095, defaultValue: 40, summary: "12-bit ADC reading at one end of travel."),
         ConfigDesc(key: .faderRawMax, name: "faderRawMax", minValue: 0, maxValue: 4095, defaultValue: 4055, summary: "12-bit ADC reading at the other end of travel."),
         ConfigDesc(key: .faderInvert, name: "faderInvert", minValue: 0, maxValue: 1, defaultValue: 0, summary: "Flip fader direction."),

@@ -27,7 +27,7 @@ tools/e2e.sh swift
 tools/e2e.sh build      # only build the simulator
 ```
 
-About 25 s on a 4-core laptop (21 Node tests, 63 Swift tests). Environment: `EPDJ_E2E_BUILD` (build directory, default `firmware/core/build-e2e`, git-ignored),
+About 25 s on a 4-core laptop (22 Node tests, 62 Swift tests). Environment: `EPDJ_E2E_BUILD` (build directory, default `firmware/core/build-e2e`, git-ignored),
 `EPDJ_E2E_SANITIZE=ON|OFF` (default ON: the simulator is built with ASan + UBSan, and a sanitizer report fails the test
 that provoked it), `EPDJ_SWIFT_SCRATCH` (`--scratch-path` for SwiftPM). Needs cmake and a C++17 compiler, Node 18+
 and a Swift toolchain (5.9 is the manifest's tools version; it was run with 6.0.3); a missing Node or Swift is printed as SKIP, never counted as a pass.
@@ -85,7 +85,8 @@ request timeouts and the 2 s stream keep-alive happen in virtual time):
   follows the new id; `IDENTIFY`, `TEST_TONE`, `REBOOT`.
 * Telemetry: field offsets and signs against the simulated sensors, `jogTotal` exact and negative for counter-clockwise,
   seq continuity, the 100 Hz clamp, the keep-alive across 12 virtual seconds, the device's own 5 s timeout.
-* Calibration: device `CAL_BEGIN/END` for the fader (full travel then reaches 0 and 16383), `CAL_FAILED` /
+* Calibration: device `CAL_BEGIN/END` for the fader (full travel then reaches 0 and 16383), `apply = 0` reporting the
+  measured extremes and writing nothing against `apply = 1` reporting what it wrote (the 1 % inset), `CAL_FAILED` /
   `CAL_NOT_ACTIVE`, the host-side `SweepCalibration` against the device's answer and its reversed-pot detection, the
   **touch-ring wizard driven by simulated fingers** (the thresholds it produces are then used: 16 finger positions, on
   and between sectors, are detected within 5 ms and released within 4 ms, and 6 s of idle noise produces no touch), a
@@ -99,7 +100,7 @@ request timeouts and the 2 s stream keep-alive happen in virtual time):
 * `DeckModel` + `ScratchPlayerCore`: tap plays and pauses and the play LED note goes back in and lights the unit; a
   resting finger holds a playing track; the **scratch law** (a revolution moves the track by 1.8 s) at four speeds;
   forwards-and-back scratching returns to where it started; CUE preview/return and the cue LED; REV; fader as volume,
-  knob as trim, PITCH as tempo; in SYNC_MASTER a tap toggles once and a host play note never starts the unit's clock.
+  knob as trim, PITCH as tempo; in SYNC_MASTER a tap toggles once, and a host play note lights the play LED without ever starting the unit's clock.
 * Radio: the one-cable bridge under 20 % loss and 5 % duplication (exact tick conservation on cable 2, channel 2 kept),
   LINK_STATUS (peer, flags, rssi, rtt, **clock offset: -123 456 us set, 7 us off after 6 s**), `linkGroup` splitting and re-joining a rig live,
   deck-id conflict, `SET_DECK` on one unit of a rig, a follower taking tempo and transport over the radio.
@@ -129,16 +130,16 @@ a strict mock Mixxx engine (unknown controls/API calls throw, values are range-c
 
 ## Findings
 
-Things the harness found that are not in the files it owns (E2E-1 and E2E-3 are also flagged in `PROTOCOL.md`; this table is
-the source of truth for all three, so update it first when one is fixed). Each is a plain assertion in the suites (or a
-`knownIssue`, which prints `KNOWN ISSUE` and **fails the test as soon as the issue stops reproducing**, so the marker is
-promoted to a plain assertion instead of rotting).
+Things the harness found that are not in the files it owns. This table is the source of truth: update it first when one
+changes. An open finding is a `knownIssue` in the suites, which prints `KNOWN ISSUE` and **fails the test as soon as the
+issue stops reproducing**, so the marker is promoted to a plain assertion instead of rotting; a fixed one is a plain
+assertion. Fixed findings keep one line here for history.
 
-| Id | Where | What | Reproduce |
+| Id | Where | What | Status |
 |---|---|---|---|
-| E2E-1 | firmware vs `PROTOCOL.md` 3 (CAL_END) | With `apply = 0` the result should carry "the measured extremes"; the firmware returns them inset by 1 % exactly like `apply = 1` (`CalibrationTracker::end` always insets). | `calAutoBegin(.knob)`, sweep the knob 100..3900, `calAutoEnd(.knob, apply: false)` -> `rawMin 136, rawMax 3864` (`TelemetryCalibrationE2ETests`) |
-| E2E-2 | Swift `ControllerState` / `Cc14Assembler` | `faderRole` is only updated when a 14-bit pair's *value changes*. Switching the role away and back with the pot untouched makes the unit re-send the pair (that is why it does), the value equals what the fold already holds for that pair, nothing is reported, and `faderRole` (and `DeckModel`'s idea of what the pot is) stays on the previous role until the pot moves. | `cc14(.channelVolume, 16383)`, `cc14(.pitch, 16383)`, `cc14(.channelVolume, 16383)` into one `ControllerState` -> `faderRole == .pitch` (`KnownIssueReproducers`) |
-| E2E-3 | `PROTOCOL.md` 2.6 vs `Engine` | The spec says the inbound `play` note is "the host telling the unit its deck is playing, for the LED, in every mode". In SYNC_MASTER the engine drops it (only `mirror_` is updated, and only outside SYNC_MASTER) and `LedStatus.transport` shows the unit's own clock, so a host that starts its deck cannot light the play LED of a master unit. | SYNC_MASTER, host sends `90 27 7f` -> `LedStatus.transport` stays `Stopped` (`DeckE2ETests`) |
+| E2E-1 | firmware vs `PROTOCOL.md` 3 (CAL_END) | `CAL_END` with `apply = 0` returned the extremes inset by 1 % like `apply = 1`, where the spec says "the measured extremes". | **Fixed.** `apply = 0` reports the measured extremes and changes nothing; `apply = 1` reports (and writes) the 1 % inset range. Pinned by `TelemetryCalibrationE2ETests` (a knob sweep 100..3900 ends as 100..3900 without apply and 138..3862 with it) and by core tests in `test_analog`, `test_config_server` and `test_engine_sysex`. |
+| E2E-2 | Swift `ControllerState` / `Cc14Assembler` | `faderRole` is only updated when a 14-bit pair's *value changes*. Switching the role away and back with the pot untouched makes the unit re-send the pair (that is why it does), the value equals what the fold already holds for that pair, nothing is reported, and `faderRole` (and `DeckModel`'s idea of what the pot is) stays on the previous role until the pot moves. | **Fixed in the Swift library.** `Cc14Assembler.observe()` also reports unchanged pairs and `ControllerState` takes the role from any arriving fader pair. Pinned by pure `ControllerState` tests, a `DeckModel` test and the Swift e2e. The old reproducer was: `cc14(.channelVolume, 16383)`, `cc14(.pitch, 16383)`, `cc14(.channelVolume, 16383)` into one `ControllerState` -> `faderRole == .pitch`. |
+| E2E-3 | `PROTOCOL.md` 2.6 vs `Engine` | In SYNC_MASTER the engine dropped the host's inbound `play` note, so `LedStatus.transport` showed only the unit's own clock and a host that starts its deck could not light a master unit's play LED. | **Fixed.** The engine remembers the host's play note in every mode; SYNC_MASTER shows `Playing` on the LED while either its own transport or the host's deck plays. The note still never touches the master's transport, clock or MTC. Rule in `firmware/core/README.md` ("Play LED rule"); pinned by `DeckE2ETests` and by `test_engine_sync`. |
 
 Observations (working as designed, but worth knowing):
 

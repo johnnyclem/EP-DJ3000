@@ -96,7 +96,7 @@ struct DeckCardView: View {
         switch role {
         case .crossfader?: return "Slide pot: crossfader"
         case .channelVolume?: return "Slide pot: channel volume"
-        case .pitch?: return "Slide pot: pitch"
+        case .pitch?: return "Slide pot: pitch (tempo)"
         case nil: return "Slide pot (move it)"
         }
     }

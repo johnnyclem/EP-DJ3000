@@ -90,6 +90,16 @@ function expectedFader14(raw, { rawMin = 40, rawMax = 4055, dead = 0.015 } = {})
   return Math.round(live * 16383);
 }
 
+/**
+ * What the script does with each slide-pot role. Contract v1.2: a factory unit's pot is the tempo fader, PITCH (CC 25/57),
+ * which the script sets as the deck's `rate` (Mixxx range -1..1). CHANNEL_VOLUME (CC 7/39) is the deck's `volume` (0..1).
+ */
+const POT = {
+  pitch: { role: 2, msb: P.cc.pitchMsb, lsb: P.cc.pitchLsb, key: "rate", mixxx: (v14) => -1 + (2 * v14) / 16383 },
+  volume: { role: 1, msb: P.cc.channelVolumeMsb, lsb: P.cc.channelVolumeLsb, key: "volume", mixxx: (v14) => v14 / 16383 },
+};
+const nearly = (a, b) => Math.abs(a - b) < 1e-9;
+
 const tests = [];
 const test = (name, fn) => tests.push({ name, fn });
 
@@ -204,62 +214,71 @@ test("free-spinning AS5600 platter (platterSource = AS5600): untouched motion be
 
 // ---- fader and knob --------------------------------------------------------------------------------------------
 
-test("fader sweep (default faderRole = CHANNEL_VOLUME): full 0..1 range, monotonic, MSB always before LSB, final value matches PROTOCOL 2.4", async () => {
-  await withWorld({}, async ({ engine, rig }) => {
-    await rig.cmd("fader raw=40");
-    await rig.run(200);
-    engine.take();
-    const t0 = rig.heard.length;
-    const tStart = rig.heard.length ? rig.heard[rig.heard.length - 1].t : 0;
-    await rig.ramp("fader", 40, 4055, 800);
-    await rig.run(200);
-    const up = engine.take("setParameter");
-    assert.ok(up.length > 20, "a sweep produces many updates");
-    assert.ok(up.every((c) => c.g === "[Channel1]" && c.k === "volume"), "default role is deck volume, not the crossfader");
-    assert.equal(engine.getValue("[Channel1]", "volume"), 1, "top of travel is exactly 1");
-
-    // ordering as the firmware really sends it
-    const msgs = rig.heard.slice(t0).filter((e) => e.bytes.length === 3 && e.bytes[0] === 0xb0 && (e.bytes[1] === P.cc.channelVolumeMsb || e.bytes[1] === P.cc.channelVolumeLsb));
-    let order = 0;
-    for (let i = 0; i < msgs.length; i++) {
-      const isLsb = msgs[i].bytes[1] === P.cc.channelVolumeLsb;
-      if (isLsb) {
-        const prev = msgs[i - 1];
-        const sameStepMsb = prev && prev.t === msgs[i].t && prev.bytes[1] === P.cc.channelVolumeMsb;
-        if (!sameStepMsb) order++; // an LSB with no MSB in the same step is the "skipped unchanged half" case
-      } else {
-        const next = msgs[i + 1];
-        assert.ok(!next || next.t > msgs[i].t || next.bytes[1] === P.cc.channelVolumeLsb, "MSB is followed by its LSB, never by another MSB in the same step");
+/** Sweeps the pot over its whole travel and checks what the script and the wire saw. `role` is set over SysEx first unless it is the default. */
+function faderSweepTest(name, pot, { setRole = false } = {}) {
+  test(name, async () => {
+    await withWorld({}, async ({ sim, engine, rig }) => {
+      if (setRole) {
+        await setConfig(sim, 0, 0, K.faderRole, pot.role);
+        await rig.run(50);
       }
-    }
-    observe(`fader sweep: ${msgs.length} CC messages, ${order} lone-LSB updates (unchanged MSB skipped)`);
+      await rig.cmd("fader raw=40");
+      await rig.run(200);
+      engine.take();
+      const t0 = rig.heard.length;
+      const tStart = rig.heard.length ? rig.heard[rig.heard.length - 1].t : 0;
+      await rig.ramp("fader", 40, 4055, 800);
+      await rig.run(200);
+      const up = engine.take("setParameter");
+      assert.ok(up.length > 20, "a sweep produces many updates");
+      assert.ok(up.every((c) => c.g === "[Channel1]" && c.k === pot.key), `the role is deck ${pot.key}, not the crossfader`);
+      assert.equal(engine.getValue("[Channel1]", pot.key), pot.mixxx(16383), "top of travel is exactly the end of the control's range");
 
-    // transient overshoot of the MSB-then-LSB pair as a receiver sees it
-    const trace = pairTrace(rig, { msb: P.cc.channelVolumeMsb, lsb: P.cc.channelVolumeLsb, from: tStart + 1 });
-    const finals = trace.filter((p, i) => i === trace.length - 1 || trace[i + 1].t !== p.t);
-    for (let i = 1; i < finals.length; i++) assert.ok(finals[i].value >= finals[i - 1].value - 1, "settled values never go backwards");
-    let worst = 0;
-    for (let i = 0; i < trace.length; i++) {
-      const settled = finals.find((f) => f.t === trace[i].t).value;
-      worst = Math.max(worst, Math.abs(trace[i].value - settled));
-    }
-    observe(`fader sweep: worst 14-bit transient between the MSB and LSB of one update = ${worst} counts (${(worst / 163.83).toFixed(2)}% of travel)`);
+      // ordering as the firmware really sends it
+      const msgs = rig.heard.slice(t0).filter((e) => e.bytes.length === 3 && e.bytes[0] === 0xb0 && (e.bytes[1] === pot.msb || e.bytes[1] === pot.lsb));
+      let order = 0;
+      for (let i = 0; i < msgs.length; i++) {
+        const isLsb = msgs[i].bytes[1] === pot.lsb;
+        if (isLsb) {
+          const prev = msgs[i - 1];
+          const sameStepMsb = prev && prev.t === msgs[i].t && prev.bytes[1] === pot.msb;
+          if (!sameStepMsb) order++; // an LSB with no MSB in the same step is the "skipped unchanged half" case
+        } else {
+          const next = msgs[i + 1];
+          assert.ok(!next || next.t > msgs[i].t || next.bytes[1] === pot.lsb, "MSB is followed by its LSB, never by another MSB in the same step");
+        }
+      }
+      observe(`fader sweep (${pot.key}): ${msgs.length} CC messages, ${order} lone-LSB updates (unchanged MSB skipped)`);
 
-    const final = trace[trace.length - 1].value;
-    assert.ok(Math.abs(final - expectedFader14(4055)) <= 2, `top of travel ${final}`);
-    assert.equal(engine.getValue("[Channel1]", "volume"), final / 16383, "the Mixxx parameter is exactly the 14-bit wire value / 16383");
+      // transient overshoot of the MSB-then-LSB pair as a receiver sees it
+      const trace = pairTrace(rig, { msb: pot.msb, lsb: pot.lsb, from: tStart + 1 });
+      const finals = trace.filter((p, i) => i === trace.length - 1 || trace[i + 1].t !== p.t);
+      for (let i = 1; i < finals.length; i++) assert.ok(finals[i].value >= finals[i - 1].value - 1, "settled values never go backwards");
+      let worst = 0;
+      for (let i = 0; i < trace.length; i++) {
+        const settled = finals.find((f) => f.t === trace[i].t).value;
+        worst = Math.max(worst, Math.abs(trace[i].value - settled));
+      }
+      observe(`fader sweep (${pot.key}): worst 14-bit transient between the MSB and LSB of one update = ${worst} counts (${(worst / 163.83).toFixed(2)}% of travel)`);
 
-    // and back down, to a mid position
-    await rig.ramp("fader", 4055, 2048, 500);
-    await rig.run(200);
-    const mid = pairTrace(rig, { msb: P.cc.channelVolumeMsb, lsb: P.cc.channelVolumeLsb }).pop().value;
-    assert.ok(Math.abs(mid - expectedFader14(2048)) <= 45, `mid travel: wire ${mid}, spec ${expectedFader14(2048)}`);
-    assert.equal(engine.getValue("[Channel1]", "volume"), mid / 16383);
-    await rig.cmd("fader raw=0");
-    await rig.run(200);
-    assert.equal(engine.getValue("[Channel1]", "volume"), 0, "bottom of travel is exactly 0");
+      const final = trace[trace.length - 1].value;
+      assert.ok(Math.abs(final - expectedFader14(4055)) <= 2, `top of travel ${final}`);
+      assert.ok(nearly(engine.getValue("[Channel1]", pot.key), pot.mixxx(final)), "the Mixxx parameter is exactly the 14-bit wire value / 16383 on the control's range");
+
+      // and back down, to a mid position
+      await rig.ramp("fader", 4055, 2048, 500);
+      await rig.run(200);
+      const mid = pairTrace(rig, { msb: pot.msb, lsb: pot.lsb }).pop().value;
+      assert.ok(Math.abs(mid - expectedFader14(2048)) <= 45, `mid travel: wire ${mid}, spec ${expectedFader14(2048)}`);
+      assert.ok(nearly(engine.getValue("[Channel1]", pot.key), pot.mixxx(mid)));
+      await rig.cmd("fader raw=0");
+      await rig.run(200);
+      assert.ok(nearly(engine.getValue("[Channel1]", pot.key), pot.mixxx(0)), "bottom of travel is exactly the other end of the range");
+    });
   });
-});
+}
+faderSweepTest("fader sweep (default faderRole = PITCH): full range of the deck's rate, monotonic, MSB always before LSB, final value matches PROTOCOL 2.4", POT.pitch);
+faderSweepTest("fader sweep (faderRole = CHANNEL_VOLUME over SysEx): full 0..1 range of the deck's volume, monotonic, MSB always before LSB", POT.volume, { setRole: true });
 
 test("a real fader movement is on the wire within 2 ms (PROTOCOL.md 2.4), MSB before LSB, and a one-count wiggle is not", async () => {
   await withWorld({}, async ({ sim, rig }) => {
@@ -268,13 +287,13 @@ test("a real fader movement is on the wire within 2 ms (PROTOCOL.md 2.4), MSB be
     const tChange = (await sim.status(0)).t;
     await rig.cmd("fader raw=3000 noise=0");
     await rig.run(10);
-    const burst = rig.messages().filter((m) => m.t >= tChange && (m.bytes[1] === P.cc.channelVolumeMsb || m.bytes[1] === P.cc.channelVolumeLsb));
+    const burst = rig.messages().filter((m) => m.t >= tChange && (m.bytes[1] === POT.pitch.msb || m.bytes[1] === POT.pitch.lsb));
     assert.ok(burst.length >= 2, "the step produced a pair");
     const latencyUs = burst[0].t - tChange;
     observe(`fader step of 2000 counts: first CC ${latencyUs} us after the ADC changed`);
     assert.ok(latencyUs <= 2000, `latency ${latencyUs} us`);
-    assert.equal(burst[0].bytes[1], P.cc.channelVolumeMsb, "MSB first");
-    assert.equal(burst[1].bytes[1], P.cc.channelVolumeLsb, "then LSB");
+    assert.equal(burst[0].bytes[1], POT.pitch.msb, "MSB first");
+    assert.equal(burst[1].bytes[1], POT.pitch.lsb, "then LSB");
     assert.equal(burst[0].t, burst[1].t, "in the same engine tick");
   });
 });
@@ -291,10 +310,11 @@ test("a still fader does not chatter: +-3 counts of ADC noise sends nothing for 
   });
 });
 
-test("faderRole over SysEx selects which CC pair the script sees: CROSSFADER -> [Master],crossfader, PITCH -> deck rate, CHANNEL_VOLUME -> deck volume", async () => {
+test("faderRole over SysEx selects which CC pair the script sees: PITCH (the default) -> deck rate, CROSSFADER -> [Master],crossfader, CHANNEL_VOLUME -> deck volume", async () => {
   await withWorld({}, async ({ sim, engine, rig }) => {
     await rig.cmd("fader raw=4055");
     await rig.run(100);
+    assert.equal(engine.getValue("[Channel1]", "rate"), 1, "the default role is the tempo fader: pot at top = rate slider at +1");
     await setConfig(sim, 0, 0, K.faderRole, 0);
     await rig.run(50);
     assert.equal(engine.getValue("[Master]", "crossfader"), 1, "CROSSFADER role: pot at top = crossfader fully right");
@@ -311,7 +331,11 @@ test("faderRole over SysEx selects which CC pair the script sees: CROSSFADER -> 
 
     await setConfig(sim, 0, 0, K.faderRole, 1);
     await rig.run(50);
-    assert.equal(engine.getValue("[Channel1]", "volume"), 1, "back to CHANNEL_VOLUME");
+    assert.equal(engine.getValue("[Channel1]", "volume"), 1, "CHANNEL_VOLUME: pot at top = volume 1");
+
+    await setConfig(sim, 0, 0, K.faderRole, 2);
+    await rig.run(50);
+    assert.equal(engine.getValue("[Channel1]", "rate"), 1, "and back to the default PITCH");
   });
 });
 
@@ -500,11 +524,11 @@ test("one-cable bridge (Deck B has no USB host): its scratch arrives on Deck A's
     await rig.ramp("fader", 500, 3900, 1200, { unit: 1 });
     await rig.run(300);
     const pair = rig.heard.slice(mark).filter((e) => e.u === 0 && e.cable === 2 && e.bytes.length === 3 && e.bytes[0] === 0xb1 &&
-      (e.bytes[1] === P.cc.channelVolumeMsb || e.bytes[1] === P.cc.channelVolumeLsb));
+      (e.bytes[1] === POT.pitch.msb || e.bytes[1] === POT.pitch.lsb));
     assert.ok(pair.length > 10, "Deck B's fader reached cable 2");
-    const finalPair = pairTrace(rig, { unit: 0, cable: 2, ch: 1, msb: P.cc.channelVolumeMsb, lsb: P.cc.channelVolumeLsb }).pop().value;
+    const finalPair = pairTrace(rig, { unit: 0, cable: 2, ch: 1, msb: POT.pitch.msb, lsb: POT.pitch.lsb }).pop().value;
     assert.ok(Math.abs(finalPair - expectedFader14(3900)) <= 45, `bridged fader ${finalPair} vs spec ${expectedFader14(3900)}`);
-    assert.equal(engine.getValue("[Channel2]", "volume"), finalPair / 16383, "and Mixxx's Deck 2 volume is that value");
+    assert.ok(nearly(engine.getValue("[Channel2]", "rate"), POT.pitch.mixxx(finalPair)), "and Mixxx's Deck 2 rate is that value");
 
     // LEDs go back the other way: Mixxx -> cable 2 -> radio -> Deck B
     engine.mixxxSet("[Channel2]", "cue_indicator", 1);
@@ -526,9 +550,9 @@ test("SET_DECK over SysEx restarts the unit as the other deck: it keeps working 
     engine.take();
     await rig.cmd("fader raw=4055");
     await rig.run(100);
-    const volume = engine.take("setParameter").filter((c) => c.k === "volume");
-    assert.ok(volume.length > 0 && volume.every((c) => c.g === "[Channel2]"), "Deck B's fader moves [Channel2]");
-    assert.ok(rig.messages().some((m) => m.bytes[0] === 0xb1 && m.bytes[1] === P.cc.channelVolumeMsb), "on MIDI channel 2");
+    const rate = engine.take("setParameter").filter((c) => c.k === "rate");
+    assert.ok(rate.length > 0 && rate.every((c) => c.g === "[Channel2]"), "Deck B's fader moves [Channel2]");
+    assert.ok(rig.messages().some((m) => m.bytes[0] === 0xb1 && m.bytes[1] === POT.pitch.msb), "on MIDI channel 2");
   });
 });
 

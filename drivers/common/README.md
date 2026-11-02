@@ -52,8 +52,12 @@ These are the places the protocol is easy to get subtly wrong. Each links to the
    skipped when it did not change. Keep both halves, combine as `(msb << 7) | lsb` (0..16383), and
    apply nothing until both have been seen once. `bpm` carries BPM x 10.
 5. **The slide pot is one of three CC pairs** (2.4), chosen by the unit's `faderRole`: `crossfader*`,
-   `channelVolume*` or `pitch*`. The default is `CHANNEL_VOLUME`, so a mapping that binds only one pair should
-   bind `channelVolume*`. Bind all three if the app can use them; only one pair ever carries data.
+   `channelVolume*` or `pitch*`. The default is `PITCH`, so a mapping that binds only one pair should bind `pitch*`:
+   a tempo slider does something in every DJ app, even behind an external mixer, which channel volume does not.
+   Bind all three if the app can use them; only one pair ever carries data. When the role changes the unit sends the
+   new pair at the pot's current position, which can be the very value that pair held before: a receiver must take
+   "this pair arrived" as "the pot is this role now", not only a changed value (the macOS `ControllerState` once
+   missed this, finding E2E-2).
 6. **`bpm`, `bpmNudge`, `tap` and `transport` come out of the unit only in `SYNC_MASTER`** (2.6), plus `bpm`
    when `knobRole = BPM`. A DJ-software mapping can leave them unbound (VirtualDJ, djay and rekordbox do;
    Mixxx binds them).
@@ -66,10 +70,10 @@ These are the places the protocol is easy to get subtly wrong. Each links to the
 
 ## Worked example: a decoder
 
-Most of the rules above in one short decoder. When this was written the block was extracted and run against
-the byte-exact oracle `protocol/test-vectors.json` (relative and 14-bit vectors for every pair on both decks,
-the USB-MIDI note and jog messages, and the edge cases: Note On velocity 0, a foreign channel). Nothing
-re-runs it, so if you change it, re-run that check yourself.
+Most of the rules above in one short decoder. The block was extracted from this file and run against the byte-exact
+oracle `protocol/test-vectors.json` (the relative vectors through `jog` and the 14-bit vectors through every pair on
+both decks: 60 checks), plus a foreign channel, Note On velocity 0, Note Off and the same pair arriving twice. It passed.
+Nothing in the repo re-runs it, so if you change it, extract it and run those cases again.
 
 ```js
 const E = require("./epdj3000-protocol.js");

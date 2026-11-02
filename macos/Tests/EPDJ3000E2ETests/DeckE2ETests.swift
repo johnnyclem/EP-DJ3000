@@ -254,7 +254,16 @@ final class DeckE2ETests: E2ETestCase {
         try await withWorld { world in
             let bench = DeckBench(world: world)
             let c = world.client()
-            // default faderRole = CHANNEL_VOLUME: the pot is the deck's own volume, linear
+            // default faderRole = PITCH (contract v1.2): top of travel = +8 %, bottom = -8 %, middle = nominal
+            for (raw, ratio) in [(4055.0, 1.08), (40.0, 0.92), (2048.0, 1.0)] {
+                _ = try await world.command("fader u=0 raw=\(raw) noise=0")
+                try await bench.run(ms: 100)
+                XCTAssertEqual(bench.deck.tempoRatio, ratio, accuracy: 0.003, "pitch pot at raw \(raw)")
+            }
+            XCTAssertEqual(bench.deck.controller.faderRole, .pitch)
+
+            // CHANNEL_VOLUME, selected explicitly: the pot is the deck's own volume, linear
+            try await c.client.setConfig(.faderRole, Int32(FaderRole.channelVolume.rawValue))
             for (raw, gain) in [(4055.0, 1.0), (40.0, 0.0), (2048.0, 0.5)] {
                 _ = try await world.command("fader u=0 raw=\(raw) noise=0")
                 try await bench.run(ms: 200)
@@ -265,15 +274,6 @@ final class DeckE2ETests: E2ETestCase {
             _ = try await world.command("knob u=0 raw=1024 noise=0")
             try await bench.run(ms: 100)
             XCTAssertEqual(Double(bench.player.parameters.volume), 0.25, accuracy: 0.01, "the knob is the output trim")
-
-            // PITCH: top of travel = +8 %, bottom = -8 %, middle = nominal
-            try await c.client.setConfig(.faderRole, Int32(FaderRole.pitch.rawValue))
-            for (raw, ratio) in [(4055.0, 1.08), (40.0, 0.92), (2048.0, 1.0)] {
-                _ = try await world.command("fader u=0 raw=\(raw) noise=0")
-                try await bench.run(ms: 100)
-                XCTAssertEqual(bench.deck.tempoRatio, ratio, accuracy: 0.003, "pitch pot at raw \(raw)")
-            }
-            XCTAssertEqual(bench.deck.controller.faderRole, .pitch)
         }
     }
 
@@ -339,10 +339,17 @@ final class DeckE2ETests: E2ETestCase {
             try await expectEqual(try await world.status().transport, Int(TransportState.stopped.rawValue), "the unit's clock did not start")
             let started = world.midiEvents(from: mark).contains { if case .start = $0.event { return true } else { return false } }
             XCTAssertFalse(started, "no MIDI Start from a play note")
-            // PROTOCOL.md 2.6 calls the note "the host telling the unit its deck is playing, for the LED ... in every mode".
+            // PROTOCOL.md 2.6: the note is "the host telling the unit its deck is playing, for the LED ... in every mode".
+            // The LED shows it while the unit's own transport, checked above, stays stopped.
             let led = try await world.status().led
-            knownIssue("E2E-3", "in SYNC_MASTER the host's play-note feedback leaves LedStatus.transport at \(led.transport) (the unit's own clock), "
-                       + "so the play LED cannot show that the host's deck is playing", holds: led.playing)
+            XCTAssertTrue(led.playing, "the play LED shows the host's deck playing, whatever the unit's own transport (LedStatus.transport = \(led.transport))")
+            // And it goes dark again when the host's deck stops: the unit's own state (stopped) is authoritative.
+            bench.player.send(.pause)
+            try await bench.run(ms: 200)
+            XCTAssertEqual(bench.status.transport, .paused)
+            let dark = try await world.status().led
+            XCTAssertFalse(dark.playing, "the host's deck paused: the LED falls back to the unit's own (stopped) transport")
+            try await expectEqual(try await world.status().transport, Int(TransportState.stopped.rawValue))
         }
     }
 

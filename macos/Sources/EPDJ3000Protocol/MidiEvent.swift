@@ -121,6 +121,10 @@ public enum MidiClock {
 /// Pairs MSB/LSB control changes into 14-bit values. Either half may arrive first or be skipped
 /// (the device skips an unchanged half); a half never seen is taken as 0. Each arriving half yields
 /// a value, so when both halves change the MSB-only value is reported momentarily before the final one.
+///
+/// `feed` reports only values that differ from the last one for that pair. A consumer that has to know a pair is
+/// being sent at all, even at the value it already had, uses `observe` (the slide pot: when `faderRole` changes the
+/// unit re-sends the new role's pair, which may well equal what that pair last held).
 public struct Cc14Assembler: Equatable, Sendable {
     public struct Update: Equatable, Sendable {
         public var channel: UInt8
@@ -136,6 +140,13 @@ public struct Cc14Assembler: Equatable, Sendable {
 
     /// Returns an update when `controller` is a 14-bit half and the combined value changed.
     public mutating func feed(channel: UInt8, controller: UInt8, value: UInt8) -> Update? {
+        guard let (update, changed) = observe(channel: channel, controller: controller, value: value), changed else { return nil }
+        return update
+    }
+
+    /// Like `feed`, but also returns the pair's value when it did not change; `changed` says which it was.
+    /// nil only when `controller` is not a 14-bit half.
+    public mutating func observe(channel: UInt8, controller: UInt8, value: UInt8) -> (update: Update, changed: Bool)? {
         guard let control = Control14.allCases.first(where: { $0.msb == controller || $0.lsb == controller }) else { return nil }
         let key = Key(channel: channel, control: control)
         var slot = slots[key] ?? Slot()
@@ -144,7 +155,7 @@ public struct Cc14Assembler: Equatable, Sendable {
         let changed = slot.last != combined
         slot.last = combined
         slots[key] = slot
-        return changed ? Update(channel: channel, control: control, value: combined) : nil
+        return (Update(channel: channel, control: control, value: combined), changed)
     }
 }
 

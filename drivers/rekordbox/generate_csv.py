@@ -53,11 +53,11 @@ LAYOUT = [
         ("play", "PlayPause", "Button", LIVE, "deck", True, "Fast;Priority=50", "Play/Pause - platter tap - LED follows deck"),
         ("cue", "Cue", "Button", LIVE, "deck", True, "Fast;Priority=50", "Cue - LED follows cue state"),
         ("rev", "Reverse", "Button", TRY, "deck", False, "Fast", "UNVERIFIED command name - confirm in the ADD menu first"),
-        ("pitch", "TempoSlider", "KnobSliderHiRes", LIVE, "deck", False, "Fast", "Tempo fader - set faderRole to PITCH"),
+        ("pitch", "TempoSlider", "KnobSliderHiRes", LIVE, "deck", False, "Fast", "Tempo fader - faderRole PITCH (the default)"),
     ]),
     ("Mixer", [
         ("crossfader", "CrossFader", "KnobSliderHiRes", LIVE, "global", False, "Fast", "Crossfader - faderRole CROSSFADER - no use with an external mixer"),
-        ("channelVolume", "ChannelFader", "KnobSliderHiRes", TRY, "deck", False, "Fast", "UNVERIFIED command name - faderRole CHANNEL_VOLUME (the default)"),
+        ("channelVolume", "ChannelFader", "KnobSliderHiRes", TRY, "deck", False, "Fast", "UNVERIFIED command name - faderRole CHANNEL_VOLUME (not the default)"),
         ("knob", "Gain", "KnobSliderHiRes", LIVE, "deck", False, "Fast", "Orange knob as trim - an arbitrary choice - re-learn to taste"),
     ]),
     ("Jog - EXPERIMENTAL - disabled - see README", [

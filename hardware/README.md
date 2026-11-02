@@ -35,8 +35,8 @@ to be designed (`PLATTER.md`, "If the platter should spin").
 
 ## Builder traps
 
-1. **Status LED pin.** The pin plan has the WS2812 on GPIO48, as on DevKitC-1 v1.0. **v1.1 boards put it on GPIO38**, so
-   there is no LED until `kStatusLed` in `board_pins.h` is changed.
+1. **Status LED pin.** The WS2812 is on GPIO38 on DevKitC-1 v1.1 boards (the default build) and GPIO48 on v1.0; pick
+   the revision in `menuconfig` (`EPDJ_BOARD_REV`). On any other board the LED stays dark until you set the pin.
 2. **Two USB-C cables.** After the first flash the native port belongs to TinyUSB (the unit is a MIDI device, not a serial
    port), so reflashing and logs need the UART port, or BOOT held while pressing reset. Development uses both cables.
 3. **Two 3.5 mm TRS jacks that look alike.** The MIDI jack carries 3.3 V on its ring (through 33 ohm) and the line-out

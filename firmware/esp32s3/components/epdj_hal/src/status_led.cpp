@@ -37,6 +37,7 @@ bool StatusLed::begin() {
     return false;
   }
   set({0, 0, 0});
+  ESP_LOGI(TAG, "WS2812 on GPIO%d (%s)", pins::kStatusLed, pins::kBoardRev);
   return true;
 }
 

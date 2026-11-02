@@ -70,8 +70,10 @@ class CalibrationTracker {
 
   enum class Status : uint8_t { Ok, NotActive, SpanTooSmall };
   struct Result {
-    uint16_t rawMin = 0;  // measured minimum moved inward by 1% of the span
-    uint16_t rawMax = 0;  // measured maximum moved inward by 1% of the span
+    uint16_t measuredMin = 0;  // the extremes seen (after the 3-sample median)
+    uint16_t measuredMax = 0;
+    uint16_t rawMin = 0;  // measuredMin moved inward by 1% of the span: what CAL_END(apply = 1) writes
+    uint16_t rawMax = 0;  // measuredMax moved inward by 1% of the span
   };
 
   void begin();

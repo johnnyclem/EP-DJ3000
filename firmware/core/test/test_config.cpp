@@ -77,7 +77,7 @@ EPDJ_TEST(defaults_come_from_the_contract_table) {
   CHECK_EQ(c.get(ConfigKey::ClockOutMask), 3);
   CHECK_EQ(c.get(ConfigKey::MtcFps), 3);
   CHECK_EQ(c.get(ConfigKey::ButtonDebounceMs), 4);
-  CHECK_EQ(c.get(ConfigKey::FaderRole), 1);  // CHANNEL_VOLUME: two units never fight over one crossfader
+  CHECK_EQ(c.get(ConfigKey::FaderRole), 2);  // PITCH (contract v1.2): audible in every DJ app, and two units never fight over it
   CHECK_EQ(c.get(ConfigKey::LinkGroup), 0);
   CHECK_EQ(proto::kConfigCount, 33u);
   CHECK_EQ(c.revision(), 0u);
@@ -177,7 +177,7 @@ EPDJ_TEST(blob_layout_is_stable) {
   CHECK_EQ(b[0], 'E'); CHECK_EQ(b[1], 'P'); CHECK_EQ(b[2], 'C'); CHECK_EQ(b[3], 'F');
   CHECK_EQ(b[4], 1);
   CHECK_EQ(b[5], 33);
-  CHECK_EQ(b[6 + 4 * 11], 1);       // faderRole = CHANNEL_VOLUME by default
+  CHECK_EQ(b[6 + 4 * 11], 2);       // faderRole = PITCH by default
   CHECK_EQ(b[6 + 4 * 1], 16);       // midiChannel = 16, little-endian
   CHECK_EQ(b[6 + 4 * 13], 4055 & 0xFF);
   CHECK_EQ(b[6 + 4 * 13 + 1], 4055 >> 8);

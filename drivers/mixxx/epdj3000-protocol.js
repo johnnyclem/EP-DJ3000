@@ -30,6 +30,20 @@ var EPDJ3000 = {
     "play": 39,
     "tap": 41
   },
+  "usb": {
+    "vendorId": 4617,
+    "productId": 1,
+    "product": "EP-DJ3000",
+    "deckNames": [
+      "Deck A",
+      "Deck B"
+    ],
+    "cableNames": [
+      "Deck",
+      "TRS MIDI",
+      "Linked deck"
+    ]
+  },
   "clockPpqn": 24,
   "bpmMinX10": 200,
   "bpmMaxX10": 3000,

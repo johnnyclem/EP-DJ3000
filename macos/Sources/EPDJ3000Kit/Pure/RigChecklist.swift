@@ -59,7 +59,7 @@ public enum RigChecklist {
         }
         for unit in units {
             guard let own = unit.deck, let peers = unit.peers else { continue }
-            if peers.contains(where: { $0.deck == own.rawValue || $0.reserved & 1 != 0 }) {
+            if peers.contains(where: { $0.deck == own.rawValue || $0.status & PeerStatus.conflict.rawValue != 0 }) {
                 return RigCheck(id: "ids", title: "Distinct deck IDs", status: .problem,
                                 detail: "\(unit.label) hears another unit claiming the same deck id over the radio link. Change one with Settings > Swap deck.")
             }

@@ -195,14 +195,14 @@
         "id": 2,
         "name": "GET_CONFIG",
         "req": "[key u8] (0xFF = dump all)",
-        "resp": "CONFIG (0x42): [key u8, value i32le] (one per key)",
+        "resp": "CONFIG (0x42): [key u8, value i32le]; a dump (0xFF) sends one per key then ACK[GET_CONFIG]",
         "desc": "Read config value(s)."
       },
       {
         "id": 3,
         "name": "SET_CONFIG",
         "req": "[key u8, value i32le]",
-        "resp": "ACK | NAK(BAD_KEY/OUT_OF_RANGE)",
+        "resp": "ACK | NAK(BAD_KEY/OUT_OF_RANGE/NOT_SUPPORTED for deckId: use SET_DECK)",
         "desc": "Apply a config value live (not persisted until SAVE_CONFIG)."
       },
       {
@@ -217,14 +217,14 @@
         "name": "LOAD_DEFAULTS",
         "req": "(empty)",
         "resp": "ACK",
-        "desc": "Reset live config to defaults (call SAVE_CONFIG to persist)."
+        "desc": "Reset live config to defaults, KEEPING deckId (call SAVE_CONFIG to persist)."
       },
       {
         "id": 6,
         "name": "STREAM",
         "req": "[rateHz u8]",
         "resp": "ACK, then TELEMETRY (0x47) frames",
-        "desc": "Start/stop raw telemetry (0 = off, max 100 Hz). Auto-stops after 5 s without a refresh."
+        "desc": "Start/stop raw telemetry (0 = off; rates above 100 Hz are clamped to 100). Auto-stops after 5 s without a refresh; repeating the request refreshes it."
       },
       {
         "id": 7,
@@ -238,14 +238,14 @@
         "name": "CAL_END",
         "req": "[kind u8, apply u8]",
         "resp": "CAL_RESULT (0x48): struct CalResult | NAK(CAL_NOT_ACTIVE/CAL_FAILED)",
-        "desc": "Finish; apply=1 writes the measured range into the live config."
+        "desc": "Finish; apply=1 writes the measured range into the live config. CalResult carries the values written (with inset) when applied=1, else the measured extremes."
       },
       {
         "id": 9,
         "name": "SET_DECK",
         "req": "[deck u8]",
         "resp": "ACK",
-        "desc": "Set deck A/B, persist, and re-enumerate USB (reboot)."
+        "desc": "Set deck A/B, persist, and re-enumerate USB (reboot). The ACK carries the deck the unit had when the request arrived."
       },
       {
         "id": 10,
@@ -264,7 +264,7 @@
       {
         "id": 12,
         "name": "TEST_TONE",
-        "req": "[on u8, freqHz u16le, attenDb u8]",
+        "req": "[on u8 (0/1), freqHz u16le (20..20000), attenDb u8 (0..96)]",
         "resp": "ACK | NAK(NOT_SUPPORTED)",
         "desc": "Play a sine on the DAC output (audio path test). Auto-stops after 10 s."
       },
@@ -579,6 +579,12 @@
         "IS_MASTER",
         2
       ]
+    ],
+    "PeerStatus": [
+      [
+        "CONFLICT",
+        0
+      ]
     ]
   },
   "bitfieldWidths": {
@@ -696,8 +702,8 @@
         "enum": "FaderRole",
         "min": 0,
         "max": 2,
-        "default": 0,
-        "desc": "What the slide pot controls (changes the CC it sends)."
+        "default": 1,
+        "desc": "What the slide pot controls (changes the CC it sends). Default CHANNEL_VOLUME: each deck cuts its own channel, so two units never fight over one crossfader."
       },
       {
         "id": 12,
@@ -883,6 +889,15 @@
         "max": 30,
         "default": 4,
         "desc": "Button debounce time."
+      },
+      {
+        "id": 32,
+        "name": "linkGroup",
+        "type": "u8",
+        "min": 0,
+        "max": 255,
+        "default": 0,
+        "desc": "Radio rig id. Units only link with peers that share it, so two rigs in one room do not cross-link."
       }
     ]
   },
@@ -1017,7 +1032,7 @@
         "i8"
       ],
       [
-        "reserved",
+        "status",
         "u8"
       ],
       [

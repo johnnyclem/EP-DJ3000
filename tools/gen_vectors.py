@@ -148,7 +148,7 @@ def build():
     struct_vecs = []
     for name, vals in (("Info", info_vals), ("Telemetry", tele_vals),
                        ("CalResult", {"kind": 1, "applied": 1, "rawMin": 12, "rawMax": 4090}),
-                       ("Peer", {"deck": 1, "flags": 5, "rssi": -60, "reserved": 0, "rttUs": 1500, "offsetUs": -250})):
+                       ("Peer", {"deck": 1, "flags": 5, "rssi": -60, "status": 0, "rttUs": 1500, "offsetUs": -250})):
         struct_vecs.append({"struct": name, "values": vals, "bytes": serialize_struct(structs[name], vals)})
 
     cc14 = []

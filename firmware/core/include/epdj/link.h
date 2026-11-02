@@ -623,8 +623,8 @@ class Link {
   bool localTimeToMaster(uint32_t localUs, uint32_t* masterUs) const;
 
   // LINK_STATUS reply entries. flags = USB_HOST/FORWARDING as announced + IS_MASTER from our election;
-  // reserved bit 0 = deck-id conflict (kPeerConflict); rttUs/offsetUs describe the partner only.
-  static constexpr uint8_t kPeerConflict = 1;
+  // Peer.status bit 0 = deck-id conflict (kPeerConflict == proto::peerStatus::kConflict); rttUs/offsetUs describe the partner only.
+  static constexpr uint8_t kPeerConflict = proto::peerStatus::kConflict;
   size_t fillPeers(proto::Peer* out, size_t cap, uint64_t nowUs) const;
 
   const PeerTable& peers() const { return peers_; }

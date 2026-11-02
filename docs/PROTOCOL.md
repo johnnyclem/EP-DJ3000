@@ -43,6 +43,10 @@ Jack strings SHOULD carry the cable names so hosts label the ports.
 Channel: `midiChannel` (0-15), or **auto** (16) = Deck A -> channel 1, Deck B -> channel 2
 (zero-based 0 and 1). All controls below use that channel. Real-time messages have no channel.
 
+**Channel filter:** a unit MUST ignore channel-voice messages whose channel is not its own effective channel, including
+messages relayed on cable 2 by the bridge. Host software may therefore send LED feedback for both decks to every port without
+one deck's LEDs following the other's.
+
 <!-- BEGIN GENERATED:midi -->
 | Control | Message | Kind | Direction | Meaning |
 |---|---|---|---|---|
@@ -82,7 +86,8 @@ Channel: `midiChannel` (0-15), or **auto** (16) = Deck A -> channel 1, Deck B ->
 * `touch` note on when a finger is confirmed down, off when confirmed up.
   Thresholds are `touchOnPermille` / `touchOffPermille` (per-mille rise over a slowly-tracking baseline, with hysteresis).
 * **Tap**: touch down -> up within `tapMaxMs` with total movement <= `tapMoveTicks`, and `tapPlay = 1`:
-  emit a `play` note pulse (127, then 0 after >= 10 ms). In SYNC modes this also toggles the local transport.
+  emit a `play` note pulse (127, then 0 after >= 10 ms). In SYNC_MASTER this also toggles the local transport
+  (SYNC_FOLLOW only mirrors a transport, and DJ mode has none).
   A tap MUST NOT also be reported as scratching (jog messages produced during the tap window are still sent; the host ignores sub-threshold motion).
 
 ### 2.4 Fader and knob
@@ -125,11 +130,18 @@ Transport state (`TransportState`): STOPPED, PLAYING, PAUSED.
   while PLAYING; a full-frame SysEx (`F0 7F 7F 01 01 hr mn sc fr F7`, `hr = (fpsType << 5) | hours`) on start, pause, stop and rewind.
   Time = elapsed PLAYING time since the last rewind (pause holds it).
 * **BPM**: tempo changes are announced with `bpm` (14-bit) on change, at most 20 Hz.
+* **LINK port bit**: the radio never carries `0xF8` bytes. Instead it sends reliable TRANSPORT packets (state, tempo, position, send time)
+  to the linked deck on every state change, tempo change (<= 20 Hz), mode entry and every 10 s.
+* **Edge semantics**: Pause rounds the position down to the announced MIDI beat. `Stop` + `SPP 0` on the wire means both
+  pause-at-zero and stop-and-rewind, so followers mirror STOPPED. Rewind while PLAYING emits Stop, SPP 0, Start and keeps playing;
+  while PAUSED it emits SPP 0 and ends STOPPED.
 
 **Input** (always accepted on cable 0):
 
 * `0xF8/0xFA/0xFB/0xFC` update the follower: BPM estimate (robust over >= 24 ticks; invalid after 500 ms without clock) and mirrored transport state.
-* `transport` CC (0/1/2) and `play` note with velocity > 0 drive the local transport in SYNC_MASTER; elsewhere they only update the mirrored state (LED).
+* The `transport` CC (0/1/2) is the **command**: in SYNC_MASTER it drives the local transport; elsewhere it only updates the mirrored state.
+  The `play` note with velocity > 0 is **feedback only, in every mode** (the host telling the unit its deck is playing, for the LED);
+  it never starts the unit's clock, so a DJ app can mirror its play state to the unit regardless of mode.
 * `bpm` / `bpmNudge` / `tap` set tempo (SYNC_MASTER applies it; otherwise it is stored for display).
 * Tempo is clamped to `bpmMinX10..bpmMaxX10`. Tap tempo averages the last 4 intervals and resets after a 2 s gap.
 
@@ -150,6 +162,13 @@ F0 7D 45 44 <ver> <deck> <cmd> <packed payload ...> <checksum> F7
 * **Replies:** `cmd | 0x40` carrying data; `0x7E` ACK with payload `[cmd]`; `0x7F` NAK with payload `[cmd, errorCode]`.
   The deck byte in a reply is the replying unit's deck id.
 * All multi-byte integers inside payloads are little-endian; `i32` is two's complement.
+* **Command rules** (every command): the payload length must match exactly, else `NAK BAD_LENGTH` with no side effects (a payload that
+  cannot be unpacked, or exceeds 96 bytes, is also `BAD_LENGTH`). Boolean bytes above 1, `SET_DECK` with a deck above 1 and `REBOOT` with a
+  mode above 1 are `OUT_OF_RANGE`. `CAL_BEGIN` with an unknown kind is `NOT_SUPPORTED`; `CAL_END` with a kind that is not active is
+  `CAL_NOT_ACTIVE`. `TEST_TONE` needs `on` in {0,1}; when on, `freqHz` 20..20000 and `attenDb` <= 96, else `OUT_OF_RANGE`.
+* `SET_CONFIG` of `deckId` is `NAK NOT_SUPPORTED`: the deck changes only through `SET_DECK`. `LOAD_DEFAULTS` keeps `deckId`.
+* A `GET_CONFIG` dump (`0xFF`) answers one `CONFIG` frame per key the device knows, then `ACK[GET_CONFIG]` as the end marker, so a host and a
+  firmware with different key counts still agree on when the dump is over. The device needs about 512 bytes of reply queue for a dump.
 * Receivers MUST ignore frames with a bad checksum, wrong header or wrong version (NAK `BAD_CHECKSUM` is optional), and MUST tolerate
   SysEx split across USB packets and interleaved with real-time bytes.
 * USB-MIDI framing of SysEx follows the USB-MIDI 1.0 CIN rules (4 = continue, 5/6/7 = end with 1/2/3 bytes).
@@ -158,17 +177,17 @@ F0 7D 45 44 <ver> <deck> <cmd> <packed payload ...> <checksum> F7
 | Cmd | Name | Request payload | Response | Purpose |
 |---|---|---|---|---|
 | 0x01 | `GET_INFO` | (empty) | INFO (0x41): struct Info | Identify the unit, firmware, capabilities. |
-| 0x02 | `GET_CONFIG` | [key u8] (0xFF = dump all) | CONFIG (0x42): [key u8, value i32le] (one per key) | Read config value(s). |
-| 0x03 | `SET_CONFIG` | [key u8, value i32le] | ACK \| NAK(BAD_KEY/OUT_OF_RANGE) | Apply a config value live (not persisted until SAVE_CONFIG). |
+| 0x02 | `GET_CONFIG` | [key u8] (0xFF = dump all) | CONFIG (0x42): [key u8, value i32le]; a dump (0xFF) sends one per key then ACK[GET_CONFIG] | Read config value(s). |
+| 0x03 | `SET_CONFIG` | [key u8, value i32le] | ACK \| NAK(BAD_KEY/OUT_OF_RANGE/NOT_SUPPORTED for deckId: use SET_DECK) | Apply a config value live (not persisted until SAVE_CONFIG). |
 | 0x04 | `SAVE_CONFIG` | (empty) | ACK \| NAK(FLASH_ERROR) | Persist the live config to flash. |
-| 0x05 | `LOAD_DEFAULTS` | (empty) | ACK | Reset live config to defaults (call SAVE_CONFIG to persist). |
-| 0x06 | `STREAM` | [rateHz u8] | ACK, then TELEMETRY (0x47) frames | Start/stop raw telemetry (0 = off, max 100 Hz). Auto-stops after 5 s without a refresh. |
+| 0x05 | `LOAD_DEFAULTS` | (empty) | ACK | Reset live config to defaults, KEEPING deckId (call SAVE_CONFIG to persist). |
+| 0x06 | `STREAM` | [rateHz u8] | ACK, then TELEMETRY (0x47) frames | Start/stop raw telemetry (0 = off; rates above 100 Hz are clamped to 100). Auto-stops after 5 s without a refresh; repeating the request refreshes it. |
 | 0x07 | `CAL_BEGIN` | [kind u8] | ACK \| NAK(NOT_SUPPORTED) | Begin recording extremes of a control (kind = CalKind). |
-| 0x08 | `CAL_END` | [kind u8, apply u8] | CAL_RESULT (0x48): struct CalResult \| NAK(CAL_NOT_ACTIVE/CAL_FAILED) | Finish; apply=1 writes the measured range into the live config. |
-| 0x09 | `SET_DECK` | [deck u8] | ACK | Set deck A/B, persist, and re-enumerate USB (reboot). |
+| 0x08 | `CAL_END` | [kind u8, apply u8] | CAL_RESULT (0x48): struct CalResult \| NAK(CAL_NOT_ACTIVE/CAL_FAILED) | Finish; apply=1 writes the measured range into the live config. CalResult carries the values written (with inset) when applied=1, else the measured extremes. |
+| 0x09 | `SET_DECK` | [deck u8] | ACK | Set deck A/B, persist, and re-enumerate USB (reboot). The ACK carries the deck the unit had when the request arrived. |
 | 0x0A | `REBOOT` | [mode u8] 0 = normal, 1 = ROM bootloader (firmware update) | ACK, then reboot | Restart the unit. |
 | 0x0B | `LINK_STATUS` | (empty) | LINK (0x4B): [count u8] + count x struct Peer | Peers visible on the radio link. |
-| 0x0C | `TEST_TONE` | [on u8, freqHz u16le, attenDb u8] | ACK \| NAK(NOT_SUPPORTED) | Play a sine on the DAC output (audio path test). Auto-stops after 10 s. |
+| 0x0C | `TEST_TONE` | [on u8 (0/1), freqHz u16le (20..20000), attenDb u8 (0..96)] | ACK \| NAK(NOT_SUPPORTED) | Play a sine on the DAC output (audio path test). Auto-stops after 10 s. |
 | 0x0D | `IDENTIFY` | [seconds u8] | ACK | Flash the status LED so you can tell which physical unit this is. |
 <!-- END GENERATED:sysex -->
 
@@ -215,9 +234,12 @@ Enums and bit fields:
 | `Buttons` | CUE = bit 0, REV = bit 1 |
 | `ClockPorts` | USB = bit 0, TRS = bit 1, LINK = bit 2 |
 | `PeerFlags` | USB_HOST = bit 0, FORWARDING = bit 1, IS_MASTER = bit 2 |
+| `PeerStatus` | CONFLICT = bit 0 |
 <!-- END GENERATED:bitfields -->
 
-Payload structs:
+Payload structs. `Telemetry.jogTotal` is the cumulative sum of the jog ticks the unit has emitted, **after** `jogInvert` is applied,
+wrapping as an `i32`. `CalResult.rawMin/rawMax` are the values written to the config (with the 1% inset) when `applied = 1`, otherwise the
+measured extremes. `Peer.status` bit 0 (`PeerStatus.CONFLICT`) means two units claim the same deck id.
 
 <!-- BEGIN GENERATED:structs -->
 | Struct | Bytes | Fields (little-endian, packed) |
@@ -225,7 +247,7 @@ Payload structs:
 | `Info` | 18 | protocolVersion:u8, fwMajor:u8, fwMinor:u8, fwPatch:u8, hwRev:u8, deck:u8, mode:u8, platterSource:u8, caps:u16, serial:u32, uptimeS:u32 |
 | `Telemetry` | 36 | seq:u8, buttons:u8, flags:u8, transport:u8, faderRaw:u16, knobRaw:u16, faderOut:u16, knobOut:u16, angle:u16, bpmX10:u16, jogTotal:i32, touchRaw:u16[8] |
 | `CalResult` | 6 | kind:u8, applied:u8, rawMin:u16, rawMax:u16 |
-| `Peer` | 10 | deck:u8, flags:u8, rssi:i8, reserved:u8, rttUs:u16, offsetUs:i32 |
+| `Peer` | 10 | deck:u8, flags:u8, rssi:i8, status:u8, rttUs:u16, offsetUs:i32 |
 <!-- END GENERATED:structs -->
 
 ### 3.1 Config keys
@@ -247,7 +269,7 @@ Exceptions that need a reboot to take effect: `dacMode`, `deckId` (via `SET_DECK
 | 8 | `tapPlay` | bool | 0..1 | 1 | A quick touch with no movement toggles play/pause. |
 | 9 | `tapMaxMs` | u16 | 60..500 | 180 | Longest touch that still counts as a tap. |
 | 10 | `tapMoveTicks` | u8 | 0..64 | 8 | Platter movement (ticks of 1/1024 rev) allowed during a tap. |
-| 11 | `faderRole` | enum `FaderRole` | 0..2 | 0 | What the slide pot controls (changes the CC it sends). |
+| 11 | `faderRole` | enum `FaderRole` | 0..2 | 1 | What the slide pot controls (changes the CC it sends). Default CHANNEL_VOLUME: each deck cuts its own channel, so two units never fight over one crossfader. |
 | 12 | `faderRawMin` | u16 | 0..4095 | 40 | 12-bit ADC reading at one end of travel. |
 | 13 | `faderRawMax` | u16 | 0..4095 | 4055 | 12-bit ADC reading at the other end of travel. |
 | 14 | `faderInvert` | bool | 0..1 | 0 | Flip fader direction. |
@@ -268,6 +290,7 @@ Exceptions that need a reboot to take effect: `dacMode`, `deckId` (via `SET_DECK
 | 29 | `trsMidiEnable` | bool | 0..1 | 1 | Enable the 3.5 mm TRS MIDI jack (cable 1). |
 | 30 | `ledBrightness` | u8 | 0..255 | 64 | Status LED brightness. |
 | 31 | `buttonDebounceMs` | u8 | 1..30 | 4 | Button debounce time. |
+| 32 | `linkGroup` | u8 | 0..255 | 0 | Radio rig id. Units only link with peers that share it, so two rigs in one room do not cross-link. |
 <!-- END GENERATED:config -->
 
 ### 3.2 Calibration recipes
@@ -279,7 +302,7 @@ Calibration is **host-driven** over the telemetry stream (`STREAM`), with on-dev
 | Fader | `CAL_BEGIN(FADER)`, user sweeps the pot end to end, `CAL_END(FADER, apply=1)`. The device keeps min/max of the raw reading, rejects a span < 1500 counts with `CAL_FAILED`, and writes `faderRawMin/Max` (with a 1% inset). |
 | Knob | Same with `KNOB`. |
 | Touch ring | Host: stream telemetry, collect `touchRaw` idle for 1 s (noise), then a finger on each sector. Compute per-mille rise, set `touchOnPermille` = 50% of the weakest sector's rise and `touchOffPermille` = 60% of that (never below 3x idle noise); `SET_CONFIG`; `SAVE_CONFIG`. |
-| Platter direction | Host: ask the user to spin the platter clockwise while streaming; if `jogTotal` decreases set `jogInvert = 1`. |
+| Platter direction | Host: ask the user to spin the platter clockwise while streaming. `jogTotal` is measured after `jogInvert`, so if it decreases the current setting is backwards: write `jogInvert = 1 - current`. |
 | Platter source | Host reads `Info.caps`; AS5600 present -> suggest AS5600, else TOUCH_RING. |
 
 ## 4. Radio link (unit-to-unit)
@@ -287,9 +310,12 @@ Calibration is **host-driven** over the telemetry stream (`STREAM`), with on-dev
 Each unit may link to its peer over **ESP-NOW** (no router, no pairing menus). Summary; the wire format lives in
 [`firmware/core/include/epdj/link.h`](../firmware/core/include/epdj/link.h) and [`docs/LINK.md`](LINK.md).
 
+* Units only link with peers that share the same `linkGroup` (default 0), so two rigs in one room never cross-link.
 * Units broadcast a HELLO (deck, MAC, flags: `USB_HOST`, `FORWARDING`, `IS_MASTER`); a peer table with timeouts tracks who is alive. Two units that both claim the same deck id surface an error in `LINK_STATUS` rather than silently fighting.
 * **Master** = lower deck id (A before B). The master's tempo/transport is the shared time base; followers estimate clock offset with a 4-timestamp exchange.
 * **Bridge**: a unit with **no USB host** forwards its cable-0 MIDI to a peer that has one; the peer emits it on **cable 2** (channel preserved, so Deck B stays on channel 2) and relays host feedback (notes/CCs received on cable 2) back. Jog is forwarded as a cumulative 16-bit counter so lost radio packets never lose motion.
+* The bridge forwards **Note and CC only**: system real-time (clock/start/stop/MTC), program change and SysEx are not bridged, so a bridged
+  deck cannot follow host MIDI clock and cannot be configured over the link (plug it in directly to calibrate).
 * Radio MIDI is best-effort, target latency <= 5 ms typical. Config/transport messages use sequence numbers and retries.
 
 ## 5. Conformance

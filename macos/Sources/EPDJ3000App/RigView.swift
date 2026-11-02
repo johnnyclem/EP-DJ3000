@@ -201,7 +201,7 @@ struct LinkRows: View {
         if f.contains(.usbHost) { parts.append("USB host") }
         if f.contains(.forwarding) { parts.append("forwarding") }
         if f.contains(.isMaster) { parts.append("master") }
-        if peer.reserved & 1 != 0 { parts.append("DECK ID CONFLICT") }
+        if peer.status & PeerStatus.conflict.rawValue != 0 { parts.append("DECK ID CONFLICT") }
         return parts.isEmpty ? "-" : parts.joined(separator: ", ")
     }
 }

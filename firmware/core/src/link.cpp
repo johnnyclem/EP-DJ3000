@@ -1210,7 +1210,7 @@ size_t Link::fillPeers(proto::Peer* out, size_t cap, uint64_t nowUs) const {
     p.flags = static_cast<uint8_t>(e.flags & (proto::peerFlags::kUsbHost | proto::peerFlags::kForwarding));
     if (master != nullptr && master->mac == e.mac) p.flags |= proto::peerFlags::kIsMaster;
     p.rssi = e.rssi;
-    p.reserved = peers_.inConflict(e) ? kPeerConflict : static_cast<uint8_t>(0);
+    p.status = peers_.inConflict(e) ? kPeerConflict : static_cast<uint8_t>(0);
     if (havePartner_ && e.mac == partner_ && sync_.valid()) {
       p.rttUs = sync_.rttUs();
       p.offsetUs = sync_.offsetUs(static_cast<uint32_t>(nowUs));

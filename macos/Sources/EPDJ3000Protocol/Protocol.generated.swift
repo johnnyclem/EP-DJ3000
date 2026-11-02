@@ -17,6 +17,11 @@ public enum Proto {
     public static let clockPpqn = 24
     public static let bpmMinX10 = 200
     public static let bpmMaxX10 = 3000
+    public static let usbVendorId: UInt16 = 0x1209
+    public static let usbProductId: UInt16 = 0x0001
+    public static let productName = "EP-DJ3000"
+    public static let deckNames: [String] = ["Deck A", "Deck B"]
+    public static let cableNames: [String] = ["Deck", "TRS MIDI", "Linked deck"]
 
     public enum CC {
         public static let jog: UInt8 = 22
@@ -166,6 +171,12 @@ public struct PeerFlags: OptionSet, Sendable {
     public static let isMaster = PeerFlags(rawValue: 1 << 2)
 }
 
+public struct PeerStatus: OptionSet, Sendable {
+    public let rawValue: UInt8
+    public init(rawValue: UInt8) { self.rawValue = rawValue }
+    public static let conflict = PeerStatus(rawValue: 1 << 0)
+}
+
 public enum SysExCmd: UInt8, CaseIterable, Sendable {
     case getInfo = 0x01
     case getConfig = 0x02
@@ -236,6 +247,7 @@ public enum ConfigKey: UInt8, CaseIterable, Sendable {
     case trsMidiEnable = 29
     case ledBrightness = 30
     case buttonDebounceMs = 31
+    case linkGroup = 32
 }
 
 public struct ConfigDesc: Sendable {
@@ -260,7 +272,7 @@ public enum ConfigTable {
         ConfigDesc(key: .tapPlay, name: "tapPlay", minValue: 0, maxValue: 1, defaultValue: 1, summary: "A quick touch with no movement toggles play/pause."),
         ConfigDesc(key: .tapMaxMs, name: "tapMaxMs", minValue: 60, maxValue: 500, defaultValue: 180, summary: "Longest touch that still counts as a tap."),
         ConfigDesc(key: .tapMoveTicks, name: "tapMoveTicks", minValue: 0, maxValue: 64, defaultValue: 8, summary: "Platter movement (ticks of 1/1024 rev) allowed during a tap."),
-        ConfigDesc(key: .faderRole, name: "faderRole", minValue: 0, maxValue: 2, defaultValue: 0, summary: "What the slide pot controls (changes the CC it sends)."),
+        ConfigDesc(key: .faderRole, name: "faderRole", minValue: 0, maxValue: 2, defaultValue: 1, summary: "What the slide pot controls (changes the CC it sends). Default CHANNEL_VOLUME: each deck cuts its own channel, so two units never fight over one crossfader."),
         ConfigDesc(key: .faderRawMin, name: "faderRawMin", minValue: 0, maxValue: 4095, defaultValue: 40, summary: "12-bit ADC reading at one end of travel."),
         ConfigDesc(key: .faderRawMax, name: "faderRawMax", minValue: 0, maxValue: 4095, defaultValue: 4055, summary: "12-bit ADC reading at the other end of travel."),
         ConfigDesc(key: .faderInvert, name: "faderInvert", minValue: 0, maxValue: 1, defaultValue: 0, summary: "Flip fader direction."),
@@ -281,6 +293,7 @@ public enum ConfigTable {
         ConfigDesc(key: .trsMidiEnable, name: "trsMidiEnable", minValue: 0, maxValue: 1, defaultValue: 1, summary: "Enable the 3.5 mm TRS MIDI jack (cable 1)."),
         ConfigDesc(key: .ledBrightness, name: "ledBrightness", minValue: 0, maxValue: 255, defaultValue: 64, summary: "Status LED brightness."),
         ConfigDesc(key: .buttonDebounceMs, name: "buttonDebounceMs", minValue: 1, maxValue: 30, defaultValue: 4, summary: "Button debounce time."),
+        ConfigDesc(key: .linkGroup, name: "linkGroup", minValue: 0, maxValue: 255, defaultValue: 0, summary: "Radio rig id. Units only link with peers that share it, so two rigs in one room do not cross-link."),
     ]
     public static func desc(_ key: ConfigKey) -> ConfigDesc { all[Int(key.rawValue)] }
 }
@@ -451,15 +464,15 @@ public struct Peer: Equatable, Sendable {
     public var deck: UInt8
     public var flags: UInt8
     public var rssi: Int8
-    public var reserved: UInt8
+    public var status: UInt8
     public var rttUs: UInt16
     public var offsetUs: Int32
     public static let byteCount = 10
-    public init(deck: UInt8 = 0, flags: UInt8 = 0, rssi: Int8 = 0, reserved: UInt8 = 0, rttUs: UInt16 = 0, offsetUs: Int32 = 0) {
+    public init(deck: UInt8 = 0, flags: UInt8 = 0, rssi: Int8 = 0, status: UInt8 = 0, rttUs: UInt16 = 0, offsetUs: Int32 = 0) {
         self.deck = deck
         self.flags = flags
         self.rssi = rssi
-        self.reserved = reserved
+        self.status = status
         self.rttUs = rttUs
         self.offsetUs = offsetUs
     }
@@ -471,7 +484,7 @@ public struct Peer: Equatable, Sendable {
         self.deck = UInt8(truncatingIfNeeded: rd(1))
         self.flags = UInt8(truncatingIfNeeded: rd(1))
         self.rssi = Int8(truncatingIfNeeded: rd(1))
-        self.reserved = UInt8(truncatingIfNeeded: rd(1))
+        self.status = UInt8(truncatingIfNeeded: rd(1))
         self.rttUs = UInt16(truncatingIfNeeded: rd(2))
         self.offsetUs = Int32(truncatingIfNeeded: rd(4))
     }
@@ -482,7 +495,7 @@ public struct Peer: Equatable, Sendable {
         wr(UInt32(self.deck), 1)
         wr(UInt32(self.flags), 1)
         wr(UInt32(bitPattern: Int32(self.rssi)), 1)
-        wr(UInt32(self.reserved), 1)
+        wr(UInt32(self.status), 1)
         wr(UInt32(self.rttUs), 2)
         wr(UInt32(bitPattern: Int32(self.offsetUs)), 4)
         return out

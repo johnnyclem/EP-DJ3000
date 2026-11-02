@@ -640,7 +640,7 @@
     "deck": 1,
     "flags": 5,
     "rssi": -60,
-    "reserved": 0,
+    "status": 0,
     "rttUs": 1500,
     "offsetUs": -250
    },

@@ -166,7 +166,7 @@ EPDJ_TEST(node_discovery_election_and_status) {
   CHECK_EQ(deckA.link->fillPeers(p, 3, sim.nodes[1]->clock(sim.nowUs)), 1);
   CHECK_EQ(p[0].deck, 1);
   CHECK_EQ(p[0].flags, proto::peerFlags::kForwarding);  // B has no host, is forwarding, is not master
-  CHECK_EQ(p[0].reserved, 0);
+  CHECK_EQ(p[0].status, 0);
   CHECK_EQ(p[0].rssi, -40);
   CHECK(p[0].rttUs > 1400 && p[0].rttUs < 3000);
 
@@ -480,7 +480,7 @@ EPDJ_TEST(node_duplicate_deck_id_is_surfaced_not_fought) {
   CHECK(x.link->deckConflict() && y.link->deckConflict());
   proto::Peer p[3];
   CHECK_EQ(x.link->fillPeers(p, 3, 0), 1);
-  CHECK_EQ(p[0].reserved, Link::kPeerConflict);
+  CHECK_EQ(p[0].status, Link::kPeerConflict);
   CHECK_EQ(p[0].deck, 0);
   // Still exactly one master (lower MAC), still a working bridge: the conflict is reported, not a hang.
   CHECK(y.link->selfIsMaster() && !x.link->selfIsMaster());
@@ -491,7 +491,7 @@ EPDJ_TEST(node_duplicate_deck_id_is_surfaced_not_fought) {
   sim.run(1500);
   CHECK(!x.link->deckConflict() && !y.link->deckConflict());
   CHECK_EQ(y.link->fillPeers(p, 3, 0), 1);
-  CHECK_EQ(p[0].reserved, 0);
+  CHECK_EQ(p[0].status, 0);
 }
 
 EPDJ_TEST(node_groups_isolate_rigs_and_non_deck_peers_are_listed_not_used) {

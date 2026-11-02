@@ -24,6 +24,13 @@ constexpr uint8_t kClockPpqn = 24;
 constexpr uint16_t kBpmMinX10 = 200;
 constexpr uint16_t kBpmMaxX10 = 3000;
 
+// ---- USB identity (dev placeholder VID/PID, see protocol/epdj3000.json) ----
+constexpr uint16_t kUsbVendorId = 0x1209;
+constexpr uint16_t kUsbProductId = 0x0001;
+constexpr const char* kProductName = "EP-DJ3000";
+constexpr const char* kDeckNames[2] = {"Deck A", "Deck B"};
+constexpr const char* kCableNames[3] = {"Deck", "TRS MIDI", "Linked deck"};
+
 namespace cc {
 constexpr uint8_t kJog = 22;
 constexpr uint8_t kCrossfaderMsb = 23;
@@ -139,6 +146,9 @@ constexpr uint8_t kUsbHost = static_cast<uint8_t>(1u << 0);
 constexpr uint8_t kForwarding = static_cast<uint8_t>(1u << 1);
 constexpr uint8_t kIsMaster = static_cast<uint8_t>(1u << 2);
 }  // namespace peerFlags
+namespace peerStatus {
+constexpr uint8_t kConflict = static_cast<uint8_t>(1u << 0);
+}  // namespace peerStatus
 
 // ---- SysEx ----
 namespace sysex {
@@ -220,6 +230,7 @@ enum class ConfigKey : uint8_t {
   TrsMidiEnable = 29,
   LedBrightness = 30,
   ButtonDebounceMs = 31,
+  LinkGroup = 32,
 };
 struct ConfigDesc {
   ConfigKey key;
@@ -228,7 +239,7 @@ struct ConfigDesc {
   int32_t maxValue;
   int32_t defaultValue;
 };
-constexpr size_t kConfigCount = 32;
+constexpr size_t kConfigCount = 33;
 constexpr ConfigDesc kConfigTable[kConfigCount] = {
   {ConfigKey::DeckId, "deckId", 0, 1, 0},
   {ConfigKey::MidiChannel, "midiChannel", 0, 16, 16},
@@ -241,7 +252,7 @@ constexpr ConfigDesc kConfigTable[kConfigCount] = {
   {ConfigKey::TapPlay, "tapPlay", 0, 1, 1},
   {ConfigKey::TapMaxMs, "tapMaxMs", 60, 500, 180},
   {ConfigKey::TapMoveTicks, "tapMoveTicks", 0, 64, 8},
-  {ConfigKey::FaderRole, "faderRole", 0, 2, 0},
+  {ConfigKey::FaderRole, "faderRole", 0, 2, 1},
   {ConfigKey::FaderRawMin, "faderRawMin", 0, 4095, 40},
   {ConfigKey::FaderRawMax, "faderRawMax", 0, 4095, 4055},
   {ConfigKey::FaderInvert, "faderInvert", 0, 1, 0},
@@ -262,6 +273,7 @@ constexpr ConfigDesc kConfigTable[kConfigCount] = {
   {ConfigKey::TrsMidiEnable, "trsMidiEnable", 0, 1, 1},
   {ConfigKey::LedBrightness, "ledBrightness", 0, 255, 64},
   {ConfigKey::ButtonDebounceMs, "buttonDebounceMs", 1, 30, 4},
+  {ConfigKey::LinkGroup, "linkGroup", 0, 255, 0},
 };
 
 // ---- structs (little-endian, packed) ----
@@ -534,7 +546,7 @@ struct Peer {
   uint8_t deck = 0;
   uint8_t flags = 0;
   int8_t rssi = 0;
-  uint8_t reserved = 0;
+  uint8_t status = 0;
   uint16_t rttUs = 0;
   int32_t offsetUs = 0;
   static constexpr size_t kBytes = 10;
@@ -544,7 +556,7 @@ inline void serialize(const Peer& v, uint8_t* out) {
   out[i++] = static_cast<uint8_t>((static_cast<uint32_t>(v.deck) >> 0) & 0xFFu);
   out[i++] = static_cast<uint8_t>((static_cast<uint32_t>(v.flags) >> 0) & 0xFFu);
   out[i++] = static_cast<uint8_t>((static_cast<uint32_t>(v.rssi) >> 0) & 0xFFu);
-  out[i++] = static_cast<uint8_t>((static_cast<uint32_t>(v.reserved) >> 0) & 0xFFu);
+  out[i++] = static_cast<uint8_t>((static_cast<uint32_t>(v.status) >> 0) & 0xFFu);
   out[i++] = static_cast<uint8_t>((static_cast<uint32_t>(v.rttUs) >> 0) & 0xFFu);
   out[i++] = static_cast<uint8_t>((static_cast<uint32_t>(v.rttUs) >> 8) & 0xFFu);
   out[i++] = static_cast<uint8_t>((static_cast<uint32_t>(v.offsetUs) >> 0) & 0xFFu);
@@ -573,7 +585,7 @@ inline bool deserialize(const uint8_t* in, size_t len, Peer* v) {
   {
     uint32_t x_ = 0;
     x_ |= static_cast<uint32_t>(in[i++]) << 0;
-    v->reserved = static_cast<uint8_t>(x_);
+    v->status = static_cast<uint8_t>(x_);
   }
   {
     uint32_t x_ = 0;

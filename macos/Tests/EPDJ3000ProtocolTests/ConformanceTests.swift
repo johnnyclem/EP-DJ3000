@@ -70,7 +70,7 @@ final class ConformanceTests: XCTestCase {
                 XCTAssertEqual(CalResult(bytes: s.bytes), x)
             case "Peer":
                 let x = Peer(deck: UInt8(s.int("deck")), flags: UInt8(s.int("flags")), rssi: Int8(s.int("rssi")),
-                             reserved: UInt8(s.int("reserved")), rttUs: UInt16(s.int("rttUs")), offsetUs: Int32(s.int("offsetUs")))
+                             status: UInt8(s.int("status")), rttUs: UInt16(s.int("rttUs")), offsetUs: Int32(s.int("offsetUs")))
                 XCTAssertEqual(x.serialized(), s.bytes)
                 XCTAssertEqual(Peer(bytes: s.bytes), x)
             default:

@@ -86,7 +86,7 @@ MIDI with a jog counter and one fader pair 31 B.
   with the lowest `(deck, MAC)`. With the two-deck hardware it is simply "the other deck". Which units hear
   each other is isolated by **group**; two rigs in one room need different groups (section 11).
 * **Duplicate deck id**: if a live peer announces our deck id, or two peers announce the same one, that is
-  reported in LINK_STATUS (`Peer.reserved` bit 0, section 10). The link keeps working (election falls back
+  reported in LINK_STATUS (`Peer.status` bit 0 (`PeerStatus.CONFLICT`), section 10). The link keeps working (election falls back
   to the MAC); the host is expected to tell the user to change a deck id.
 
 ## 4. The bridge ("one cable" mode)
@@ -254,7 +254,7 @@ abandoned (retries exhausted) and retried event counts.
 | `deck` | the peer's announced deck id (`FF` = not a deck) |
 | `flags` | USB_HOST and FORWARDING as the peer announced them; IS_MASTER set on the peer we elected (not on a peer when we are the master) |
 | `rssi` | dBm of the last packet |
-| `reserved` | bit 0 = **deck-id conflict** (this peer claims our deck id or the same id as another peer). Bits 1-7 are 0. |
+| `status` | bit 0 = **deck-id conflict** (`PeerStatus.CONFLICT`) (this peer claims our deck id or the same id as another peer). Bits 1-7 are 0. |
 | `rttUs` | fastest recent round trip to the partner (0 for other peers, or before the first answer) |
 | `offsetUs` | partner clock minus ours now, microseconds (0 for other peers) |
 
@@ -300,9 +300,8 @@ rate, channel coexistence with Wi-Fi/BLE); the time-sync figures above come from
 
 ## 13. Contract changes this document relies on
 
-Proposed for [`protocol/epdj3000.json`](../protocol/epdj3000.json) (not applied; the orchestrator owns it):
+Both are now in [`protocol/epdj3000.json`](../protocol/epdj3000.json):
 
-1. `structs.Peer.reserved` -> name it `status` and add a `PeerStatus` bit field with `CONFLICT = bit 0`.
-   The implementation already writes the conflict flag into that byte.
-2. A config key `linkGroup` (u8 0..255, default 0) so two rigs in one room can be separated without
-   firmware changes; the group is already in the wire header.
+1. `structs.Peer.status` with the `PeerStatus` bit field (`CONFLICT = bit 0`).
+2. Config key `linkGroup` (u8 0..255, default 0), so two rigs in one room can be separated without
+   reflashing; the group is in the wire header.

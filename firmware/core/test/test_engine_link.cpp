@@ -104,7 +104,7 @@ EPDJ_TEST(engine_link_discovery_and_status) {
     CHECK(proto::deserialize(&r[0].payload[1], proto::Peer::kBytes, &peer));
     CHECK_EQ(peer.deck, 1);
     CHECK_EQ(peer.flags, proto::peerFlags::kForwarding);  // B has no host, forwards, is not the master
-    CHECK_EQ(peer.reserved, 0);
+    CHECK_EQ(peer.status, 0);
     CHECK_EQ(peer.rssi, -40);
     CHECK(peer.rttUs > 1400 && peer.rttUs < 4000);
   }
@@ -376,7 +376,7 @@ EPDJ_TEST(engine_link_disable_and_deck_conflict) {
     proto::Peer peer;
     CHECK(proto::deserialize(&r[0].payload[1], proto::Peer::kBytes, &peer));
     CHECK_EQ(peer.deck, 0);
-    CHECK_EQ(peer.reserved & link::Link::kPeerConflict, link::Link::kPeerConflict);
+    CHECK_EQ(peer.status & link::Link::kPeerConflict, link::Link::kPeerConflict);
   }
 }
 

@@ -475,8 +475,8 @@ module round_cap(d, h) {
         cylinder(d = d, h = 1.2, $fn = 64);
         translate([0, 0, h - 1.4]) cylinder(d = d - 1.4, h = 1.4, $fn = 64);
     }
-    translate([0, 0, h - eps])
-        cylinder(d = 4.4, h = skin + stem_past, $fn = 24);
+    translate([0, 0, h - 0.6])
+        cylinder(d = 4.4, h = skin + stem_past + 0.6, $fn = 24);
 }
 
 module button() { round_cap(play_d, play_h); }

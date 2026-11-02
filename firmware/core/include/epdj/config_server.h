@@ -59,11 +59,15 @@ class ReplyQueue final : public ReplySink {
 class CalibrationHost {
  public:
   enum class EndStatus : uint8_t { Ok, NotActive, Failed };
+  struct Range {
+    uint16_t measuredMin = 0, measuredMax = 0;  // the extremes seen: what CAL_END(apply = 0) reports
+    uint16_t rawMin = 0, rawMax = 0;            // the range to write (the host's inset already included): what apply = 1 writes and reports
+  };
   // Start recording extremes of `kind`. False = this control cannot be calibrated (NOT_SUPPORTED).
   virtual bool begin(proto::CalKind kind) = 0;
-  // Stop recording. On Ok, *rawMin/*rawMax hold the range to apply (any inset already included).
+  // Stop recording. *out is written only on Ok.
   // NotActive = nothing was being recorded for `kind`; Failed = the sweep was too small.
-  virtual EndStatus end(proto::CalKind kind, uint16_t* rawMin, uint16_t* rawMax) = 0;
+  virtual EndStatus end(proto::CalKind kind, Range* out) = 0;
 
  protected:
   ~CalibrationHost() = default;

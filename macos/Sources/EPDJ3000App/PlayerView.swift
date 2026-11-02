@@ -159,7 +159,7 @@ struct PlayerDeckView: View {
             }
             Text(session.isVirtual
                  ? "Use the buttons, or drag the on-screen platter below. CUE: while playing it returns to the cue point; while paused it sets the cue here and previews while held."
-                 : "The unit drives this player too: touch the platter to hold the record and slide to scratch, CUE and REV work as on a CDJ, a quick tap toggles play, and the fader sets the channel volume (or cuts like a crossfader, or sets the pitch, by its role).")
+                 : "The unit drives this player too: touch the platter to hold the record and slide to scratch, CUE and REV work as on a CDJ, a quick tap toggles play, and the slide pot is the pitch fader (or sets the channel volume, or cuts like a crossfader, by its role).")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }
@@ -226,7 +226,7 @@ struct PlayerDeckView: View {
                     .frame(width: 170)
                 }
             }
-            Text("The unit's pitch fader (slide pot role Pitch) and knob override the on-screen controls when they move. The role is live; Settings > Save to unit keeps it.")
+            Text("A factory unit's slide pot is the pitch fader. It and the knob override the on-screen controls when they move; choose Channel volume to cut this deck like a fader instead. The role is live; Settings > Save to unit keeps it.")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }

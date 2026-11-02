@@ -11,9 +11,10 @@ First power-up: [`docs/BRINGUP.md`](../../docs/BRINGUP.md). Wiring: [`hardware/W
 
 Tested toolchain: **ESP-IDF 6.1.0** (what PlatformIO's `espressif32` 8.0.0 installs) with `espressif/esp_tinyusb`
 **3.0.0** (it bundles TinyUSB 0.21.0). The code was written for IDF 5.3+ (two version guards: ESP-NOW callback
-signature and rate API) but only 6.1.0 has been compiled. `platformio.ini` says `platform = espressif32` without a
-version, so a newer platform release changes the toolchain under you; `platform = espressif32@8.0.0` reproduces this
-build.
+signature and rate API) but only 6.1.0 has been compiled. `platformio.ini` pins `platform = espressif32@8.0.0`, the
+release that produced the verified build (PlatformIO Core 6.2.0; it installs ESP-IDF 6.1.0, GCC 15.2.0 and esptool
+5.4.0), so a newer platform release cannot swap the toolchain under you. Moving to a newer platform means re-running
+the build and checking for warnings first.
 
 `pio run -d firmware/esp32s3` was run from a clean copy of the tree for this README: it succeeds with no compiler
 warnings (the RAM and flash figures print at the end of the build).
@@ -33,8 +34,9 @@ not already set, so after editing the defaults delete the generated file.
 **Two USB-C cables.** The DevKitC-1 has two ports. **UART** (the CP210x bridge) is for flashing and the log. **USB** is the
 chip's native port, which the firmware gives to TinyUSB as soon as it boots, so from the first flash on, the Mac sees a
 MIDI device there and no serial port. Keep both cables plugged in while developing. If the firmware ever hangs the native
-port, flash over UART, or hold BOOT while pressing reset. The status LED pin assumes DevKitC-1 v1.0 (GPIO48); v1.1 boards
-have it on GPIO38 (`kStatusLed`, `WIRING.md`).
+port, flash over UART, or hold BOOT while pressing reset. The status LED is on GPIO38 on DevKitC-1 v1.1 boards (the
+default here) and GPIO48 on v1.0: pick the revision with `EPDJ_BOARD_REV` (`WIRING.md`). A wrong pick leaves the LED dark;
+the boot log line `led: WS2812 on GPIO..` says which pin was driven.
 
 `platformio.ini` sets `src_dir = main` so PlatformIO and `idf.py` share one tree.
 
@@ -55,6 +57,7 @@ delete the generated sdkconfig: IDF only applies defaults to symbols that are no
 
 | Option | Default | |
 |---|---|---|
+| `EPDJ_BOARD_DEVKITC_1_V1_1` / `_V1_0` | v1.1 | DevKitC-1 revision: status LED on GPIO38 (v1.1) or GPIO48 (v1.0), feeds `kStatusLed` in `board_pins.h` |
 | `EPDJ_PLATTER_*` | touch ring | first-boot platter source (afterwards the `platterSource` config key) |
 | `EPDJ_TOUCH_PAD_COUNT` | 8 | pads wired from GPIO4 up; 1 for an AS5600 build (hold pad) |
 | `EPDJ_TOUCH_SCAN_TARGET_US` | 800 | boot-time auto-range: charge/discharge cycles are chosen so one scan of all pads takes about this long (0 = off) |

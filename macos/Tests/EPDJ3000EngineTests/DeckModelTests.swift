@@ -299,14 +299,14 @@ final class DeckModelTests: XCTestCase {
         XCTAssertEqual(d.run(0.05).map { abs($0) }.max()!, 0.8, accuracy: 0.01)
     }
 
-    func testChannelVolumeIsTheDefaultRoleAndAlwaysALinearGain() {
+    func testChannelVolumeRoleIsAlwaysALinearGain() {
         let d = DeckRig()
         d.tap()
         d.run(0.3)
         XCTAssertEqual(d.run(0.05).map { abs($0) }.max()!, 0.8, accuracy: 0.01, "open until the pot first moves")
         XCTAssertNil(d.deck.controller.faderRole)
 
-        // CC 7 / 39 is what a unit sends with its default faderRole.
+        // CC 7 / 39 is what a unit sends after faderRole = CHANNEL_VOLUME (not the factory default, which is PITCH).
         for (value, expected) in [(UInt16(0), Float(0)), (4096, 0.2), (8192, 0.4), (16383, 0.8)] as [(UInt16, Float)] {
             d.set14(.channelVolume, value)
             d.run(0.05)
@@ -322,7 +322,7 @@ final class DeckModelTests: XCTestCase {
 
     func testPitchRoleSetsTheTempoWithinPlusMinusEightPercent() {
         let d = DeckRig()
-        d.set14(.pitch, 16383)
+        d.set14(.pitch, 16383)  // CC 25 / 57: what a factory-default unit sends
         XCTAssertEqual(d.deck.tempoRatio, 1.08, accuracy: 1e-9)
         XCTAssertEqual(d.deck.pitchPercent, 8, accuracy: 1e-6)
         d.tap()
@@ -350,6 +350,19 @@ final class DeckModelTests: XCTestCase {
             d.set14(role, 16383)
             XCTAssertEqual(d.deck.tempoRatio, 1.0, "\(role)")
         }
+    }
+
+    /// E2E-2 as the deck sees it: the unit re-sends the pitch pair at the value it already held after the role was
+    /// changed away and back, and the tempo has to follow the pot again.
+    func testSwitchingTheRoleBackToPitchAtAnUnchangedPositionTakesTheTempoAgain() {
+        let d = DeckRig()
+        d.set14(.pitch, 16383)
+        XCTAssertEqual(d.deck.tempoRatio, 1.08, accuracy: 1e-9)
+        d.set14(.channelVolume, 16383)
+        XCTAssertEqual(d.deck.tempoRatio, 1.0, "left to the pitch role: back to nominal")
+        d.set14(.pitch, 16383)
+        XCTAssertEqual(d.deck.controller.faderRole, .pitch)
+        XCTAssertEqual(d.deck.tempoRatio, 1.08, accuracy: 1e-9, "the same pitch pair again at the same value is the pot being a tempo fader again")
     }
 
     func testKnobSetsTheOutputVolume() {
@@ -512,11 +525,11 @@ final class DeckModelTests: XCTestCase {
 
     // MARK: a recorded session, as bytes off the wire
 
-    /// What a unit on channel 1 sends for: open the fader (default role), tap to play, let it run, touch the platter, scratch
+    /// What a unit on channel 1 sends for: centre the pitch fader (default role), tap to play, let it run, touch the platter, scratch
     /// forwards and back, let go, hold REV, then CUE. Running status is used the way a real device does.
     private static let session: [(t: Double, bytes: [UInt8])] = {
         var s = [(Double, [UInt8])]()
-        s.append((0.000, [0xB0, 7, 127, 39, 127]))                 // channel volume 16383, the default fader role (MSB, LSB in running status)
+        s.append((0.000, [0xB0, 25, 64, 57, 0]))                   // pitch 8192 = nominal tempo, the default fader role (MSB, LSB in running status)
         s.append((0.010, [0xB0, 24, 0, 56, 0]))                    // knob 0 -- then
         s.append((0.020, [0xB0, 24, 127, 56, 127]))                // knob up to full
         s.append((0.100, [0x90, 39, 127]))                         // platter tap: play pulse
@@ -572,7 +585,8 @@ final class DeckModelTests: XCTestCase {
 
         XCTAssertEqual(next, session.count, "every recorded message was replayed")
         XCTAssertTrue(allFinite(out))
-        XCTAssertEqual(d.deck.controller.faderRole, .channelVolume)
+        XCTAssertEqual(d.deck.controller.faderRole, .pitch)
+        XCTAssertEqual(d.deck.tempoRatio, 1.0)
         XCTAssertEqual(d.deck.controller.knob, 16383)
 
         let playing = checkpoints["playing"]!

@@ -124,12 +124,14 @@ bool Engine::Device::begin(proto::CalKind kind) {
   return true;
 }
 
-CalibrationHost::EndStatus Engine::Device::end(proto::CalKind kind, uint16_t* rawMin, uint16_t* rawMax) {
+CalibrationHost::EndStatus Engine::Device::end(proto::CalKind kind, Range* out) {
   CalibrationTracker::Result r;
   switch ((kind == proto::CalKind::Fader ? e_.calFader_ : e_.calKnob_).end(&r)) {
     case CalibrationTracker::Status::Ok:
-      *rawMin = r.rawMin;
-      *rawMax = r.rawMax;
+      out->measuredMin = r.measuredMin;
+      out->measuredMax = r.measuredMax;
+      out->rawMin = r.rawMin;
+      out->rawMax = r.rawMax;
       return EndStatus::Ok;
     case CalibrationTracker::Status::NotActive:
       return EndStatus::NotActive;
@@ -819,6 +821,7 @@ void Engine::handleHostMessage(const midi::Message& m) {
         // "vel > 0 = deck is playing": feedback for the LED, in every mode. Only the transport CC commands
         // a master, so a host can mirror its play state to the unit without starting its clock. A
         // velocity-0 release pauses only the mirror, so the pulse we sent cannot be echoed into a state change.
+        hostPlaying_ = on;
         if (!isMaster()) {
           mirror_ = on ? TransportState::Playing : (mirror_ == TransportState::Playing ? TransportState::Paused : mirror_);
         }
@@ -947,6 +950,9 @@ void Engine::updateLed() {
   led_.cueLit = cueLit_;
   led_.touched = jog_.touched();
   led_.transport = transport();
+  // A master's own transport stays authoritative for output; the host's play note only lights the indicator.
+  // (Outside SYNC_MASTER the note is already folded into mirror_.)
+  if (isMaster() && hostPlaying_) led_.transport = TransportState::Playing;
   const uint32_t heldMs = gestures_.chordHeldMs(now_);
   led_.chordStage = heldMs >= ButtonGestures::kSwapMinMs ? 2 : (heldMs >= ButtonGestures::kCycleMinMs ? 1 : 0);
   led_.brightness = static_cast<uint8_t>(cfg_.get(ConfigKey::LedBrightness));

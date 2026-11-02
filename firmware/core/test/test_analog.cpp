@@ -328,6 +328,8 @@ EPDJ_TEST(calibration_measures_extremes_with_one_percent_inset) {
   // Measured [0 .. 4095]: inset is 1% of the span (41) at each end.
   CHECK(r.rawMin >= 38 && r.rawMin <= 46);
   CHECK(r.rawMax >= 4049 && r.rawMax <= 4057);
+  CHECK(r.measuredMin <= 6 && r.measuredMax >= 4090);
+  CHECK(r.rawMin > r.measuredMin && r.rawMax < r.measuredMax);
 }
 
 EPDJ_TEST(calibration_inset_is_exactly_one_percent_for_clean_input) {
@@ -341,6 +343,8 @@ EPDJ_TEST(calibration_inset_is_exactly_one_percent_for_clean_input) {
   CHECK(c.end(&r) == CalibrationTracker::Status::Ok);
   CHECK_EQ(r.rawMin, 1025);  // span 2500 -> inset 25
   CHECK_EQ(r.rawMax, 3475);
+  CHECK_EQ(r.measuredMin, 1000);  // the extremes themselves are reported too (CAL_END with apply = 0 sends these)
+  CHECK_EQ(r.measuredMax, 3500);
 }
 
 EPDJ_TEST(calibration_fails_below_minimum_span) {
@@ -357,9 +361,13 @@ EPDJ_TEST(calibration_fails_below_minimum_span) {
   CalibrationTracker::Result r;
   r.rawMin = 7;
   r.rawMax = 9;
+  r.measuredMin = 11;
+  r.measuredMax = 13;
   CHECK(run(1000, 2499, &r) == CalibrationTracker::Status::SpanTooSmall);  // span 1499
   CHECK_EQ(r.rawMin, 7);  // untouched on failure
   CHECK_EQ(r.rawMax, 9);
+  CHECK_EQ(r.measuredMin, 11);
+  CHECK_EQ(r.measuredMax, 13);
   CHECK(run(1000, 2500, &r) == CalibrationTracker::Status::Ok);            // span 1500 is the minimum
   CHECK(run(0, 100, &r) == CalibrationTracker::Status::SpanTooSmall);
   CHECK(run(2000, 2000, &r) == CalibrationTracker::Status::SpanTooSmall);

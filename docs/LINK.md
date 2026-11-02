@@ -122,7 +122,7 @@ What is forwarded: cable-0 Note On/Off and Control Change (jog, faders, knob, bu
 decks go through TRANSPORT and the clock sync, not through the bridge, and a bridged deck cannot follow
 host MIDI clock in v1. Cable 1 (TRS) is not bridged. Host feedback relayed back is limited to Note and CC
 (LED states, tempo) and is handled exactly as if it had arrived on the bridged deck's own cable 0: in
-particular the `play` note (velocity > 0) is LED feedback only and never starts or stops that deck's clock;
+particular the `play` note (velocity > 0) is LED feedback only (it lights the play LED in every mode) and never starts or stops that deck's clock;
 only the `transport` CC commands a clock master (PROTOCOL.md section 2.6).
 
 The bridge carries MIDI only. A bridged deck has **no USB audio stream** (its DAC is silent), cannot be configured over the

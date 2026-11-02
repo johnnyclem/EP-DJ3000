@@ -154,7 +154,7 @@ EPDJ_TEST(engine_sysex_config_round_trip) {
 
   r = ask(d, 0, Cmd::LoadDefaults);
   CHECK(r.size() == 1 && isAck(r[0], Cmd::LoadDefaults));
-  CHECK_EQ(cfgValue(d, ConfigKey::FaderRole), 1);  // the default role is CHANNEL_VOLUME
+  CHECK_EQ(cfgValue(d, ConfigKey::FaderRole), 2);  // the default role is PITCH
   CHECK_EQ(cfgValue(d, ConfigKey::LinkGroup), 0);
 }
 
@@ -205,7 +205,7 @@ EPDJ_TEST(engine_deck_identity_changes_only_through_set_deck_and_a_restart) {
 
 EPDJ_TEST(engine_sysex_set_config_applies_live_to_the_fader) {
   Deck d(0);
-  d.set(ConfigKey::FaderRole, 0);  // CROSSFADER (CC 23 / 55); the default role is CHANNEL_VOLUME
+  d.set(ConfigKey::FaderRole, 0);  // CROSSFADER (CC 23 / 55); the default role is PITCH
   d.in.faderRaw = 3000;
   d.run(100);
   const int base = lastPair(d, 23, 55);
@@ -447,8 +447,8 @@ EPDJ_TEST(engine_sysex_calibration_failure_and_no_apply_change_nothing) {
     CHECK(r[0].cmd == 0x48 && proto::deserialize(r[0].payload.data(), r[0].payload.size(), &res));
     CHECK_EQ(res.kind, 1);
     CHECK_EQ(res.applied, 0);
-    CHECK_EQ(res.rawMin, 100 + 38);
-    CHECK_EQ(res.rawMax, 3900 - 38);
+    CHECK_EQ(res.rawMin, 100);  // PROTOCOL.md 3: the measured extremes, no inset (E2E-1)
+    CHECK_EQ(res.rawMax, 3900);
   }
   CHECK_EQ(d.cfg.get(ConfigKey::KnobRawMin), 0);
   CHECK_EQ(d.cfg.get(ConfigKey::KnobRawMax), 4095);
@@ -464,6 +464,13 @@ EPDJ_TEST(engine_sysex_calibration_failure_and_no_apply_change_nothing) {
   d.run(4);
   r = ask(d, 0, Cmd::CalEnd, b({1, 1}));
   CHECK_EQ(r.size(), 1);
+  if (r.size() == 1) {  // apply = 1 reports the values it wrote: the same sweep, now with the 1% inset
+    proto::CalResult res;
+    CHECK(r[0].cmd == 0x48 && proto::deserialize(r[0].payload.data(), r[0].payload.size(), &res));
+    CHECK_EQ(res.applied, 1);
+    CHECK_EQ(res.rawMin, 138);
+    CHECK_EQ(res.rawMax, 3862);
+  }
   CHECK_EQ(d.cfg.get(ConfigKey::KnobRawMin), 138);
   CHECK_EQ(d.cfg.get(ConfigKey::KnobRawMax), 3862);
 

@@ -85,12 +85,12 @@ final class ControllerStateE2ETests: E2ETestCase {
                 let t = try XCTUnwrap(c.telemetry.take().last)
                 XCTAssertEqual(state.fader, t.faderOut, "slide pot at raw \(raw): the 14-bit value on the wire is what the device computed")
                 XCTAssertEqual(state.knob, t.knobOut, "knob at raw \(raw)")
-                XCTAssertEqual(state.faderRole, .channelVolume)
+                XCTAssertEqual(state.faderRole, .pitch, "contract v1.2: a factory unit's slide pot is the tempo fader")
             }
             XCTAssertEqual(state.faderNormalized, 1.0, accuracy: 1e-9, "top of travel")
             XCTAssertEqual(state.knobNormalized, 4055.0 / 4095.0, accuracy: 0.001)
 
-            for role in [FaderRole.crossfader, .pitch] {
+            for role in [FaderRole.crossfader, .channelVolume] {
                 try await c.client.setConfig(.faderRole, Int32(role.rawValue))
                 try await world.run(ms: 50)
                 fold(c, into: &state)
@@ -99,16 +99,17 @@ final class ControllerStateE2ETests: E2ETestCase {
                 XCTAssertEqual(state.fader, t.faderOut, "the new pair was sent the current position straight away")
             }
 
-            // Back to the role whose pair the fold has already seen, at the same position: the unit re-sends the pair
-            // (it must tell the host what the pot means now), but the fold only registers a CHANGED 14-bit value.
+            // E2E-2: back to the role whose pair the fold has already seen, at the same position. The unit re-sends the
+            // pair (it must tell the host what the pot means now) at the value the pair already held.
             let mark = world.process.log.count
-            try await c.client.setConfig(.faderRole, Int32(FaderRole.channelVolume.rawValue))
+            try await c.client.setConfig(.faderRole, Int32(FaderRole.pitch.rawValue))
             try await world.run(ms: 50)
             let resent = world.faderValues(since: mark)
-            XCTAssertFalse(resent.isEmpty, "the firmware did re-send the channel-volume pair")
+            XCTAssertFalse(resent.isEmpty, "the firmware did re-send the pitch pair")
             fold(c, into: &state)
-            knownIssue("E2E-2", "ControllerState.faderRole stays \(String(describing: state.faderRole)) after the unit switched back to CHANNEL_VOLUME at an unchanged position",
-                       holds: state.faderRole == .channelVolume)
+            XCTAssertEqual(state.faderRole, .pitch, "the role follows a pair that is sent again at an unchanged value")
+            let t = try XCTUnwrap(c.telemetry.take().last)
+            XCTAssertEqual(state.fader, t.faderOut)
         }
     }
 

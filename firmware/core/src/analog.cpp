@@ -133,6 +133,8 @@ CalibrationTracker::Status CalibrationTracker::end(Result* out) {
   active_ = false;
   if (!haveExtremes_ || max_ - min_ < kMinSpan) return Status::SpanTooSmall;
   const uint16_t inset = static_cast<uint16_t>((max_ - min_ + 50) / 100);
+  out->measuredMin = min_;
+  out->measuredMax = max_;
   out->rawMin = static_cast<uint16_t>(min_ + inset);
   out->rawMax = static_cast<uint16_t>(max_ - inset);
   return Status::Ok;

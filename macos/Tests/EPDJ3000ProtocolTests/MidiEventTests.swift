@@ -167,6 +167,26 @@ final class MidiHelpersTests: XCTestCase {
         XCTAssertEqual(a.feed(channel: 0, controller: 23, value: 9)?.value, 9 << 7, "channel 1 and the knob did not disturb it")
     }
 
+    func testCc14AssemblerObserveReportsRepeatsAndSaysWhetherTheValueChanged() {
+        var a = Cc14Assembler()
+        var seen = [Bool]()
+        func observe(_ cc: UInt8, _ value: UInt8) -> Cc14Assembler.Update? {
+            guard let (u, changed) = a.observe(channel: 0, controller: cc, value: value) else { return nil }
+            seen.append(changed)
+            return u
+        }
+        XCTAssertEqual(observe(23, 10)?.value, 10 << 7)
+        XCTAssertEqual(observe(55, 5)?.value, (10 << 7) | 5)
+        XCTAssertEqual(observe(23, 10)?.value, (10 << 7) | 5, "a repeat still reports the pair's value")
+        XCTAssertEqual(observe(55, 5)?.control, .crossfader)
+        XCTAssertEqual(seen, [true, true, false, false])
+        // feed is the changes-only view of the same stream
+        XCTAssertNil(a.feed(channel: 0, controller: 23, value: 10))
+        XCTAssertEqual(a.feed(channel: 0, controller: 23, value: 11)?.value, (11 << 7) | 5)
+        XCTAssertNil(observe(Proto.CC.jog, 5), "not a pair")
+        XCTAssertEqual(seen.count, 4)
+    }
+
     func testCc14AssemblerIgnoresControllersThatAreNotPairs() {
         var a = Cc14Assembler()
         for cc in [Proto.CC.jog, Proto.CC.bpmNudge, Proto.CC.transport, 1, 64] {

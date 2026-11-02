@@ -233,7 +233,7 @@ EPDJ_TEST(engine_fader_sweep_14bit_pairs_msb_first_for_every_role) {
 
 EPDJ_TEST(engine_fader_does_not_chatter_and_reacts_within_a_step) {
   Deck d(0);
-  d.set(ConfigKey::FaderRole, 0);  // CROSSFADER; the default role is CHANNEL_VOLUME
+  d.set(ConfigKey::FaderRole, 0);  // CROSSFADER; the default role is PITCH
   d.in.faderRaw = 2000;
   d.run(200);
   d.clearLog();
@@ -259,19 +259,21 @@ EPDJ_TEST(engine_fader_does_not_chatter_and_reacts_within_a_step) {
   CHECK(seen);
 }
 
-EPDJ_TEST(engine_fader_defaults_to_channel_volume) {
-  // Contract v1.1: each deck cuts its own channel, so two units never fight over one crossfader.
+EPDJ_TEST(engine_fader_defaults_to_pitch) {
+  // Contract v1.2: the CDJ-style tempo slider. It is audible in every DJ app even with an external mixer, and
+  // two units never fight over one control. CHANNEL_VOLUME and CROSSFADER stay selectable and are pinned
+  // explicitly by engine_fader_sweep_14bit_pairs_msb_first_for_every_role and the role-change test below.
   Deck d(0);
-  CHECK_EQ(d.cfg.get(ConfigKey::FaderRole), static_cast<int>(proto::FaderRole::ChannelVolume));
+  CHECK_EQ(d.cfg.get(ConfigKey::FaderRole), static_cast<int>(proto::FaderRole::Pitch));
   d.in.faderRaw = 3000;
   d.run(100);
   const std::vector<Bytes> m = usbMsgs(d.log, 0);
-  CHECK(ccPresent(m, proto::cc::kChannelVolumeMsb) && ccPresent(m, proto::cc::kChannelVolumeLsb));  // CC 7 / 39
+  CHECK(ccPresent(m, proto::cc::kPitchMsb) && ccPresent(m, proto::cc::kPitchLsb));  // CC 25 / 57
   CHECK(!ccPresent(m, proto::cc::kCrossfaderMsb) && !ccPresent(m, proto::cc::kCrossfaderLsb));
-  CHECK(!ccPresent(m, proto::cc::kPitchMsb) && !ccPresent(m, proto::cc::kPitchLsb));
-  CHECK_EQ(proto::cc::kChannelVolumeMsb, 7);
-  CHECK_EQ(proto::cc::kChannelVolumeLsb, 39);
-  const std::vector<int> v = pairValues(m, 0, 7, 39);
+  CHECK(!ccPresent(m, proto::cc::kChannelVolumeMsb) && !ccPresent(m, proto::cc::kChannelVolumeLsb));
+  CHECK_EQ(proto::cc::kPitchMsb, 25);
+  CHECK_EQ(proto::cc::kPitchLsb, 57);
+  const std::vector<int> v = pairValues(m, 0, 25, 57);
   CHECK(!v.empty());
   CHECK_NEAR(lastOr(v), 12195, 15);  // raw 3000 of 40..4055 through the 1.5% dead zones
 }
@@ -603,7 +605,7 @@ EPDJ_TEST(engine_deck_b_uses_channel_two_for_everything) {
   const std::vector<Bytes> msgs = usbMsgs(d->log, 0);
   CHECK(msgs.size() > 100);
   CHECK(allOnChannel(msgs, 1));
-  CHECK(ccPresent(msgs, proto::cc::kJog) && ccPresent(msgs, proto::cc::kChannelVolumeMsb) &&
+  CHECK(ccPresent(msgs, proto::cc::kJog) && ccPresent(msgs, proto::cc::kPitchMsb) &&
         ccPresent(msgs, proto::cc::kKnobMsb) && ccPresent(msgs, proto::cc::kBpmMsb));
   CHECK_EQ(countEq(msgs, b({0x91, 36, 127})), 1);
 }
@@ -753,10 +755,10 @@ EPDJ_TEST(engine_unmounted_usb_is_silent_and_mount_resends_state) {
   d.in.usbMounted = true;
   d.run(300);
   const std::vector<Bytes> m = usbMsgs(d.log, 0);
-  CHECK(ccPresent(m, proto::cc::kChannelVolumeMsb) && ccPresent(m, proto::cc::kChannelVolumeLsb));  // current state, both halves
+  CHECK(ccPresent(m, proto::cc::kPitchMsb) && ccPresent(m, proto::cc::kPitchLsb));  // current state, both halves (default role)
   CHECK(ccPresent(m, proto::cc::kKnobMsb) && ccPresent(m, proto::cc::kKnobLsb));
   CHECK_EQ(ccSum(m, 0, proto::cc::kJog), 0);  // motion made while nobody listened is not replayed
-  const std::vector<int> f = pairValues(m, 0, proto::cc::kChannelVolumeMsb, proto::cc::kChannelVolumeLsb);
+  const std::vector<int> f = pairValues(m, 0, proto::cc::kPitchMsb, proto::cc::kPitchLsb);
   CHECK(!f.empty());
   CHECK_NEAR(lastOr(f), 12195, 150);  // where the pot is now (raw 2999)
 }

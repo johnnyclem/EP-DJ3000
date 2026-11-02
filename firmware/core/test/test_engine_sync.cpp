@@ -51,6 +51,15 @@ Bytes transportBytes(const std::vector<Rec>& log, size_t from = 0) {
   return out;
 }
 
+// Any MIDI Time Code output after `from`: a quarter frame (F1) or a full-frame SysEx.
+bool mtcPresent(const std::vector<Rec>& log, size_t from) {
+  for (size_t i = from; i < log.size(); ++i) {
+    if (log[i].kind == OutEvent::Kind::SysEx) return true;
+    if (log[i].kind == OutEvent::Kind::Message && !log[i].bytes.empty() && log[i].bytes[0] == 0xF1) return true;
+  }
+  return false;
+}
+
 bool ccPresent(const std::vector<Bytes>& v, uint8_t cc) {
   for (const Bytes& m : v) {
     if (m.size() == 3 && (m[0] & 0xF0) == 0xB0 && m[1] == cc) return true;
@@ -372,7 +381,7 @@ EPDJ_TEST(engine_master_platter_tap_plays_and_pauses) {
   d->hostMsg(b({0x90, 39, 127}));
   d->run(50);
   CHECK(d->engine.transport() == proto::TransportState::Paused);
-  CHECK(d->engine.led().transport == proto::TransportState::Paused);  // the master's own state, not the host's claim
+  CHECK(d->engine.led().transport == proto::TransportState::Playing);  // the host's deck plays: LED only (next test)
   CHECK_BYTES(transportBytes(d->log, mark), Bytes());
   hostTransport(*d, 1);
   CHECK_BYTES(transportBytes(d->log, mark), b({0xFB}));
@@ -382,7 +391,82 @@ EPDJ_TEST(engine_master_platter_tap_plays_and_pauses) {
   d->hostMsg(b({0x80, 39, 0}));
   d->run(50);
   CHECK(d->engine.transport() == proto::TransportState::Playing);
+  CHECK(d->engine.led().transport == proto::TransportState::Playing);
   CHECK_BYTES(transportBytes(d->log, mark), Bytes());
+}
+
+// PROTOCOL 2.6 (E2E-3): the inbound play note is feedback for the LED in every mode.
+EPDJ_TEST(engine_host_play_note_lights_the_play_led_in_every_mode) {
+  for (int mode = 0; mode <= 2; ++mode) {
+    Deck d(0);
+    d.set(ConfigKey::Mode, mode);
+    d.run(200);
+    d.clearLog();
+    CHECK(d.engine.led().transport == proto::TransportState::Stopped);
+    d.hostMsg(b({0x90, 39, 127}));
+    d.run(50);
+    CHECK(d.engine.led().transport == proto::TransportState::Playing);
+    d.hostMsg(b({0x91, 39, 0}));  // another deck's channel: ignored
+    d.run(50);
+    CHECK(d.engine.led().transport == proto::TransportState::Playing);
+    d.hostMsg(b({0x90, 39, 0}));
+    d.run(50);
+    CHECK(d.engine.led().transport != proto::TransportState::Playing);
+    d.hostMsg(b({0x90, 39, 127}));
+    d.run(50);
+    CHECK(d.engine.led().transport == proto::TransportState::Playing);
+    d.hostMsg(b({0x80, 39, 0}));  // note off, the other way to say "stopped"
+    d.run(50);
+    CHECK(d.engine.led().transport != proto::TransportState::Playing);
+    CHECK_BYTES(transportBytes(d.log), Bytes());  // never a Start, Stop or Song Position, whatever the mode
+  }
+}
+
+// The master's own state stays authoritative for output: the note changes the LED snapshot and nothing else.
+EPDJ_TEST(engine_master_host_play_note_never_touches_transport_clock_or_mtc) {
+  std::unique_ptr<Deck> d = makeMaster();
+  d->set(ConfigKey::MtcEnable, 1);
+  d->run(100);
+  size_t mark = d->log.size();
+  d->hostMsg(b({0x90, 39, 127}));
+  d->run(1000);
+  CHECK(d->engine.led().transport == proto::TransportState::Playing);
+  CHECK(d->engine.transport() == proto::TransportState::Stopped);
+  CHECK_BYTES(transportBytes(d->log, mark), Bytes());
+  CHECK(!mtcPresent(d->log, mark));
+  CHECK_NEAR(countClocks(d->log, mark, d->log.size()), 48, 2);  // 120 BPM, undisturbed
+
+  // The LED shows Playing while either the host's deck or the unit's own transport plays.
+  d->hostMsg(b({0x90, 39, 0}));
+  d->run(50);
+  CHECK(d->engine.led().transport == proto::TransportState::Stopped);
+  hostTransport(*d, 1);  // the unit's own transport starts (a command, unlike the note)
+  d->run(50);
+  CHECK(d->engine.led().transport == proto::TransportState::Playing);
+  d->hostMsg(b({0x90, 39, 0}));  // the host saying "not playing" does not dim a running master
+  d->run(50);
+  CHECK(d->engine.led().transport == proto::TransportState::Playing);
+  d->hostMsg(b({0x90, 39, 127}));
+  hostTransport(*d, 2);  // paused, while the host's deck plays
+  d->run(50);
+  CHECK(d->engine.transport() == proto::TransportState::Paused);
+  CHECK(d->engine.led().transport == proto::TransportState::Playing);
+  d->hostMsg(b({0x90, 39, 0}));
+  d->run(50);
+  CHECK(d->engine.led().transport == proto::TransportState::Paused);  // the unit's own state again
+
+  // Feedback that arrived before the unit became a master is not lost, and still starts nothing.
+  Deck e(0);
+  e.run(100);
+  e.hostMsg(b({0x90, 39, 127}));
+  e.run(20);
+  CHECK(e.engine.led().transport == proto::TransportState::Playing);
+  e.clearLog();
+  e.set(ConfigKey::Mode, 1);
+  e.run(200);
+  CHECK(e.engine.led().transport == proto::TransportState::Playing);
+  CHECK(e.engine.transport() == proto::TransportState::Stopped);
+  CHECK_BYTES(transportBytes(e.log), Bytes());
 }
 
 // ---- tempo ---------------------------------------------------------------------------------------

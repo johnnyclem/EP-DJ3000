@@ -16,10 +16,6 @@ renamed `Peer.reserved` to `Peer.status` (a `PeerStatus` bit field), added the `
 `CHANNEL_VOLUME` the default `faderRole`, put the USB identity in the contract, and settled the `deckId`, `LOAD_DEFAULTS`,
 `GET_CONFIG`-dump and play-note rules below. The revision label exists only in these documents, not in the JSON.
 
-**Known deviations of the current firmware from this text** (the text is the intent; each is an open finding with a
-reproducer in [`E2E.md`](E2E.md)): **E2E-1**, `CAL_END` with `apply = 0` returns the extremes inset by 1 %, like `apply = 1`
-(section 3, `CalResult`); **E2E-3**, in `SYNC_MASTER` the inbound `play` note does not light the play LED (section 2.6).
-Remove this paragraph when both are fixed.
 
 ## 1. USB topology
 
@@ -154,8 +150,8 @@ Transport state (`TransportState`): STOPPED, PLAYING, PAUSED.
 * The `transport` CC (0/1/2) is the **command**: in SYNC_MASTER it drives the local transport; elsewhere it only updates the mirrored state.
   The `play` note with velocity > 0 is **feedback only, in every mode** (the host telling the unit its deck is playing, for the LED);
   it never starts the unit's clock, so a DJ app can mirror its play state to the unit regardless of mode.
-  *Known deviation (E2E-3, open):* in `SYNC_MASTER` the firmware drops the note instead of lighting the LED, which keeps showing
-  the unit's own transport; DJ and `SYNC_FOLLOW` behave as described.
+  In `SYNC_MASTER` the LED shows Playing while either the unit's own transport or the host's deck is playing; the note still
+  never touches the master's transport, clock or MTC.
 * `bpm` / `bpmNudge` / `tap` set tempo (SYNC_MASTER applies it; otherwise it is stored for display).
 * Tempo is clamped to `bpmMinX10..bpmMaxX10`. Tap tempo averages the last 4 intervals and resets after a 2 s gap.
 
@@ -253,8 +249,7 @@ Enums and bit fields:
 
 Payload structs. `Telemetry.jogTotal` is the cumulative sum of the jog ticks the unit has emitted, **after** `jogInvert` is applied,
 wrapping as an `i32`. `CalResult.rawMin/rawMax` are the values written to the config (with the 1% inset) when `applied = 1`, otherwise the
-measured extremes (*known deviation, E2E-1, open:* the firmware insets them by 1 % also when `applied = 0`, so a host that
-displays "measured range" shows slightly narrower numbers). `Peer.status` bit 0 (`PeerStatus.CONFLICT`) means two units claim
+measured extremes. `Peer.status` bit 0 (`PeerStatus.CONFLICT`) means two units claim
 the same deck id.
 
 <!-- BEGIN GENERATED:structs -->
@@ -285,7 +280,7 @@ Exceptions that need a reboot to take effect: `dacMode`, `deckId` (via `SET_DECK
 | 8 | `tapPlay` | bool | 0..1 | 1 | A quick touch with no movement toggles play/pause. |
 | 9 | `tapMaxMs` | u16 | 60..500 | 180 | Longest touch that still counts as a tap. |
 | 10 | `tapMoveTicks` | u8 | 0..64 | 8 | Platter movement (ticks of 1/1024 rev) allowed during a tap. |
-| 11 | `faderRole` | enum `FaderRole` | 0..2 | 1 | What the slide pot controls (changes the CC it sends). Default CHANNEL_VOLUME: each deck cuts its own channel, so two units never fight over one crossfader. |
+| 11 | `faderRole` | enum `FaderRole` | 0..2 | 2 | What the slide pot controls (changes the CC it sends). Default PITCH: the CDJ-style tempo slider, which is audible in every DJ app even with an external mixer, and two units never fight over one control. CHANNEL_VOLUME is a per-deck scratch cut (only audible where the app's deck outputs are post-fader, e.g. Mixxx); CROSSFADER suits a single software mixer. |
 | 12 | `faderRawMin` | u16 | 0..4095 | 40 | 12-bit ADC reading at one end of travel. |
 | 13 | `faderRawMax` | u16 | 0..4095 | 4055 | 12-bit ADC reading at the other end of travel. |
 | 14 | `faderInvert` | bool | 0..1 | 0 | Flip fader direction. |

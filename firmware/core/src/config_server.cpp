@@ -229,8 +229,8 @@ void ConfigServer::calEnd(const syx::Frame& f) {
     nak(f.cmd, Err::CalNotActive);
     return;
   }
-  uint16_t rawMin = 0, rawMax = 0;
-  switch (cal_->end(static_cast<proto::CalKind>(kind), &rawMin, &rawMax)) {
+  CalibrationHost::Range range;
+  switch (cal_->end(static_cast<proto::CalKind>(kind), &range)) {
     case CalibrationHost::EndStatus::Ok: break;
     case CalibrationHost::EndStatus::NotActive: nak(f.cmd, Err::CalNotActive); return;
     case CalibrationHost::EndStatus::Failed: nak(f.cmd, Err::CalFailed); return;
@@ -238,21 +238,24 @@ void ConfigServer::calEnd(const syx::Frame& f) {
   const bool isFader = kind == static_cast<uint8_t>(proto::CalKind::Fader);
   const proto::ConfigKey minKey = isFader ? proto::ConfigKey::FaderRawMin : proto::ConfigKey::KnobRawMin;
   const proto::ConfigKey maxKey = isFader ? proto::ConfigKey::FaderRawMax : proto::ConfigKey::KnobRawMax;
-  if (apply == 1) {
-    // Both values are checked before either is written, so a bad measurement changes nothing.
-    if (Config::validate(static_cast<uint8_t>(minKey), rawMin) != ConfigStatus::Ok ||
-        Config::validate(static_cast<uint8_t>(maxKey), rawMax) != ConfigStatus::Ok) {
-      nak(f.cmd, Err::CalFailed);
-      return;
-    }
-    config_.set(minKey, rawMin);
-    config_.set(maxKey, rawMax);
-  }
   proto::CalResult r;
   r.kind = kind;
   r.applied = apply;
-  r.rawMin = rawMin;
-  r.rawMax = rawMax;
+  if (apply == 1) {
+    // Both values are checked before either is written, so a bad measurement changes nothing.
+    if (Config::validate(static_cast<uint8_t>(minKey), range.rawMin) != ConfigStatus::Ok ||
+        Config::validate(static_cast<uint8_t>(maxKey), range.rawMax) != ConfigStatus::Ok) {
+      nak(f.cmd, Err::CalFailed);
+      return;
+    }
+    config_.set(minKey, range.rawMin);
+    config_.set(maxKey, range.rawMax);
+    r.rawMin = range.rawMin;  // the values written
+    r.rawMax = range.rawMax;
+  } else {
+    r.rawMin = range.measuredMin;  // PROTOCOL.md 3: the measured extremes, not what apply would have written
+    r.rawMax = range.measuredMax;
+  }
   uint8_t buf[syx::kMaxFrameBytes];
   reply(buf, syx::encodeCalResult(replyDeck_, r, buf, sizeof(buf)));
 }

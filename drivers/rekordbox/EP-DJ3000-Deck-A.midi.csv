@@ -7,11 +7,11 @@
 PlayPause,PlayPause,Button,9027,0,,,,9027,0,,,,Fast;Priority=50,Play/Pause - platter tap - LED follows deck
 Cue,Cue,Button,9024,0,,,,9024,0,,,,Fast;Priority=50,Cue - LED follows cue state
 #Reverse,Reverse,Button,9025,0,,,,,,,,,Fast,UNVERIFIED command name - confirm in the ADD menu first
-TempoSlider,TempoSlider,KnobSliderHiRes,B019,0,,,,,,,,,Fast,Tempo fader - set faderRole to PITCH
+TempoSlider,TempoSlider,KnobSliderHiRes,B019,0,,,,,,,,,Fast,Tempo fader - faderRole PITCH (the default)
 ,,,,,,,,,,,,,,
 # Mixer,,,,,,,,,,,,,,
 CrossFader,CrossFader,KnobSliderHiRes,B017,,,,,,,,,,Fast,Crossfader - faderRole CROSSFADER - no use with an external mixer
-#ChannelFader,ChannelFader,KnobSliderHiRes,B007,0,,,,,,,,,Fast,UNVERIFIED command name - faderRole CHANNEL_VOLUME (the default)
+#ChannelFader,ChannelFader,KnobSliderHiRes,B007,0,,,,,,,,,Fast,UNVERIFIED command name - faderRole CHANNEL_VOLUME (not the default)
 Gain,Gain,KnobSliderHiRes,B018,0,,,,,,,,,Fast,Orange knob as trim - an arbitrary choice - re-learn to taste
 ,,,,,,,,,,,,,,
 # Jog - EXPERIMENTAL - disabled - see README,,,,,,,,,,,,,,

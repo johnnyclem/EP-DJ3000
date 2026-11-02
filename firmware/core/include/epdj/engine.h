@@ -86,6 +86,9 @@ struct LedStatus {
   bool identify = false;   // the "on" half of the 2 Hz blink while IDENTIFY is active
   bool cueLit = false;     // the host says the cue point is active (note 36 feedback)
   bool touched = false;
+  // The play indicator. DJ / SYNC_FOLLOW: the mirrored transport (the host's play note, transport CC, external
+  // clock or linked master). SYNC_MASTER: the unit's own transport, shown as Playing also while the host says its
+  // deck plays (the inbound play note). That feedback never moves the master's transport, clock or MTC.
   proto::TransportState transport = proto::TransportState::Stopped;
   uint8_t chordStage = 0;  // CUE+REV held: 1 = releasing now cycles the mode, 2 = releasing now swaps decks
   uint8_t brightness = 64; // ledBrightness
@@ -222,7 +225,7 @@ class Engine {
     void getTelemetry(proto::Telemetry* out) override;
     size_t getPeers(proto::Peer* out, size_t max) override;
     bool begin(proto::CalKind kind) override;
-    EndStatus end(proto::CalKind kind, uint16_t* rawMin, uint16_t* rawMax) override;
+    EndStatus end(proto::CalKind kind, Range* out) override;
 
    private:
     Engine& e_;
@@ -351,6 +354,7 @@ class Engine {
   // mode / transport
   proto::Mode mode_ = proto::Mode::Dj;
   proto::TransportState mirror_ = proto::TransportState::Stopped;  // DJ / SYNC_FOLLOW view of the host's transport
+  bool hostPlaying_ = false;    // the host's last play note (vel > 0): its deck is playing. Every mode; LED only
   uint32_t freeTick_ = 0;       // master clock ticks while not playing, for the beat flash
   uint32_t followTick_ = 0;     // ticks since Start in SYNC_FOLLOW
   uint64_t flashUntilUs_ = 0;

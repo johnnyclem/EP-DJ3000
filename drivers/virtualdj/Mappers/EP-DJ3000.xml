@@ -11,8 +11,8 @@
     LEDs are not mapped here: LED_CUE and LED_PLAY follow the action of their button
     (default="" in the definition), so they show cue_stop and play_pause state.
     Slide pot: the unit sends only the one of CROSSFADER / LEVEL / PITCH that its faderRole selects
-    (LEVEL by default). With an external mixer (the EP-136 rig) VirtualDJ's own crossfader and level
-    do nothing audible; set the unit's faderRole to PITCH there.
+    (PITCH by default). With an external mixer (the EP-136 rig) VirtualDJ's own crossfader and level
+    do nothing audible, which is why the unit's factory role is the tempo fader.
   -->
 
   <!-- Unit on MIDI channel 1 -->

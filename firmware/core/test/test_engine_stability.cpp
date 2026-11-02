@@ -378,9 +378,9 @@ EPDJ_TEST(engine_stability_one_hour_two_units_random_everything) {
     u.in.nowUs = u.local(u.t);
     u.engine.step(u.in);
     u.t += 1000;
-    while (u.engine.popOut(&e)) cc += (e.kind == OutEvent::Kind::Message && e.len == 3 && e.data[0] == 0xB0 && (e.data[1] == 7 || e.data[1] == 39)) ? 1u : 0u;
+    while (u.engine.popOut(&e)) cc += (e.kind == OutEvent::Kind::Message && e.len == 3 && e.data[0] == 0xB0 && (e.data[1] == 25 || e.data[1] == 57)) ? 1u : 0u;
   }
-  CHECK(cc > 100);  // the default fader role is CHANNEL_VOLUME (CC 7 / 39)
+  CHECK(cc > 100);  // the default fader role is PITCH (CC 25 / 57)
   // LOAD_DEFAULTS kept the deck the chaos left it on, so ask for that one.
   n = syx::encodeFrame(static_cast<uint8_t>(u.cfg.get(ConfigKey::DeckId)), static_cast<uint8_t>(Cmd::GetInfo), nullptr, 0, buf, sizeof buf);
   u.engine.onSysexIn(buf, n, u.local(u.t));

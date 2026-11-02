@@ -60,10 +60,10 @@ final class DeviceClientE2ETests: E2ETestCase {
         }
     }
 
-    func testFaderRoleDefaultIsChannelVolumeAsContractV11Says() async throws {
+    func testFaderRoleDefaultIsPitchAsContractV12Says() async throws {
         try await withWorld { world in
             let role = try await world.client().client.getConfig(.faderRole)
-            XCTAssertEqual(role, Int32(FaderRole.channelVolume.rawValue))
+            XCTAssertEqual(role, Int32(FaderRole.pitch.rawValue))
         }
     }
 

@@ -113,6 +113,57 @@ final class ControllerStateTests: XCTestCase {
         XCTAssertEqual(s.fader, 8192)
     }
 
+    /// E2E-2. When `faderRole` changes the unit re-sends the new role's pair, which can be exactly the value that pair
+    /// held before. The role has to follow the pair in use, not only a pair whose value moved.
+    func testFaderRoleFollowsAPairSentAgainAtTheSameValue() {
+        var s = ControllerState(channel: 0)
+        s.apply(MidiEvent.cc14(.channelVolume, channel: 0, value: 16383))
+        s.apply(MidiEvent.cc14(.pitch, channel: 0, value: 16383))
+        XCTAssertEqual(s.faderRole, .pitch)
+        s.apply(MidiEvent.cc14(.channelVolume, channel: 0, value: 16383))
+        XCTAssertEqual(s.faderRole, .channelVolume)
+        XCTAssertEqual(s.fader, 16383)
+        s.apply(MidiEvent.cc14(.pitch, channel: 0, value: 16383))
+        XCTAssertEqual(s.faderRole, .pitch, "and back again, every time")
+    }
+
+    func testFaderValueFollowsAPairSentAgainAtTheSameValueWhileAnotherPairMoved() {
+        var s = ControllerState(channel: 0)
+        s.apply(MidiEvent.cc14(.channelVolume, channel: 0, value: 16383))
+        s.apply(MidiEvent.cc14(.pitch, channel: 0, value: 4000))
+        XCTAssertEqual(s.fader, 4000)
+        s.apply(MidiEvent.cc14(.channelVolume, channel: 0, value: 16383))  // the pair's own last value
+        XCTAssertEqual(s.faderRole, .channelVolume)
+        XCTAssertEqual(s.fader, 16383, "the value belongs to the role in use, not to the pair that moved last")
+        XCTAssertEqual(s.faderNormalized, 1.0)
+    }
+
+    func testFaderRoleIsTakenFromASingleRepeatedHalfToo() {
+        var s = ControllerState(channel: 0)
+        s.apply(MidiEvent.cc14(.crossfader, channel: 0, value: (50 << 7) | 9))
+        s.apply(MidiEvent.cc14(.pitch, channel: 0, value: 8192))
+        s.apply(cc(23, 50))  // the unit skips the LSB it already sent for this pair
+        XCTAssertEqual(s.faderRole, .crossfader)
+        XCTAssertEqual(s.fader, (50 << 7) | 9)
+    }
+
+    func testARepeatedFaderPairOfAnotherChannelDoesNotChangeTheRole() {
+        var s = ControllerState(channel: 0)
+        s.apply(MidiEvent.cc14(.pitch, channel: 0, value: 8192))
+        s.apply(MidiEvent.cc14(.channelVolume, channel: 1, value: 100))
+        XCTAssertEqual(s.faderRole, .pitch)
+        XCTAssertEqual(s.fader, 8192)
+    }
+
+    func testARepeatedBpmPairDoesNotUndoANudge() {
+        var s = ControllerState(channel: 0)
+        s.apply(MidiEvent.cc14(.bpm, channel: 0, value: 1285))
+        s.apply(MidiEvent.controlChange(channel: 0, controller: Proto.CC.bpmNudge, value: 65))  // +0.1
+        XCTAssertEqual(s.bpmX10, 1286)
+        s.apply(MidiEvent.cc14(.bpm, channel: 0, value: 1285))  // same value as the pair held: not news
+        XCTAssertEqual(s.bpmX10, 1286)
+    }
+
     func testKnobIsSeparateFromTheFader() {
         var s = ControllerState(channel: 0)
         s.apply(MidiEvent.cc14(.knob, channel: 0, value: 4000))

@@ -144,17 +144,25 @@ normalisation, ADC and I2C access.
   calibration or `knobInvert` changes, so switching the role live, or calibrating, never makes the tempo jump.
   A knob nobody turned never replaces a tempo that the host, a tap or the platter set since (a USB re-plug that
   re-sends controls does not count as a turn).
-* **Fader role default is `CHANNEL_VOLUME`** (CC 7 / 39; contract v1.1), so two units do not fight over one
-  crossfader. A unit that saved its config under v1.0 keeps the `faderRole` it stored.
+* **Fader role default is `PITCH`** (CC 25 / 57; contract v1.2): the CDJ-style tempo slider, which every DJ app acts
+  on even behind an external mixer, and two units never fight over one control. `CHANNEL_VOLUME` (CC 7 / 39, a
+  per-deck scratch cut) and `CROSSFADER` (CC 23 / 55) stay selectable. A unit that saved its config under an earlier
+  contract keeps the `faderRole` it stored.
 * **Radio group** = the `linkGroup` config key, applied live (`Link::setGroup`): the unit leaves its old rig at
   once (peers forgotten, a held bridged note released) and announces itself in the new one without a reboot.
   The config value 0 means "use `Identity::linkGroup`", the platform's build-time default.
 * **Host feedback** is accepted on the unit's own channel only (cable 0, or relayed over the radio from the
-  bridging deck's cable 2). The `play` note (velocity > 0) is LED feedback in DJ and SYNC_FOLLOW and never starts or
+  bridging deck's cable 2). The `play` note (velocity > 0) is feedback for the LED in every mode and never starts or
   stops a SYNC_MASTER clock: only the `transport` CC (and the local gestures) command a master. A velocity-0 release
-  changes nothing in a master, so a pulse echoed back by a mapping cannot pause it either. **Known deviation from
-  `PROTOCOL.md` (E2E-3, open):** in SYNC_MASTER the note is dropped, so it does not light the play LED, which shows the
-  unit's own transport (`Engine::handleHostMessage`; `docs/E2E.md`).
+  changes nothing in a master, so a pulse echoed back by a mapping cannot pause it either.
+* **Play LED rule** (`LedStatus::transport`). The engine remembers the host's last play note in every mode.
+  DJ and SYNC_FOLLOW show the mirrored transport, which that note feeds (together with the `transport` CC, an external
+  clock and the linked master). SYNC_MASTER shows its own transport, and `Playing` as well while the host says its deck
+  plays, so the indicator is lit while either plays; the host's "not playing" never dims a running master, and the
+  note never reaches the transport, the clock or MTC. A mapping that echoes the unit's own tap pulse back therefore
+  makes a paused master's indicator flash for the length of the pulse. Mode changes re-derive the mirrored state from
+  the clock follower, so feedback given before a switch to DJ or SYNC_FOLLOW is not carried over (a switch to
+  SYNC_MASTER keeps it).
 * **SysEx answers are bounded and counted.** A `GET_CONFIG` dump (`0xFF`) is one `CONFIG` per key followed by
   `ACK[GET_CONFIG]` as the end marker (34 frames, 506 bytes on the wire). If the output queue refuses a frame the
   dump stops there with no ACK, so a dump that ends with the ACK is complete; the loss is counted in
@@ -163,7 +171,9 @@ normalisation, ADC and I2C access.
 * **Motion with no listener is dropped**, not queued: nothing is sent while no host is mounted and no peer
   bridges, and a host that appears later gets the current fader/knob/tempo state, not old jog movement.
 * **Calibration** (CAL_BEGIN/END) takes a 3-sample median to reject ADC spikes, so a sweep must dwell for a
-  few ms at each end stop (a hand does); a pass that turns around instantly loses the last sample.
+  few ms at each end stop (a hand does); a pass that turns around instantly loses the last sample. `CAL_END` with
+  `apply = 1` writes the measured extremes moved in by 1 % of the span and reports those values; with `apply = 0` it
+  reports the measured extremes themselves and changes nothing (`CalibrationTracker::Result` carries both).
 * A SysEx answer is queued even when `usbMounted` is false; only a host can have asked.
 
 ## Tests
@@ -184,9 +194,9 @@ touch ring, a fake platform, a lossy two-unit radio, queries over the recorded o
 
 | File | Covers |
 |---|---|
-| `test_engine_core.cpp` | Ring sweep -> jog CCs on the right channel with exact conservation (both decks, both directions); AS5600 spin exactness and `jogInvert`; touch/tap notes and the play pulse; fader sweeps per role (MSB first) and the CHANNEL_VOLUME default, no chatter, 1-step latency; knob roles and the BPM-knob pickup (saved tempo survives boot, 2% threshold both ways, re-arm on role/calibration change, re-plug does not override); button notes, bounce, chords (mode cycle, deck swap); DJ mode emits no clock; Deck B on channel 2; channel change mid-hold; host feedback; USB unplug/replug; TRS pass-through. |
-| `test_engine_sync.cpp` | Master clock over 10 s at 1 kHz and at 40 kHz stepping, 25 random tempo changes against the generator's schedule, scheduled tick not moved by a tempo change, `clockOutMask` port gating, the 32-bit wrap; start/pause/continue/stop/rewind byte sequences; platter tap; CUE tap tempo to 128 BPM; platter nudge (exact with AS5600, approximate with the ring); MTC quarter frames and full frames; leaving master; SYNC_FOLLOW locking to a jittered 24 PPQN input on USB and TRS. |
-| `test_engine_sysex.cpp` | Input before the first step, GET_INFO, config round trip (the dump and its ACK end marker), deck identity (LOAD_DEFAULTS keeps it, SET_CONFIG of it is refused, SET_DECK is the only way), live application to fader and platter, STREAM telemetry (rate, fields, expiry, clamp), calibration (apply, no apply, failures), SET_DECK/REBOOT/LINK_STATUS/TEST_TONE/IDENTIFY, SysEx split across USB packets with real-time bytes, corrupt and hostile input, `encodeUsb` round trip, queue bounds. |
+| `test_engine_core.cpp` | Ring sweep -> jog CCs on the right channel with exact conservation (both decks, both directions); AS5600 spin exactness and `jogInvert`; touch/tap notes and the play pulse; fader sweeps per role (MSB first) and the PITCH default, no chatter, 1-step latency; knob roles and the BPM-knob pickup (saved tempo survives boot, 2% threshold both ways, re-arm on role/calibration change, re-plug does not override); button notes, bounce, chords (mode cycle, deck swap); DJ mode emits no clock; Deck B on channel 2; channel change mid-hold; host feedback; USB unplug/replug; TRS pass-through. |
+| `test_engine_sync.cpp` | Master clock over 10 s at 1 kHz and at 40 kHz stepping, 25 random tempo changes against the generator's schedule, scheduled tick not moved by a tempo change, `clockOutMask` port gating, the 32-bit wrap; start/pause/continue/stop/rewind byte sequences; platter tap; the host's play note in every mode (LED only: no transport, clock or MTC output); CUE tap tempo to 128 BPM; platter nudge (exact with AS5600, approximate with the ring); MTC quarter frames and full frames; leaving master; SYNC_FOLLOW locking to a jittered 24 PPQN input on USB and TRS. |
+| `test_engine_sysex.cpp` | Input before the first step, GET_INFO, config round trip (the dump and its ACK end marker), deck identity (LOAD_DEFAULTS keeps it, SET_CONFIG of it is refused, SET_DECK is the only way), live application to fader and platter, STREAM telemetry (rate, fields, expiry, clamp), calibration (apply reports the inset range it wrote, no apply reports the measured extremes, failures), SET_DECK/REBOOT/LINK_STATUS/TEST_TONE/IDENTIFY, SysEx split across USB packets with real-time bytes, corrupt and hostile input, `encodeUsb` round trip, queue bounds. |
 | `test_engine_link.cpp` | Two engines over a radio with 20% loss, 10% duplication and reordering: Deck B's jog, fader, knob, buttons and touch arrive on Deck A's cable 2 on channel 2 with exact jog conservation; 5 ms bridge latency on a clean simulated air (a model, never measured on a radio); feedback relayed back; master transport/tempo/beat reaching a follower; peer loss releasing held notes; route changes with USB host changes; link disable and deck-id conflict; `linkGroup` changed live over SysEx (leave, find each other again, bridge resumes) and its precedence over the build-time default; determinism. |
 | `test_engine_stability.cpp` | One hour of simulated time on two linked engines (both clocks cross the 2^32 us wrap): random sensors with garbage readings, random host MIDI, random SysEx of every command, random config changes, hostile radio packets, a lossy air, stalls. Every output event well formed, work per step bounded, queue within capacity, all losses counted, engine alive afterwards. |
 

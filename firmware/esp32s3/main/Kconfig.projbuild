@@ -5,6 +5,21 @@ menu "EP-DJ3000"
         range 0 255
         default 1
 
+    choice EPDJ_BOARD_REV
+        prompt "ESP32-S3-DevKitC-1 board revision (decides the status LED pin)"
+        default EPDJ_BOARD_DEVKITC_1_V1_1
+        help
+            The on-board WS2812 is on GPIO38 on v1.1 boards (the ones sold now) and on GPIO48 on v1.0. The
+            revision is printed on the board. Choosing wrong leaves the status LED dark and changes nothing
+            else; the boot log line "led: ... on GPIO.." says which pin was driven. For another board, edit
+            kStatusLed in epdj_hal/board_pins.h.
+
+        config EPDJ_BOARD_DEVKITC_1_V1_1
+            bool "DevKitC-1 v1.1 (status LED on GPIO38)"
+        config EPDJ_BOARD_DEVKITC_1_V1_0
+            bool "DevKitC-1 v1.0 (status LED on GPIO48)"
+    endchoice
+
     menu "Platter and sensors"
 
         choice EPDJ_PLATTER_DEFAULT

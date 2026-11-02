@@ -27,7 +27,7 @@ they differ.
 | `cable.<name>` | USB-MIDI cable numbers: `deck` 0, `trsMidi` 1, `linkedDeck` 2 |
 | `usb.*` | USB identity: `vendorId`, `productId` (numbers; the contract's development placeholder for now), `product` (`"EP-DJ3000"`), `deckNames` (`["Deck A", "Deck B"]`), `cableNames` (`["Deck", "TRS MIDI", "Linked deck"]`) |
 | `sysex.*` | manufacturer header, version, `deckAny`, reply/ACK/NAK bytes, `cmd.<name>` ids |
-| `enums.<Name>.<value>` | `Deck`, `Mode`, `PlatterSource`, `FaderRole`, `FaderCurve`, `KnobRole`, `DacMode`, `LinkBridge`, `CalKind`, `TransportState`, `RebootMode` |
+| `enums.<Name>.<value>` | `Deck`, `Mode`, `PlatterSource`, `FaderRole`, `FaderCurve`, `KnobRole`, `DacMode`, `LinkBridge`, `CalKind`, `TransportState`, `RebootMode`, `JogUntouched` |
 
 Config key ids, config defaults and payload structs are **not** in the JS. They are in
 `protocol/epdj3000.json` (and the generated C++ and Swift). A DJ-software mapping normally needs none of them;
@@ -67,10 +67,12 @@ These are the places the protocol is easy to get subtly wrong. Each links to the
    (only the `transport` CC commands a SYNC_MASTER unit).
 8. **A tap-to-play arrives as touch down, touch up and a `play` pulse** (2.3). The unit cannot know it is a
    tap when the touch begins, so a scratch-capable mapping briefly enters scratch mode on every tap.
-9. **Touch is not motion.** With the default `AS5600` platter, `jog` is sent whether or not a hand is on the
-   platter (a free-spinning platter coasts), and the `touch` note comes from one separate hold pad. A scratch
-   mapping must treat `touch` as "a hand is holding the record" and an untouched `jog` as a nudge, or ignore it.
-   With the experimental `TOUCH_RING` platter `jog` is only sent while a finger is down.
+9. **Touch is not motion.** With the default `AS5600` platter the `touch` note comes from one separate hold pad, not
+   from the encoder. Whether `jog` also arrives while nobody touches the platter (a free-spinning platter coasts for
+   seconds) is the unit's `jogUntouched` setting (2.2): by default (`AUTO`) it does until the hold pad has registered a touch since
+   power-up and does not after that (a build with no pad always sends it), `REPORT` always sends it, `SUPPRESS` never. A scratch mapping must treat `touch` as "a hand is holding the
+   record" and an untouched `jog`, when it arrives at all, as a nudge, or ignore it. With the experimental `TOUCH_RING`
+   platter `jog` is only sent while a finger is down.
 
 ## Worked example: a decoder
 

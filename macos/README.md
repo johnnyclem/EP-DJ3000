@@ -19,9 +19,9 @@ SysEx monitor, a small scratch-capable player, and a two-deck rig view. It speak
 >
 > | Check | Result |
 > |---|---|
-> | `swift build` and `swift test` of `EPDJ3000Protocol`, `EPDJ3000Engine` and `EPDJ3000KitPure` on Linux (Swift 6.0.3) | pass, 347 tests (211 + 81 + 55; the Protocol and Engine counts include the 7 added for the slide-pot role fix, finding E2E-2, and the Protocol count the 36 for the AS5600 calibration flow); no warnings from the three library targets with `-Xswiftc -strict-concurrency=complete` (the E2E test target has four `stderr` concurrency warnings, in test code only). `swift test` also lists the 69 `EPDJ3000E2ETests` (the firmware engine as a child process); all of them skip when `epdj_engine_sim` is not built |
+> | `swift build` and `swift test` of `EPDJ3000Protocol`, `EPDJ3000Engine` and `EPDJ3000KitPure` on Linux (Swift 6.0.3) | pass, 358 tests (213 + 82 + 63; the Protocol and Engine counts include the 7 added for the slide-pot role fix, finding E2E-2, and the Protocol count the 36 for the AS5600 calibration flow plus 2 for contract v1.4; the Engine count one pinning that the player ignores untouched jog; the KitPure count 8 for the `jogUntouched` choices and the Decks-tab platter angle); no warnings from the three library targets with `-Xswiftc -strict-concurrency=complete` (the E2E test target has four `stderr` concurrency warnings, in test code only). `swift test` also lists the 75 `EPDJ3000E2ETests` (the firmware engine as a child process); all of them skip when `epdj_engine_sim` is not built |
 > | The Foundation-only part of the Kit (`Sources/EPDJ3000Kit/Pure/`, the `EPDJ3000KitPure` target: MIDI formatting, log, waveform overview, test signals, config presentation, rig checklist, error text, name matching) | compiled and tested with the real toolchain as part of `swift test` (`EPDJ3000KitPureTests`) |
-> | All Kit and app sources type-checked in Swift 5 language mode, with complete strict-concurrency checking, against **hand-written stand-ins** for CoreMIDI, CoreAudio, AudioToolbox, AVFoundation, Combine, SwiftUI, AppKit and UniformTypeIdentifiers (not part of this repository) | no errors (re-run after the AS5600 calibration flow went in: the new `CalibrationController`, `CalibrateView` and `SettingsView` code is included); none in the Kit; 5 warnings in the app, all artefacts of the stand-ins (the `NSSecureCoding` casts that only fail on Linux, and isolation of the stand-in `NSApplicationDelegate` / `App` protocols, whose isolation in the real SDK may differ; on an older SDK the same warnings may appear for real) |
+> | All Kit and app sources type-checked in Swift 5 language mode, with complete strict-concurrency checking, against **hand-written stand-ins** for CoreMIDI, CoreAudio, AudioToolbox, AVFoundation, Combine, SwiftUI, AppKit and UniformTypeIdentifiers (not part of this repository) | no errors (re-run after the AS5600 calibration flow went in: the new `CalibrationController`, `CalibrateView` and `SettingsView` code is included; re-run again for contract v1.4: the `DecksView` platter, the telemetry stream it starts and the `CalibrateView` instructions); none in the Kit; 5 warnings in the app, all artefacts of the stand-ins (the `NSSecureCoding` casts that only fail on Linux, and isolation of the stand-in `NSApplicationDelegate` / `App` protocols, whose isolation in the real SDK may differ; on an older SDK the same warnings may appear for real) |
 > | `DeckAudio` / `AudioOutput` device-change handling, run (not just type-checked) on Linux with a stateful `AVAudioEngine` stand-in that stops itself and posts `AVAudioEngineConfigurationChange` on command (not part of this repository) | six scenarios pass: a second change right after a rebuild is restarted after the 0.5 s interval instead of dropped; bursts coalesce into one restart; a notification while the engine still runs rebuilds nothing; `shutdown()` and a later rebuild cancel a pending restart; a change long after the last rebuild is acted on at once. The previous code fails the scenarios that need a restart inside the window (it dropped the second change and left the engine stopped). This exercises our logic only; the stand-in says nothing about when or how often CoreAudio really posts the notification |
 >
 > The stand-ins were written from memory of Apple's documentation. That check proves the code is consistent with
@@ -72,10 +72,15 @@ what a message means, what the player does) lives in the two tested libraries.
 
 ## The tabs
 
-**Decks.** One card per connected unit: an animated platter driven by the jog ticks, a touch indicator, the slide pot
+**Decks.** One card per connected unit: an animated platter, a touch indicator, the slide pot
 and knob, CUE / REV / TOUCH lights, tempo, transport, song position and MIDI time code as the unit reports them. Buttons
 send transport and tempo to the unit (the unit acts on them in sync-master mode; elsewhere they only drive its LEDs).
-The unit's PLAY and CUE LEDs follow the player unless you switch that off. The unit takes the play note as LED feedback
+The platter turns with the chip's angle from the telemetry stream, which the card starts while it is on screen, and falls back
+to the jog ticks when the stream is off, the angle is invalid, or the unit is not on the AS5600 platter. That matters since
+contract v1.4: once the hold pad has registered a touch since power-up, the unit (on its default `jogUntouched` = `AUTO`) sends no
+jog for an untouched platter, so a platter that coasts after a flick would otherwise sit still on screen. The line under the
+platter ("jog sent") counts what the unit *sent*, which is zero for a coasting platter once the pad has worked (and always zero
+under `SUPPRESS`). The unit's PLAY and CUE LEDs follow the player unless you switch that off. The unit takes the play note as LED feedback
 only and never starts its clock from it, in every mode. A tap on a unit in sync-master mode arrives as
 Start/Stop and as the play pulse; the player treats the pair as one tap.
 
@@ -90,8 +95,9 @@ Start/Stop and as the play pulse; the player treats the pair as one tap.
 
 Each step shows its live reading, an instruction, and pass or fail. A failed encoder check says what to look at (no chip
 answered: I2C wiring and the 3.3 V strap; no valid angle; the angle did not move a full turn: magnet; the angle jumps
-around: magnet position or bus noise). A result is sent to the unit with *Apply* (live) and made permanent with *Save to
-unit*; the encoder check changes nothing on the unit. The hold-pad step sets the touch thresholds from a hand on a platter
+around: magnet position or bus noise). The encoder check reads the chip's angle and the direction step reads the unit's jog
+total, which counts all motion, so neither needs a hand on the hold pad and neither depends on `jogUntouched`. A result is sent
+to the unit with *Apply* (live) and made permanent with *Save to unit*; the encoder check changes nothing on the unit. The hold-pad step sets the touch thresholds from a hand on a platter
 that is not turning: it cannot tell whether the pad keeps seeing the hand while the platter spins (a rotating-contact
 problem), so the step shows the unit's own touch flag live and `docs/BRINGUP.md` section 2 asks for that check by hand.
 
@@ -105,7 +111,8 @@ handling the packet).
 DAC). Waveform overview with playhead and cue point; click to seek. Play / pause, stop, CUE (hold) and REV (hold) work from
 the buttons *and* from the unit at the same time; a hand on the unit's platter (the touch note, from its hold pad) holds the
 record and turning the platter scratches. Spinning the AS5600 platter with no hand on it moves the platter on the Decks tab
-and nothing else: the player follows the jog only while the touch note is on.
+and nothing else: the player follows the jog only while the touch note is on, so it sounds the same whether or not the unit
+sends untouched jog (`jogUntouched`; a test pins this).
 The knob and slide pot act as in `DeckModel`: the slide pot is the pitch (tempo) fader by default (the unit's `faderRole`
 is `PITCH`), or a channel volume, or a crossfader-style cut when the role is changed (a Player-tab picker sets it live). The output picker pins this deck's player to any CoreAudio
 output, including the deck's own USB audio device, which is the end-to-end audio test. With no unit connected the *On-screen
@@ -120,7 +127,9 @@ that deck's USB audio output so you can hear it arrive on that mixer channel.
 **Settings.** An editor generated from `ConfigTable`: a row per key, with pickers for enums, switches for flags, check
 boxes for bit fields and sliders for numbers (including `linkGroup`, the radio rig id: units only link within the same
 group). `platterSource` reads "AS5600 encoder (default)", "Touch ring (experimental)" or "Hold only", and `touchSectors` is
-greyed out unless the ring is selected. Changes are live; *Save to unit* persists them. The deck id is shown but read-only (the unit refuses it in
+greyed out unless the ring is selected. `jogUntouched` (contract v1.4) reads "Auto (suppress coasting once the hold
+pad has worked)" (the default: untouched motion is sent until the hold pad has registered one touch since power-up, then a coasting
+platter is silent; the proof starts over at a reboot and when the platter source changes), "Always send" or "Only while touched", and is greyed out unless the platter is the AS5600. Changes are live; *Save to unit* persists them. The deck id is shown but read-only (the unit refuses it in
 `SET_CONFIG`); change it with *Make Deck ...*, which saves it and restarts the unit. Also: reload, load defaults (which
 keeps the deck id), restart, and enter the ROM bootloader. Each of the last four asks first.
 
@@ -136,7 +145,10 @@ opened through the open panel or drag and drop. The app is not sandboxed and use
 3. **Calibrate**: the steps for the unit's platter source (for the default AS5600: encoder check, platter direction, hold pad,
    slide pot, knob), then *Save to unit*. Then turn the platter with a hand on it and watch the touch light on the Decks tab:
    the wizard cannot test that.
-4. **Test > MIDI monitor**: touch and spin the platter, press CUE and REV; look for jog, touch and note messages.
+4. **Test > MIDI monitor**: touch and spin the platter, press CUE and REV; look for jog, touch and note messages. With the
+   factory `jogUntouched` = `AUTO`, spinning the platter shows jog right away (the encoder works before the pad does); once the
+   hold pad has seen a hand, a coasting platter is silent and jog appears only under a hand, until the next reboot. To see an
+   untouched platter here regardless, set it to "Always send" in Settings.
 5. **Player**: load the demo loop, press play on the unit's platter (tap) or on screen, then scratch.
 6. With a DAC fitted: **Player > Output**, choose the deck's USB audio device; or **Rig > Mac tone to this deck**.
 7. Second unit: it appears next to the first. **Rig** shows the link and runs the checklist.
@@ -179,6 +191,9 @@ very different rate in Audio MIDI Setup, and that nothing else is loading the CP
 
 **Platter spins the wrong way.** Calibrate > Platter direction, then Save.
 
+**The platter turns on the Decks tab but the MIDI monitor shows no jog.** That is `jogUntouched` = `AUTO` doing its job: no hand on
+the platter, no jog. Put a hand on it, or choose "Always send" in Settings. The Decks tab draws the chip's angle, not the jog.
+
 **The platter does nothing (Decks tab, MIDI monitor).** Calibrate > Encoder check says why. A unit that saved its settings
 before contract v1.3 may still be on `TOUCH_RING`: Settings > `platterSource`, or *Load defaults* and *Save to unit*.
 
@@ -210,7 +225,7 @@ decoded track is held in memory). DRM-protected files are refused by macOS.
 
 ## Tests
 
-`swift test` runs the Protocol, Engine and KitPure tests on any OS (347 tests on Linux with Swift 6.0.3; the full run reports 416 because it also lists the 69 end-to-end tests, which skip until `tools/e2e.sh` has built the firmware simulator, see [`docs/E2E.md`](../docs/E2E.md)); `tools/check-all.sh swift e2e-swift` runs both halves. The Kit's
+`swift test` runs the Protocol, Engine and KitPure tests on any OS (358 tests on Linux with Swift 6.0.3; the full run reports 433 because it also lists the 75 end-to-end tests, which skip until `tools/e2e.sh` has built the firmware simulator, see [`docs/E2E.md`](../docs/E2E.md)); `tools/check-all.sh swift e2e-swift` runs both halves. The Kit's
 Foundation-only code (`Sources/EPDJ3000Kit/Pure/`) is the `EPDJ3000KitPure` target, tested by `EPDJ3000KitPureTests`;
 `Package.swift` declares the Kit and the app only on macOS, so nothing that imports CoreMIDI, AVFoundation or SwiftUI is
 tested here. `DeviceClientTests` talk to `FakeDevice`, an in-memory unit written from `docs/PROTOCOL.md` section 3 and

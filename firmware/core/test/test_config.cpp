@@ -80,7 +80,8 @@ EPDJ_TEST(defaults_come_from_the_contract_table) {
   CHECK_EQ(c.get(ConfigKey::ButtonDebounceMs), 4);
   CHECK_EQ(c.get(ConfigKey::FaderRole), 2);  // PITCH (contract v1.2): audible in every DJ app, and two units never fight over it
   CHECK_EQ(c.get(ConfigKey::LinkGroup), 0);
-  CHECK_EQ(proto::kConfigCount, 33u);
+  CHECK_EQ(c.get(ConfigKey::JogUntouched), static_cast<int>(proto::JogUntouched::Auto));  // contract v1.4
+  CHECK_EQ(proto::kConfigCount, 34u);
   CHECK_EQ(c.revision(), 0u);
 }
 
@@ -96,9 +97,12 @@ EPDJ_TEST(validate_enforces_every_range_at_the_edges) {
     CHECK(Config::validate(id, INT32_MIN) == ConfigStatus::OutOfRange);
     CHECK(Config::validate(id, INT32_MAX) == ConfigStatus::OutOfRange);
   }
-  CHECK(Config::validate(32, 255) == ConfigStatus::Ok);  // linkGroup, the last key
+  CHECK(Config::validate(32, 255) == ConfigStatus::Ok);  // linkGroup
   CHECK(Config::validate(32, 256) == ConfigStatus::OutOfRange);
-  CHECK(Config::validate(33, 0) == ConfigStatus::BadKey);
+  CHECK(Config::validate(33, 2) == ConfigStatus::Ok);  // jogUntouched, the last key: AUTO / REPORT / SUPPRESS
+  CHECK(Config::validate(33, 3) == ConfigStatus::OutOfRange);
+  CHECK(Config::validate(33, -1) == ConfigStatus::OutOfRange);
+  CHECK(Config::validate(34, 0) == ConfigStatus::BadKey);
   CHECK(Config::validate(255, 0) == ConfigStatus::BadKey);
   // A few literal ranges from the spec.
   CHECK(Config::validate(1, 16) == ConfigStatus::Ok);
@@ -120,7 +124,7 @@ EPDJ_TEST(set_validates_and_leaves_value_alone_on_failure) {
   CHECK(c.set(ConfigKey::FaderRawMin, -1) == ConfigStatus::OutOfRange);
   CHECK(c.set(ConfigKey::LinkGroup, 255) == ConfigStatus::Ok);
   CHECK_EQ(c.get(ConfigKey::LinkGroup), 255);
-  CHECK(c.set(static_cast<ConfigKey>(33), 0) == ConfigStatus::BadKey);
+  CHECK(c.set(static_cast<ConfigKey>(34), 0) == ConfigStatus::BadKey);
   CHECK(c.set(static_cast<ConfigKey>(200), 0) == ConfigStatus::BadKey);
   CHECK_EQ(c.get(static_cast<ConfigKey>(200)), 0);  // unknown key reads as 0, never out of bounds
 }
@@ -173,11 +177,11 @@ EPDJ_TEST(blob_roundtrips_every_value) {
 
 EPDJ_TEST(blob_layout_is_stable) {
   const Bytes b = blobOf(Config());
-  CHECK_EQ(Config::kBlobMaxBytes, 6 + 4 * 33 + 4);
+  CHECK_EQ(Config::kBlobMaxBytes, 6 + 4 * 34 + 4);
   CHECK_EQ(b.size(), Config::kBlobMaxBytes);
   CHECK_EQ(b[0], 'E'); CHECK_EQ(b[1], 'P'); CHECK_EQ(b[2], 'C'); CHECK_EQ(b[3], 'F');
   CHECK_EQ(b[4], 1);
-  CHECK_EQ(b[5], 33);
+  CHECK_EQ(b[5], 34);
   CHECK_EQ(b[6 + 4 * 11], 2);       // faderRole = PITCH by default
   CHECK_EQ(b[6 + 4 * 1], 16);       // midiChannel = 16, little-endian
   CHECK_EQ(b[6 + 4 * 13], 4055 & 0xFF);
@@ -266,6 +270,21 @@ EPDJ_TEST(a_blob_saved_before_linkgroup_existed_loads_with_group_zero_and_keeps_
   CHECK_EQ(c.get(ConfigKey::FaderRole), 0);
   CHECK_EQ(c.get(ConfigKey::DeckId), 1);
   CHECK_EQ(c.get(ConfigKey::LinkGroup), 0);
+}
+
+EPDJ_TEST(a_blob_saved_before_jogUntouched_existed_loads_as_auto) {
+  // Contract v1.3 wrote 33 keys. The new key takes its default (AUTO), everything else is kept.
+  auto vals = defaultValues();
+  vals.resize(33);
+  vals[static_cast<size_t>(ConfigKey::JogInvert)] = 1;
+  vals[static_cast<size_t>(ConfigKey::LinkGroup)] = 9;
+  const Bytes b = makeBlob(1, vals);
+  Config c;
+  c.set(ConfigKey::JogUntouched, 2);
+  CHECK(c.fromBlob(b.data(), b.size()) == LoadStatus::Ok);
+  CHECK_EQ(c.get(ConfigKey::JogUntouched), static_cast<int>(proto::JogUntouched::Auto));
+  CHECK_EQ(c.get(ConfigKey::JogInvert), 1);
+  CHECK_EQ(c.get(ConfigKey::LinkGroup), 9);
 }
 
 EPDJ_TEST(out_of_range_values_are_repaired_individually) {

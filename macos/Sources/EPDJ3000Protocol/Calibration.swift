@@ -312,8 +312,10 @@ public struct PlatterDirectionResult: Equatable, Sendable {
 }
 
 /// The user spins the platter clockwise; if `jogTotal` falls, the direction is wrong.
-/// `jogTotal` is the sum of the jog deltas the device sends, i.e. it already includes the current `jogInvert`,
-/// so a falling total means "flip the current setting", not "set it to 1".
+/// `jogTotal` is the sum of the platter's jog ticks, i.e. it already includes the current `jogInvert`, so a falling
+/// total means "flip the current setting", not "set it to 1". Since contract v1.4 it counts ALL motion, also what the
+/// unit did not send as jog because nobody was touching the platter (`jogUntouched`), so the user needs no hand on the
+/// hold pad here. (With the experimental touch ring the platter only moves under a finger, as before.)
 public struct PlatterDirectionCalibration: Sendable {
     public enum Phase: Equatable, Sendable {
         case waitingForSpin

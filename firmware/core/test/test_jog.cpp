@@ -837,3 +837,153 @@ EPDJ_TEST(emitter_accumulator_saturates_instead_of_wrapping) {
   e.add(-1000);
   CHECK_EQ(e.pending(), INT32_MIN);
 }
+
+// ---- StickyTouch: the motion-sticky release of the hold pad -----------------------------------------
+//
+// The driver below feeds one sample per millisecond. `moving` is whether the platter made a jog tick in that sample.
+// Time starts at 1 s: the unit never sees t = 0.
+
+namespace {
+
+struct StickyRun {
+  StickyTouch s;
+  uint64_t t = 1000000;
+  int downs = 0, ups = 0;  // edges of the verdict the tracker would see
+  bool last = false;
+
+  // One millisecond. Returns the verdict.
+  bool ms(bool pad, bool moving) {
+    const bool v = s.update(pad, t);
+    s.noteMotion(moving, t);
+    if (v && !last) ++downs;
+    if (!v && last) ++ups;
+    last = v;
+    t += 1000;
+    return v;
+  }
+  void run(int n, bool pad, bool moving) {
+    for (int i = 0; i < n; ++i) ms(pad, moving);
+  }
+};
+
+constexpr int kAfter = static_cast<int>(StickyTouch::kStickyAfterMs);
+constexpr int kMotion = static_cast<int>(StickyTouch::kStickyMotionMs);
+
+}  // namespace
+
+EPDJ_TEST(sticky_constants_are_the_originals) {
+  CHECK_EQ(StickyTouch::kStickyAfterMs, 7000u);
+  CHECK_EQ(StickyTouch::kStickyMotionMs, 80u);
+}
+
+EPDJ_TEST(sticky_a_short_touch_releases_at_once_even_while_the_platter_moves) {
+  StickyRun r;
+  r.run(3000, true, true);  // a 3 s scratch
+  CHECK(r.last);
+  CHECK(!r.ms(false, true));  // the pad says released, the platter is moving: a short touch does not care
+  CHECK_EQ(r.downs, 1);
+  CHECK_EQ(r.ups, 1);
+  // and the very first sample after a touch of any short length behaves the same
+  StickyRun q;
+  q.ms(true, true);
+  CHECK(!q.ms(false, true));
+}
+
+EPDJ_TEST(sticky_a_long_touch_rides_out_a_pad_dropout_while_the_platter_moves) {
+  StickyRun r;
+  r.run(kAfter + 500, true, true);  // 7.5 s of scratching
+  r.run(40, false, true);           // the pad's signal drops out for 40 ms; the platter does not stop
+  CHECK(r.last);
+  CHECK_EQ(r.ups, 0);
+  r.run(100, true, true);  // the pad comes back: still the same touch, no new touch-down
+  CHECK(r.last);
+  CHECK_EQ(r.downs, 1);
+  CHECK_EQ(r.ups, 0);
+  r.run(500, false, true);  // a pad that stays gone for half a second while the platter keeps turning: still held, however long
+  CHECK(r.last);
+  CHECK_EQ(r.ups, 0);
+}
+
+EPDJ_TEST(sticky_a_long_touch_released_while_still_releases_at_once) {
+  StickyRun r;
+  r.run(kAfter + 500, true, true);
+  r.run(kMotion + 5, true, false);  // the hand holds the platter still
+  CHECK(r.last);
+  CHECK(!r.ms(false, false));  // released the very sample the pad says so
+  CHECK_EQ(r.ups, 1);
+  CHECK_EQ(r.downs, 1);
+}
+
+EPDJ_TEST(sticky_after_a_long_touch_the_release_waits_for_exactly_the_motion_window) {
+  // The pad has said "released" and the platter stops: the verdict flips on the sample where the platter has been
+  // still for kStickyMotionMs, not one before.
+  StickyRun r;
+  r.run(kAfter + 500, true, true);
+  r.run(10, false, true);  // pad gone, platter still turning (the last tick is the sample just run)
+  int still = 0;           // samples since the last tick
+  bool released = false;
+  for (int i = 1; i <= 200 && !released; ++i) {
+    still = i;
+    released = !r.ms(false, false);
+  }
+  // The tick was in the sample 1 ms before the first still sample, so stillness reaches the window when `still` samples
+  // have passed after it: the release comes at still = kMotion (the update sees the motion up to the previous sample).
+  CHECK(released);
+  CHECK_EQ(still, kMotion);
+  CHECK_EQ(r.ups, 1);
+
+  // A tick inside the window restarts it.
+  StickyRun q;
+  q.run(kAfter + 500, true, true);
+  q.run(kMotion - 5, false, false);
+  CHECK(q.last);
+  q.ms(false, true);  // the platter twitches
+  q.run(kMotion - 2, false, false);
+  CHECK(q.last);  // not yet: the window started again at the twitch
+  q.run(3, false, false);
+  CHECK(!q.last);
+}
+
+EPDJ_TEST(sticky_the_long_touch_boundary_is_strictly_longer_than_kStickyAfterMs) {
+  // Touch down at the first sample the pad says touched; "lasted" is measured from there to the sample that says released.
+  {
+    StickyRun r;
+    r.ms(true, true);                   // t0
+    r.run(kAfter - 1, true, true);      // up to t0 + kAfter - 1 ms
+    CHECK(!r.ms(false, true));          // t0 + kAfter ms exactly: NOT longer, so it releases although the platter moves
+  }
+  {
+    StickyRun r;
+    r.ms(true, true);
+    r.run(kAfter, true, true);          // up to t0 + kAfter ms
+    CHECK(r.ms(false, true));           // t0 + kAfter + 1 ms: longer, and the platter moves, so it is held
+    CHECK(r.ms(false, true));
+    CHECK_EQ(r.ups, 0);
+  }
+  {
+    StickyRun r;
+    r.ms(true, false);
+    r.run(kAfter, true, false);
+    CHECK(!r.ms(false, false));         // longer, but the platter is still: released at once
+  }
+}
+
+EPDJ_TEST(sticky_each_touch_is_timed_from_its_own_start) {
+  StickyRun r;
+  r.run(kAfter + 500, true, true);
+  r.run(kMotion + 5, false, false);  // released after a long touch
+  CHECK(!r.last);
+  r.run(100, true, true);            // a new touch, 100 ms, moving
+  CHECK(!r.ms(false, true));         // short: the previous touch's length does not carry over
+  CHECK_EQ(r.downs, 2);
+  CHECK_EQ(r.ups, 2);
+}
+
+EPDJ_TEST(sticky_reset_forgets_a_touch_and_an_untouched_pad_is_never_sticky) {
+  StickyRun r;
+  r.run(kAfter + 500, true, true);
+  r.s.reset();
+  CHECK(!r.ms(false, true));  // reset: no touch to hold
+  StickyRun q;
+  for (int i = 0; i < 20000; ++i) CHECK(!q.ms(false, true));  // untouched pad + endless motion: never reports a touch
+}

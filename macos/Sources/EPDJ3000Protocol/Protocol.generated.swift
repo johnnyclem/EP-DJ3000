@@ -124,6 +124,12 @@ public enum RebootMode: UInt8, CaseIterable, Sendable {
     case bootloader = 1
 }
 
+public enum JogUntouched: UInt8, CaseIterable, Sendable {
+    case auto = 0
+    case report = 1
+    case suppress = 2
+}
+
 public struct Caps: OptionSet, Sendable {
     public let rawValue: UInt16
     public init(rawValue: UInt16) { self.rawValue = rawValue }
@@ -248,6 +254,7 @@ public enum ConfigKey: UInt8, CaseIterable, Sendable {
     case ledBrightness = 30
     case buttonDebounceMs = 31
     case linkGroup = 32
+    case jogUntouched = 33
 }
 
 public struct ConfigDesc: Sendable {
@@ -294,6 +301,7 @@ public enum ConfigTable {
         ConfigDesc(key: .ledBrightness, name: "ledBrightness", minValue: 0, maxValue: 255, defaultValue: 64, summary: "Status LED brightness."),
         ConfigDesc(key: .buttonDebounceMs, name: "buttonDebounceMs", minValue: 1, maxValue: 30, defaultValue: 4, summary: "Button debounce time."),
         ConfigDesc(key: .linkGroup, name: "linkGroup", minValue: 0, maxValue: 255, defaultValue: 0, summary: "Radio rig id. Units only link with peers that share it, so two rigs in one room do not cross-link."),
+        ConfigDesc(key: .jogUntouched, name: "jogUntouched", minValue: 0, maxValue: 2, defaultValue: 0, summary: "Whether platter motion with no hand on it is sent as jog. AUTO: a free-spinning platter coasts for seconds after release and would bend the pitch the whole time, so once the hold pad has registered a touch since power-up, untouched motion is suppressed; until then it is reported, so the encoder works before the pad does. REPORT: always send it (pitch-bend nudge). SUPPRESS: send jog only while touched. Telemetry jogTotal always counts all motion."),
     ]
     public static func desc(_ key: ConfigKey) -> ConfigDesc { all[Int(key.rawValue)] }
 }

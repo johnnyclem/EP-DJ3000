@@ -32,6 +32,12 @@ bool hasCc(const std::vector<Bytes>& v, uint8_t cc) {
   return false;
 }
 
+size_t countCc(const std::vector<Bytes>& v, uint8_t cc) {
+  size_t n = 0;
+  for (const Bytes& m : v) n += (m.size() == 3 && (m[0] & 0xF0) == 0xB0 && m[1] == cc) ? 1u : 0u;
+  return n;
+}
+
 // Time of the first (or last) 3-byte message in the log matching a predicate, or ~0 if none.
 template <typename Pred>
 uint64_t timeOf(const std::vector<Rec>& log, Pred p, bool last) {
@@ -60,6 +66,7 @@ std::vector<proto::Telemetry> telemetry(const std::vector<Rec>& log) {
 // Returns what the firmware counted; checks that exactly that reached the wire.
 int32_t jogFor(int start, const std::vector<int>& deltas, bool invert = false) {
   Deck d(0);
+  d.reportUntouched();  // an untouched spin: the default policy would keep it off the wire (tests below)
   if (invert) d.set(ConfigKey::JogInvert, 1);
   d.angle = start;
   d.in.angle12 = static_cast<uint16_t>(start);
@@ -80,6 +87,7 @@ EPDJ_TEST(as5600_one_lap_is_exactly_1024_ticks_in_both_directions_on_both_decks)
     for (int dir = -1; dir <= 1; dir += 2) {
       Deck d(deckId);
       CHECK_EQ(d.cfg.get(ConfigKey::PlatterSource), static_cast<int>(proto::PlatterSource::As5600));  // nothing selected
+      d.reportUntouched();
       d.angle = 1234;  // anywhere
       d.in.angle12 = 1234;
       d.run(50);
@@ -132,6 +140,7 @@ EPDJ_TEST(as5600_steps_count_four_to_the_tick_across_the_wrap_both_ways) {
 
 EPDJ_TEST(as5600_two_hundred_laps_and_back_do_not_drift) {
   Deck d(0);
+  d.reportUntouched();
   Rng rng(5);
   const double speed = 5.37;  // counts per ms: irregular steps of 5 and 6, and a different wrap point every lap
   const int start = 2999;
@@ -189,6 +198,133 @@ EPDJ_TEST(as5600_noise_at_rest_never_drifts_and_one_count_of_it_never_makes_a_ti
       flickered += worst;
     }
     if (amp == 3) CHECK(flickered > 0);  // and larger noise does flicker for some starting positions, so the test can fail
+  }
+}
+
+namespace {
+
+// A still platter as the chip reports it, for the measurements below. `sigma` is the white noise of the chip's own
+// measurement in counts rms. With the filter on (EPDJ_AS5600_FILTERED_ANGLE, the ANGLE register, slow filter 16x) the
+// reading is that noise through a 1-in-16 exponential average updated at the chip's internal conversion rate (about 7 per
+// millisecond), and the register is the integer part of position + filtered noise; with the raw register it is the noise
+// itself. A MODEL: neither sigma nor the internal rate has been measured on a chip. firmware/core/README.md has the results.
+struct ChipNoise {
+  Rng rng;
+  double sigma;
+  bool filtered;
+  double truth;  // the platter's true position inside its count, so a seed decides how close it rests to a boundary
+  double state = 0.0;
+
+  ChipNoise(uint32_t seed, double s, bool f) : rng(seed * 2654435761u + 1u), sigma(s), filtered(f), truth(1000.0) {
+    truth += rng.uni();
+  }
+  double gauss() { return std::sqrt(-2.0 * std::log(rng.uni())) * std::cos(6.283185307179586 * rng.uni()); }
+  uint16_t read() {
+    if (filtered) {
+      for (int k = 0; k < 7; ++k) state += (sigma * gauss() - state) / 16.0;
+    } else {
+      state = sigma * gauss();
+    }
+    return static_cast<uint16_t>(static_cast<int64_t>(std::floor(truth + state)) & 4095);
+  }
+};
+
+struct RestResult {
+  int worstNet = 0;       // largest |jogTotal| over the run, in ticks (the total is the sum of every tick sent)
+  int tickEvents = 0;     // times the total changed: each is a one-tick flicker the host sees as a jog CC
+  int64_t cc = 0;         // jog CC messages that reached the wire
+};
+
+// A finger rests on the hold pad (so the default AUTO policy sends everything) over a platter that does not move, for
+// `seconds`, with `seeds` different resting positions and noise sequences.
+RestResult restWithFinger(double sigma, bool filtered, int seeds, int seconds) {
+  RestResult r;
+  for (int seed = 1; seed <= seeds; ++seed) {
+    Deck d(0);
+    ChipNoise chip(static_cast<uint32_t>(seed), sigma, filtered);
+    d.touchIdle(kSettleMs);
+    for (int i = 0; i < 200; ++i) {  // the finger lands; the tracker anchors on a noisy sample like any other
+      d.in.angle12 = chip.read();
+      d.padStep(true);
+    }
+    d.clearLog();
+    const int32_t base = d.engine.jogTotal();
+    int32_t prev = base;
+    for (int i = 0; i < seconds * 1000; ++i) {
+      d.in.angle12 = chip.read();
+      d.padStep(true);
+      const int32_t total = d.engine.jogTotal();
+      if (total != prev) ++r.tickEvents;
+      prev = total;
+      r.worstNet = std::max(r.worstNet, std::abs(total - base));
+    }
+    d.run(20);
+    r.cc += static_cast<int64_t>(countCc(usbMsgs(d.log, 0), proto::cc::kJog));
+    CHECK(d.engine.led().touched);  // the finger stayed down the whole time
+  }
+  return r;
+}
+
+}  // namespace
+
+EPDJ_TEST(as5600_a_touched_still_platter_makes_no_net_motion_and_at_most_single_tick_flicker) {
+  // The question behind "why not drop small per-sample changes like the original firmware does": with the engine's real jog
+  // path (no threshold, exact carry) and a finger on the pad, does a platter at rest produce motion? The tracker's total is
+  // (position - first position) / 4 truncated, so rest noise cannot accumulate; it can only flicker the total between
+  // neighbouring ticks when the platter rests next to a tick boundary and the noise crosses it. Measured on the models above.
+  const double sigmas[] = {0.5, 1.0, 2.0, 3.0, 4.0};
+  std::printf("    still platter, finger down, 8 resting positions x 15 s each\n");
+  std::printf("    raw sigma   filtered ANGLE: worst |net| ticks, ticks flicker/min, jog CC   raw register: same\n");
+  for (double sigma : sigmas) {
+    const RestResult f = restWithFinger(sigma, true, 8, 15);
+    const RestResult r = restWithFinger(sigma, false, 8, 15);
+    std::printf("    %4.1f counts   %d, %7.1f, %6lld                              %d, %7.1f, %6lld\n", sigma, f.worstNet,
+                f.tickEvents / (8.0 * 15.0 / 60.0), static_cast<long long>(f.cc), r.worstNet, r.tickEvents / (8.0 * 15.0 / 60.0),
+                static_cast<long long>(r.cc));
+    // The filtered register never makes more than a one-tick flicker, up to 4 counts rms of raw chip noise (16 counts peak
+    // to peak, far beyond what a sound magnet gap gives) and is silent up to 3.
+    CHECK(f.worstNet <= 1);
+    if (sigma <= 3.0) CHECK_EQ(f.tickEvents, 0);
+    // The raw register is as quiet only while the chip's own noise stays near one count rms; past that it flickers by more
+    // than a tick, over a hundred times a second. That is the case for the filtered ANGLE register as the default, and what
+    // the bench A/B (EPDJ_AS5600_FILTERED_ANGLE = n) is for: the real chip's figure is not known here.
+    if (sigma <= 1.0) CHECK(r.worstNet <= 1);
+    if (sigma >= 2.0) CHECK(r.worstNet >= 2);  // the measurement can see a platter that is not quiet
+    CHECK(f.tickEvents <= r.tickEvents);       // and the slow filter never flickers more than the raw register
+  }
+}
+
+EPDJ_TEST(as5600_slow_motion_is_passed_exactly_where_a_three_count_per_sample_threshold_would_drop_it) {
+  // The original firmware drops any per-sample change smaller than 3 counts while touched. Applied to our 1 kHz samples
+  // that rule delivers nothing below about 2 counts per millisecond (0.5 rev/s) and next to nothing up to 3 (0.73 rev/s),
+  // where whole samples start to clear it. The engine instead
+  // keeps every count (4 counts = 1 tick, the remainder carried), and the chip's own filter plus that quantisation already
+  // keep rest noise below one tick (the test above). This prints what each would deliver, from the same angle samples.
+  std::printf("    speed      engine ticks / true ticks      3-count rule delivers (of the true motion)\n");
+  for (double revPerSec : {0.05, 0.1, 0.2, 0.5, 1.0, 2.0}) {
+    Deck d(0);
+    d.touchIdle(kSettleMs);
+    for (int i = 0; i < 200; ++i) d.padStep(true);
+    d.clearLog();
+    const double countsPerMs = revPerSec * 4096.0 / 1000.0;
+    const int32_t base = d.engine.jogTotal();
+    int64_t whatIf = 0;  // counts a per-sample |delta| >= 3 rule would pass
+    uint16_t prev = d.in.angle12;
+    const int ms = 10000;
+    for (int i = 0; i < ms; ++i) {
+      d.turn(countsPerMs, true);
+      const int delta = ((static_cast<int>(d.in.angle12) - prev + 2048 + 4096) & 4095) - 2048;
+      prev = d.in.angle12;
+      if (std::abs(delta) >= 3) whatIf += delta;
+    }
+    d.run(50);
+    const double trueTicks = countsPerMs * ms / 4.0;
+    const int32_t ours = d.engine.jogTotal() - base;
+    std::printf("    %5.2f rev/s   %6d / %9.1f              %5.1f%%\n", revPerSec, ours, trueTicks,
+                100.0 * static_cast<double>(whatIf) / (trueTicks * 4.0));
+    CHECK(std::fabs(ours - trueTicks) <= 1.0);                // exact up to the sub-tick carry
+    CHECK_EQ(ccSum(usbMsgs(d.log, 0), 0, proto::cc::kJog), ours);  // and all of it reaches the host (the finger is down)
+    if (revPerSec <= 0.2) CHECK_EQ(whatIf, 0);                // below 2 counts/ms the other rule would send nothing at all
   }
 }
 
@@ -256,6 +392,41 @@ EPDJ_TEST(as5600_a_short_dropout_loses_nothing_a_long_one_loses_only_what_it_can
   CHECK_EQ(run(3), 43);  // 3 ms of blindness is still bridged
   CHECK_EQ(run(4), 39);  // 4 ms is not: re-anchor on the first good sample (no tick for it), then 19 ticks
   CHECK_EQ(run(100), 39);  // and a 100 ms outage (the HAL's back-off after two failed reads) costs the same: no burst afterwards
+}
+
+EPDJ_TEST(as5600_an_encoder_that_turns_up_after_boot_is_picked_up_without_a_jump) {
+  // The platform asks an encoder that did not answer at boot again every 500 ms (encoder_retry.h). To the engine that is
+  // angleValid = false from the first step, a long time of it while the platter turns, and then true at some position.
+  Deck d(0);
+  d.reportUntouched();
+  d.in.angleValid = false;
+  d.touchIdle(kSettleMs);
+  ask(d, 0, Cmd::Stream, b({100}));
+  d.clearLog();
+  Rng rng(21);
+  for (int i = 0; i < 2500; ++i) {  // 2.5 s: five trials of the HAL would all have failed
+    d.in.angle12 = static_cast<uint16_t>(rng.next() & 4095);
+    d.padStep(false);
+  }
+  CHECK_EQ(d.engine.jogTotal(), 0);
+  std::vector<proto::Telemetry> f = telemetry(d.log);
+  CHECK(!f.empty());
+  for (const proto::Telemetry& t : f) CHECK_EQ(t.flags & proto::stateFlags::kAngleValid, 0);
+
+  d.clearLog();
+  d.in.angleValid = true;  // the wire is fixed; the first good read finds the platter wherever it is
+  d.angle = 3333;
+  d.in.angle12 = 3333;
+  d.step();
+  d.step();
+  CHECK_EQ(d.engine.jogTotal(), 0);  // the position at that moment is not motion
+  d.spin(4, 100);
+  d.run(20);
+  CHECK_EQ(d.engine.jogTotal(), 100);  // and from there on counting is exact
+  CHECK_EQ(ccSum(usbMsgs(d.log, 0), 0, proto::cc::kJog), 100);
+  f = telemetry(d.log);
+  CHECK(!f.empty());
+  for (const proto::Telemetry& t : f) CHECK((t.flags & proto::stateFlags::kAngleValid) != 0);  // ANGLE_VALID is back
 }
 
 EPDJ_TEST(as5600_unit_with_no_encoder_stays_silent_on_jog_but_everything_else_works) {
@@ -339,8 +510,11 @@ EPDJ_TEST(as5600_one_hold_pad_gives_touch_notes_and_taps_while_the_encoder_gives
   CHECK_EQ(d.engine.jogTotal() - jogBefore, 512);
 }
 
-EPDJ_TEST(as5600_a_platter_that_keeps_spinning_after_the_hand_leaves_still_reports_motion) {
+EPDJ_TEST(as5600_a_platter_that_keeps_spinning_after_the_hand_leaves_reports_motion_when_asked_to) {
+  // jogUntouched = REPORT: untouched motion is a pitch nudge. (The default, AUTO, keeps it off the wire when a hold pad is
+  // wired: test_engine_jog_policy.cpp.)
   Deck d(0);
+  d.reportUntouched();
   d.touchIdle(kSettleMs);
   d.clearLog();
 

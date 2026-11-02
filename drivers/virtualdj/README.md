@@ -85,6 +85,13 @@ names. Numbers are from `protocol/epdj3000.json`.
 | `PITCH` | CC 25 / 57 | `pitch` | when `faderRole` = PITCH, the unit's default |
 | `KNOB` | CC 24 / 56 | `filter` | colour-FX filter, nothing applied at centre; silent if `knobRole` = BPM |
 
+**Untouched platter motion.** The unit's default `jogUntouched` is `AUTO`: it sends `JOG` for a platter nobody touches until
+the hold pad has registered a touch since power-up, and only while a hand is on the platter after that (contract v1.4; a
+coasting platter would otherwise keep driving `touchwheel`). To get motion from a platter nobody is touching *after the pad
+has worked*, for instance as a nudge, set `jogUntouched` = `REPORT` (config key 33, value 1) in the macOS app's Settings or
+with the SysEx frame in [`../README.md`](../README.md#untouched-platter-motion-joguntouched). What
+`touchwheel` does with jog and no touch is not documented; nothing in this mapping changes for it.
+
 LEDs are not mapped separately: per the definition reference, an LED with `default="CUE"` uses the
 action of the `CUE` button as its state.
 
@@ -134,9 +141,9 @@ Everything about VirtualDJ's behaviour. Specifically:
 
 * That `vid`/`pid` detection finds the unit on macOS and Windows, and which of the three MIDI cables it binds.
 * That two identical units get decks 1 and 2 (rather than decks 1 and 3) and keep them after reconnect.
-* That `touchwheel` with no touch behaves sensibly. The default free-spinning `AS5600` platter reports
-  motion whether or not a hand is on it (a coasting platter after a flick, for one); the docs only say the verb is
-  "for a jogwheel with touch sensitivity".
+* That `touchwheel` with no touch behaves sensibly. By default the unit sends no jog for an untouched platter once the hold
+  pad has registered a touch (`jogUntouched` = `AUTO`), so this arises on a fresh unit before any touch, with `jogUntouched` =
+  `REPORT`, or in a build with no hold pad; the docs only say the verb is "for a jogwheel with touch sensitivity".
 * That `full="1024"` and a `64`-centred relative CC give one-to-one platter motion.
 * That 14-bit sliders with a skipped half (the contract allows skipping an unchanged half) behave.
 * That the `default=""` LEDs show cue and play state with `cue_stop` / `play_pause`.

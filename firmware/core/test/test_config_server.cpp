@@ -237,7 +237,8 @@ EPDJ_TEST(get_config_dump_all_sends_one_frame_per_key_in_order_then_an_ack) {
   }
   CHECK_EQ(syx::readI32le(r.sink.replies[23].payload.data() + 1), 1285);
   CHECK_EQ(syx::readI32le(r.sink.replies[1].payload.data() + 1), 5);
-  CHECK_EQ(syx::readI32le(r.sink.replies[32].payload.data() + 1), 0);  // linkGroup, the last key
+  CHECK_EQ(syx::readI32le(r.sink.replies[32].payload.data() + 1), 0);  // linkGroup
+  CHECK_EQ(syx::readI32le(r.sink.replies[33].payload.data() + 1), 0);  // jogUntouched (AUTO), the last key
   // ACK[GET_CONFIG] is the end marker: it follows the last key and nothing else does.
   CHECK_EQ(r.sink.replies.back().cmd, 0x7E);
   CHECK_BYTES(r.sink.replies.back().payload, (Bytes{0x02}));
@@ -245,13 +246,13 @@ EPDJ_TEST(get_config_dump_all_sends_one_frame_per_key_in_order_then_an_ack) {
 
   // A single-key read is just the CONFIG frame, no end marker.
   r.clear();
-  r.send(0, 0x02, {32});
+  r.send(0, 0x02, {33});
   CHECK_EQ(r.only().cmd, 0x42);
 }
 
 EPDJ_TEST(get_config_errors) {
   Rig r;
-  r.send(0, 0x02, {33});
+  r.send(0, 0x02, {34});
   r.expectNak(0x02, Err::BadKey);
   r.clear();
   r.send(0, 0x02, {0xFE});
@@ -308,7 +309,7 @@ EPDJ_TEST(set_config_negative_value_from_vector_is_out_of_range) {
 
 EPDJ_TEST(set_config_errors) {
   Rig r;
-  r.send(0, 0x03, cat({33}, i32(0)));
+  r.send(0, 0x03, cat({34}, i32(0)));
   r.expectNak(0x03, Err::BadKey);
   r.clear();
   r.send(0, 0x03, cat({255}, i32(0)));

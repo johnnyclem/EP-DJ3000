@@ -60,15 +60,36 @@ final class ConfigPresentationTests: XCTestCase {
         XCTAssertTrue(options.first { $0.value == Int32(PlatterSource.touchRing.rawValue) }?.label.contains("experimental") ?? false)
     }
 
-    func testTouchSectorsAreOnlyUsedWithTheRing() {
+    func testTouchSectorsAreOnlyUsedWithTheRingAndJogUntouchedOnlyWithTheAS5600() {
         for source in PlatterSource.allCases {
             XCTAssertEqual(ConfigPresentation.isApplicable(.touchSectors, platterSource: source), source == .touchRing, "\(source)")
-            for key in ConfigKey.allCases where key != .touchSectors {
+            XCTAssertEqual(ConfigPresentation.isApplicable(.jogUntouched, platterSource: source), source == .as5600, "\(source)")
+            for key in ConfigKey.allCases where key != .touchSectors && key != .jogUntouched {
                 XCTAssertTrue(ConfigPresentation.isApplicable(key, platterSource: source), "\(key) with \(source)")
             }
         }
         XCTAssertNotNil(ConfigPresentation.inapplicableNote(for: .touchSectors))
+        XCTAssertNotNil(ConfigPresentation.inapplicableNote(for: .jogUntouched))
         XCTAssertNil(ConfigPresentation.inapplicableNote(for: .touchOnPermille), "the hold pad uses the touch thresholds too")
+    }
+
+    func testJogUntouchedHasThePlainLanguageChoicesAndTheAutoLabelIsTheContractDefault() {
+        guard case let .choice(options) = ConfigPresentation.kind(for: .jogUntouched) else { return XCTFail("a choice") }
+        XCTAssertEqual(options.map(\.label), ["Auto (suppress coasting once the hold pad has worked)", "Always send", "Only while touched"])
+        XCTAssertEqual(options.map(\.value), JogUntouched.allCases.map { Int32($0.rawValue) }, "every value, in contract order")
+        // The same check as the platterSource one, for a key whose label does not say "default": the choice that
+        // starts with the AUTO name is the one the contract defaults to, and it is the first.
+        let auto = options.filter { $0.label.hasPrefix("Auto") }
+        XCTAssertEqual(auto.map(\.value), [ConfigTable.desc(.jogUntouched).defaultValue])
+        XCTAssertEqual(auto.map(\.value), [Int32(JogUntouched.auto.rawValue)])
+        XCTAssertEqual(options.first?.value, auto.first?.value)
+        XCTAssertEqual(ConfigPresentation.label(for: .jogUntouched, value: ConfigTable.desc(.jogUntouched).defaultValue),
+                       "Auto (suppress coasting once the hold pad has worked)")
+        XCTAssertEqual(ConfigPresentation.label(for: .jogUntouched, value: 1), "Always send")
+        XCTAssertEqual(ConfigPresentation.label(for: .jogUntouched, value: 2), "Only while touched")
+        XCTAssertEqual(ConfigPresentation.section(for: .jogUntouched), "Platter")
+        XCTAssertFalse(ConfigPresentation.needsReboot(.jogUntouched), "applies live")
+        XCTAssertFalse(ConfigPresentation.isReadOnly(.jogUntouched))
     }
 
     func testRebootKeys() {

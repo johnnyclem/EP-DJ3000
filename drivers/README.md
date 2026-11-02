@@ -42,12 +42,22 @@ fails when it no longer matches the contract.
 | Slide pot | `faderRole` = `PITCH`: CC 25 (MSB) / 57 (LSB), 14-bit. Other roles: `CROSSFADER` CC 23 / 55, `CHANNEL_VOLUME` CC 7 / 39 |
 | Orange knob | `knobRole` = `GENERIC`: CC 24 (MSB) / 56 (LSB), 14-bit |
 | Platter | `platterSource` = `AS5600`, `jogInvert` = 0: CC 22, relative `64 + delta`, **1024 ticks per revolution**, clockwise positive; touch is Note 38 (a hand on the platter, from the hold pad when the platter is the AS5600) |
+| Untouched platter | `jogUntouched` = `AUTO` (config key 33): motion with no hand on the platter is sent as jog until the hold pad has registered a touch since power-up, then **not** sent (a free-spinning platter coasts for seconds after release, and the unit cannot tell a dead pad from a working one, so it waits for the pad to report one hand; the proof is not stored, it restarts at reboot and when `platterSource` changes); always sent when the build has no hold pad. `REPORT` (1) always sends it, `SUPPRESS` (2) never does; `Telemetry.jogTotal` counts it either way |
 | Buttons | `cue` Note 36, `rev` Note 37; a platter tap (`tapPlay` = 1) pulses `play` Note 39 |
 | Mode | `mode` = `DJ`: no clock, transport or timecode out, so `bpm`, `bpmNudge`, `tap` and `transport` stay silent |
 <!-- END GENERATED:defaults -->
 
 Each mapping binds all three slide-pot roles, but only the one `faderRole` selects ever carries data. What the app does
 with each is in its README and in the matrix below.
+
+**Untouched platter motion stops being sent once the hold pad has worked (contract v1.4).** The unit's default `jogUntouched` is
+`AUTO`: it sends jog for a platter nobody is touching until the hold pad has registered a touch since power-up, and after that
+only while the pad says a hand is on the platter, because a free-spinning platter coasts for seconds after you let go and that
+would bend the pitch the whole time. So on the bench, with the pad not connected yet, spinning the platter shows jog (the encoder
+works before the pad does); once the pad has seen a hand a coasting platter is silent until the next reboot. Every mapping here
+scratches on touch and ignores or never receives the rest. To get a nudge or pitch bend from spinning the platter **without**
+touching it, also after the pad has worked, set `jogUntouched` = `REPORT` (config key 33, value 1):
+[Untouched platter motion](#untouched-platter-motion-joguntouched) below.
 
 ## Status codes
 
@@ -69,7 +79,7 @@ in the "two units into the EP-136" rig; the other two roles are not (see [Slide 
 
 | Feature (what the unit sends) | Mixxx | VirtualDJ | djay Pro | rekordbox |
 |---|---|---|---|---|
-| **Jog / scratch** (CC 22, relative, 1024 ticks/rev) | **MOCK**. `scratchTick` while touched; untouched, a pitch bend through `[ChannelN],jog`. Feel untuned. | **DOCS**. `touchwheel`, `zero="0x40" full="1024"`. Untouched behaviour of a free-spinning platter unknown. | **LEARN**. CC 22 to Scratch, two plans. djay may read only the sign of a step, not its size. | **EXP**. `JogScratch` row disabled; jog rows are hardware-only (`RO`) in rekordbox. Expect it not to work. |
+| **Jog / scratch** (CC 22, relative, 1024 ticks/rev; untouched motion before the hold pad's first touch since power-up, with `jogUntouched` = `REPORT`, or in a build with no hold pad) | **MOCK**. `scratchTick` while touched; the untouched pitch bend through `[ChannelN],jog` is live until the pad's first touch since power-up, dormant after that, and always live with `REPORT`. Feel untuned. | **DOCS**. `touchwheel`, `zero="0x40" full="1024"`. What `touchwheel` does with jog and no touch is unknown. | **LEARN**. CC 22 to Scratch, two plans. djay may read only the sign of a step, not its size. | **EXP**. `JogScratch` row disabled; jog rows are hardware-only (`RO`) in rekordbox. Expect it not to work. |
 | **Platter touch** (note 38) | **MOCK**. `scratchEnable` / `scratchDisable`. | **DOCS**. `touchwheel_touch`. | **LEARN**. Scratching Mode (name from the community list). | **EXP**. `JogTouch` row disabled. |
 | **Cue** (note 36) | **MOCK**. `cue_default`. | **DOCS**. `cue_stop`. | **LEARN**. CUE (community name). | **COMM**. `Cue` row, active. |
 | **Play / pause** (note 39, platter tap) | **MOCK**. Toggles `play`. | **DOCS**. `play_pause`. | **LEARN**. Play/Pause (name in the official manual). | **COMM**. `PlayPause` row, active. |
@@ -118,12 +128,15 @@ an external mixer, and two units never fight over a tempo slider. The other two 
 
 * **Scratch mode depends on the touch note, and on the default platter that note is the hold pad's.** Mixxx
   (`scratchEnable`), VirtualDJ (`touchwheel_touch`) and djay Pro's touch-aware plan (Scratching Mode) switch the
-  deck into scratching on note 38, not on motion. The AS5600 platter reports rotation whether or not a hand is on it, so the
+  deck into scratching on note 38, not on motion. The AS5600 senses rotation whether or not a hand is on it, so the
   hand detection comes from one touch pad that has to see a hand on a platter that spins and crosses a rotating
   joint to get there. That path is undesigned and untested (`docs/ARCHITECTURE.md` decision 2, first bring-up
-  step 3 in `docs/BRINGUP.md`). If the pad never reports a hand, no mapping here scratches: Mixxx falls back to
-  pitch bend, and what VirtualDJ and djay do with jog and no touch is unknown. `platterSource` = `TOUCH_RING`
-  (experimental, `docs/ARCHITECTURE.md`) detects the finger on the same segmented surface that senses the motion.
+  step 3 in `docs/BRINGUP.md`). **If the pad never reports a hand (or is not connected yet), nothing scratches**: a touched platter never
+  happens. The default `jogUntouched` = `AUTO` keeps sending the untouched platter as jog (the unit has not seen the pad work),
+  so the mappings that take untouched jog (Mixxx's pitch bend) turn the platter into a nudge wheel meanwhile; what VirtualDJ
+  and djay do with jog and no touch is unknown. Once the pad has registered a hand, `AUTO` goes silent for a coasting platter;
+  set `jogUntouched` = `REPORT` to keep the nudge. `platterSource` =
+  `TOUCH_RING` (experimental, `docs/ARCHITECTURE.md`) detects the finger on the same segmented surface that senses the motion.
 * **Default channels only.** Mixxx, VirtualDJ and the rekordbox CSVs hard-code channels 1 and 2. A unit with
   `midiChannel` set to something else needs the mapping edited (djay learns whatever it hears).
 * **Input channel filtering is specified.** A unit ignores channel-voice messages on any channel but its own,
@@ -148,6 +161,46 @@ an external mixer, and two units never fight over a tempo slider. The other two 
   explicitly does not support it; djay and rekordbox are untested with it.
 * **MIDI-learn names drift.** djay action names and rekordbox command names come from community lists in
   several places; both READMEs say which.
+
+## Untouched platter motion (`jogUntouched`)
+
+Since contract v1.4 ([`docs/PROTOCOL.md`](../docs/PROTOCOL.md) section 2.2) one setting decides whether a unit with the
+AS5600 platter sends jog for motion with no hand on the platter. It exists because a free-spinning platter coasts for
+seconds after release: sent as jog, that coasting would bend the pitch the whole time. (The original Field Jog sketch this
+shell was modelled on also sends jog only while touched; its reason is not in the code,
+[`docs/REFERENCE-ORIGINAL-FIRMWARE.md`](../docs/REFERENCE-ORIGINAL-FIRMWARE.md).) `Telemetry.jogTotal` counts all motion under
+every policy, so the calibration wizards and the macOS app do not depend on it.
+
+| `jogUntouched` | Value | Untouched motion is | Use it when |
+|---|---|---|---|
+| `AUTO` | 0, **factory default** | sent until the hold pad has registered a touch since power-up, not sent after that; always sent when the build has no hold pad | normal use: the encoder works before the pad does, and once the pad has seen a hand there is scratching on touch and no coasting nudge |
+| `REPORT` | 1 | always sent | you want a nudge or pitch bend from spinning the platter without touching it, also after the pad has worked (the Mixxx script's pitch-bend path, djay's Pitch bend plan) |
+| `SUPPRESS` | 2 | never sent | you want `AUTO`'s behaviour after the pad has worked from the very first tick, or in a build that has no pad (there that means no jog at all) |
+
+**The unit cannot measure that the pad works, only that it has reported a touch.** `AUTO` starts suppressing untouched jog at the
+first touch note since power-up, in a firmware build with a hold pad configured (`EPDJ_TOUCH_PAD_COUNT`, 1 by default:
+[`firmware/esp32s3/README.md`](../firmware/esp32s3/README.md)). Until then a spinning platter shows jog on a MIDI monitor, with
+nothing to set, so the encoder can be brought up before the pad exists. The proof is kept in RAM only: it starts over at every
+reboot and whenever `platterSource` changes. A floating or noisy pad that reports a phantom touch counts as a proof too. To see
+untouched jog again after the pad has worked, set `REPORT` or reboot; to never send it, set `SUPPRESS`. Nothing of this has run
+on hardware: it is the firmware's behaviour in the simulator ([`docs/E2E.md`](../docs/E2E.md)). The calibration steps in the macOS app read the
+encoder and `jogTotal` directly and work under every setting.
+
+Set it from the macOS app (Settings, Platter section: *Auto*, *Always send*, *Only while touched*) or with one SysEx frame,
+built like the `faderRole` frames in [`docs/BRINGUP.md`](../docs/BRINGUP.md) section 2b (addressed to any deck, so every unit
+on that port acts on it; `SAVE_CONFIG` keeps it). The same formula reproduces that section's `faderRole` = `PITCH` frame
+byte for byte. These three were fed to the real firmware `Engine` through the end-to-end simulator (`docs/E2E.md`): each was
+answered with an ACK and `GET_CONFIG` key 33 read back 0, 1 and 2. They were **not** sent to a unit:
+
+| What | Frame |
+|---|---|
+| `jogUntouched` = `AUTO` (0) | `F0 7D 45 44 01 7F 03 00 21 00 00 00 00 5C F7` |
+| `jogUntouched` = `REPORT` (1) | `F0 7D 45 44 01 7F 03 00 21 01 00 00 00 5B F7` |
+| `jogUntouched` = `SUPPRESS` (2) | `F0 7D 45 44 01 7F 03 00 21 02 00 00 00 5A F7` |
+
+What each app does with untouched jog when it is sent: Mixxx adds it to `[ChannelN],jog` as a pitch bend (tested on the
+mock); VirtualDJ's `touchwheel` with no touch is undocumented; djay has the "Pitch bend" plan in its README; rekordbox's jog
+rows are disabled. `REPORT` does not change anything about touched motion.
 
 ## MIDI clock, timecode and transport
 
@@ -231,7 +284,7 @@ Written and run on Node 22; needs `python3` (override with `PYTHON=...`); `xmlli
 | Step | What it proves | What it cannot |
 |---|---|---|
 | `tools/gen_protocol.py --check` | `common/epdj3000-protocol.js`, `mixxx/epdj3000-protocol.js` (the generator writes both) and the other generated files are current with `protocol/epdj3000.json` | - |
-| `test/defaults/check.mjs` | The "what the unit sends by default" table above equals a render of the contract; the Mixxx, VirtualDJ, djay and rekordbox READMEs all state the contract's default fader role and its CC pair; broken copies fail | That the firmware sends it (the firmware tests do) |
+| `test/defaults/check.mjs` | The "what the unit sends by default" table above (including the `jogUntouched` row) equals a render of the contract; the Mixxx, VirtualDJ, djay and rekordbox READMEs all state the contract's default fader role and its CC pair, the default `jogUntouched` (AUTO: untouched jog until the hold pad's first touch since power-up) and how to switch untouched jog on after that (`REPORT`, config key and value); the djay README links the original-firmware reference, which exists; broken copies fail | That the firmware sends it (the firmware tests do) |
 | `test/mixxx/run.mjs` (39 tests) | The XML and script load the way Mixxx loads them; every `<status>`/`<midino>` equals the set derived from the contract; each handler behaves correctly against a strict mock engine that rejects any control name not in the Mixxx docs; the generated XML is current and both generated copies of the constants are identical | That real Mixxx accepts it. Scratch feel, soft takeover with a real pot |
 | `test/virtualdj/check.mjs` (25 tests) | Both XML files are well-formed, use only elements and attributes of the official reference, agree with the contract number for number, use only verbs from a snapshot of the official verb list; deliberately broken copies fail | Anything VirtualDJ does with them |
 | `test/djay-rekordbox/check.mjs` | Both CSVs decoded independently of the generator match the contract (status, data byte, channel, deck column, type, LED); unverified and jog rows stay disabled; the djay and rekordbox READMEs' tables carry the contract numbers; broken copies fail | That rekordbox opens a CSV or djay has the action |

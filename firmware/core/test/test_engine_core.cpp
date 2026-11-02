@@ -107,6 +107,7 @@ EPDJ_TEST(engine_as5600_spin_is_exact_and_respects_invert) {
   for (int invert = 0; invert <= 1; ++invert) {
     Deck d(0);  // contract defaults: the AS5600 is the platter
     CHECK_EQ(d.cfg.get(ConfigKey::PlatterSource), static_cast<int>(proto::PlatterSource::As5600));
+    d.reportUntouched();  // nobody touches the hold pad here: this is about the exactness of the ticks, not the policy
     d.set(ConfigKey::JogInvert, invert);
     d.in.angle12 = 1234;
     d.run(50);

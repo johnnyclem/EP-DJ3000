@@ -3,14 +3,16 @@
 // worked) and `Telemetry.angle` (12 bit, 4096 per turn). Pure like the other wizards: no clock, durations are sample
 // counts derived from the stream rate.
 //
+// It never looks at the touched flag, the hold pad or the jog stream, so it works the same whatever `jogUntouched` is.
+//
 // The thresholds below are reasoned, not measured: nothing here has met a real AS5600.
 
 public struct EncoderDiagnosis: Sendable {
     public enum Verdict: Equatable, Sendable {
-        /// No chip answered at boot (`Caps.as5600` clear): wiring (SDA/SCL, 3.3 V, pull-ups), address, or the
+        /// No chip has answered (`Caps.as5600` clear; the unit keeps re-probing every 500 ms): wiring (SDA/SCL, 3.3 V, pull-ups), address, or the
         /// encoder probe is disabled in the build.
         case noEncoder
-        /// A chip answered at boot but the unit got no valid angle in the whole check.
+        /// A chip answered but the unit got no valid angle in the whole check.
         case readsFailing(samples: Int)
         /// Valid angles, but the platter was not turned a full revolution: no magnet, too far, or not on the axle.
         case notMoving(spanCounts: Int)

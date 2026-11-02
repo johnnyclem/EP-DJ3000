@@ -96,7 +96,25 @@ menu "EP-DJ3000"
             help
                 Needed for the default AS5600 platter: with it off, platterSource AS5600 has no encoder to
                 read and the unit sends no jog. The boot log says whether the chip answered and how the
-                magnet looks.
+                magnet looks. A chip that does not answer is asked again every 500 ms while the AS5600 is the
+                platter, so a wire fixed after power-up is found without a reboot.
+
+        config EPDJ_AS5600_FILTERED_ANGLE
+            bool "Read the AS5600's filtered ANGLE register (0x0E) instead of RAW ANGLE (0x0C)"
+            depends on EPDJ_AS5600_ENABLE
+            default y
+            help
+                On: the firmware writes the chip's CONF register at start-up (watchdog off, hysteresis 0, slow
+                filter setting 0 = 16x, fast-filter threshold setting 7 = 10 LSB: the settings of the original
+                Field Jog firmware this deck's shell was drawn for) and reads ANGLE, the scaled output that the
+                filters belong to. The slow filter quietens a platter at rest; the fast-filter threshold lets
+                movement above 10 LSB through without the slow filter's lag. Off: reads RAW ANGLE, documented as
+                unscaled and unmodified, so no filtering at all (CONF is still written, harmlessly).
+                ANGLE is also scaled by the chip's ZPOS/MPOS/MANG registers: a chip someone burned with a
+                limited range gives fewer than 1024 ticks a lap, and then this must be off.
+                This is the bench A/B switch: whether the filter helps or only adds lag has not been measured on a
+                real chip (docs/BRINGUP.md, hardware/WIRING.md). Rebuild, flash, compare the idle angle in the
+                once-a-second sens: line and how a fast scratch feels.
 
     endmenu
 

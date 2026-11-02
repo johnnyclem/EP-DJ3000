@@ -123,13 +123,23 @@ void logPlatter() {
   const bool encoder = g_as5600.present();
   const unsigned pads = g_touch.count();
 
-  char enc[112];
+  char enc[200];
   if (encoder) {
-    std::snprintf(enc, sizeof enc, "answered at 0x%02X, magnet %s, read %u us", hal::As5600::kAddress,
-                  hal::sensor_budget::magnetText(g_as5600.magnet()), g_as5600.readUs());
+    char conf[40];
+    if (!g_as5600.confKnown()) {
+      std::snprintf(conf, sizeof conf, "conf=?");
+    } else if (g_as5600.confOk()) {
+      std::snprintf(conf, sizeof conf, "conf=0x%04X", static_cast<unsigned>(g_as5600.conf()));
+    } else {
+      std::snprintf(conf, sizeof conf, "conf=0x%04X (wrote 0x%04X)", static_cast<unsigned>(g_as5600.conf()),
+                    static_cast<unsigned>(hal::as5600::kScratchConfWord));
+    }
+    std::snprintf(enc, sizeof enc, "answered at 0x%02X, magnet %s, %s, angle reg 0x%02X (%s), read %u us", hal::As5600::kAddress,
+                  hal::sensor_budget::magnetText(g_as5600.magnet()), conf, static_cast<unsigned>(hal::As5600::angleRegister()),
+                  hal::As5600::filteredAngle() ? "filtered" : "raw", g_as5600.readUs());
   } else {
-    std::snprintf(enc, sizeof enc, "NOT answering at 0x%02X (SDA GPIO%d, SCL GPIO%d)", hal::As5600::kAddress, pins::kI2cSda,
-                  pins::kI2cScl);
+    std::snprintf(enc, sizeof enc, "NOT answering at 0x%02X (SDA GPIO%d, SCL GPIO%d)%s", hal::As5600::kAddress, pins::kI2cSda,
+                  pins::kI2cScl, g_as5600.canRetry() ? ", asking again every 500 ms" : "");
   }
   ESP_LOGI(TAG, "platter: source %s | AS5600 %s | touch pads wired: %u%s", platterText(source), enc, pads,
            pads == 1 ? " (GPIO4 = hold pad)" : (pads == 0 ? " (no hold pad)" : ""));
@@ -140,9 +150,25 @@ void logPlatter() {
 #else
     const char* why = "the AS5600 probe is compiled out (EPDJ_AS5600_ENABLE is off)";
 #endif
-    ESP_LOGW(TAG, "!!! platterSource is AS5600 but no encoder answered (%s): JOG WILL BE SILENT. Check the I2C wiring (SDA GPIO%d, SCL GPIO%d, "
-                  "3V3, GND), the breakout's 3.3 V/5 V strap and the magnet gap (1-3 mm), then reboot !!!",
-             why, pins::kI2cSda, pins::kI2cScl);
+    if (g_as5600.canRetry()) {
+      ESP_LOGW(TAG, "!!! platterSource is AS5600 but no encoder answered (%s): JOG IS SILENT until one does. It is asked again every 500 ms, "
+                    "so fixing the wiring is enough, no reboot. Check the I2C wiring (SDA GPIO%d, SCL GPIO%d, 3V3, GND), the breakout's "
+                    "3.3 V/5 V strap and the magnet gap (1-3 mm) !!!",
+               why, pins::kI2cSda, pins::kI2cScl);
+    } else {
+      ESP_LOGW(TAG, "!!! platterSource is AS5600 but no encoder answered (%s): JOG WILL BE SILENT. Check the I2C wiring (SDA GPIO%d, SCL GPIO%d, "
+                    "3V3, GND), the breakout's 3.3 V/5 V strap and the magnet gap (1-3 mm), then reboot !!!",
+               why, pins::kI2cSda, pins::kI2cScl);
+    }
+  }
+  if (encoder && !g_as5600.confOk()) {
+    if (g_as5600.confKnown()) {
+      ESP_LOGW(TAG, "AS5600 CONF reads back 0x%04X after writing 0x%04X: the chip did not take the filter settings (a burned configuration "
+                    "or a bus fault). Jog still works with whatever the chip does",
+               static_cast<unsigned>(g_as5600.conf()), static_cast<unsigned>(hal::as5600::kScratchConfWord));
+    } else {
+      ESP_LOGW(TAG, "AS5600 CONF could not be written or read back (I2C error): the filter settings are whatever the chip powered up with");
+    }
   }
   if (encoder && g_as5600.magnet() != Magnet::Ok) {
     ESP_LOGW(TAG, "AS5600 magnet %s (STATUS 0x%02X): %s", hal::sensor_budget::magnetText(g_as5600.magnet()), g_as5600.status(),
@@ -157,6 +183,14 @@ void logPlatter() {
   }
   if (source == proto::PlatterSource::As5600 && pads == 0) {
     ESP_LOGW(TAG, "no hold pad wired (EPDJ_TOUCH_PAD_COUNT = 0): the unit never sends a touch note, so DJ apps never enter scratch mode");
+  }
+  if (source == proto::PlatterSource::As5600) {
+    const auto policy = static_cast<proto::JogUntouched>(g_cfg.get(proto::ConfigKey::JogUntouched));
+    const char* what = policy == proto::JogUntouched::Report    ? "REPORT: always sent"
+                       : policy == proto::JogUntouched::Suppress ? "SUPPRESS: never sent"
+                       : pads > 0 ? "AUTO: sent until the hold pad registers a touch, then NOT sent"
+                                  : "AUTO: sent, no hold pad configured";
+    ESP_LOGI(TAG, "jog: platter motion with no hand on it is %s", what);
   }
   if (source == proto::PlatterSource::TouchRing && pads < 3) {
     ESP_LOGW(TAG, "platterSource is TOUCH_RING but only %u pad(s) are wired: touch works, finger angle does not", pads);
@@ -187,7 +221,14 @@ extern "C" void app_main(void) {
 #if CONFIG_EPDJ_AS5600_ENABLE
   if (g_i2c.ok()) g_as5600.begin(g_i2c);
 #endif
-  if (!g_adc.begin(g_as5600.present() ? g_as5600.readUs() : 0)) ESP_LOGE(TAG, "ADC failed: fader and knob will read 0");
+  // The ADC takes what the encoder read leaves of the 400 us. An encoder that did not answer may still turn up (it is asked
+  // again while running), so its share is reserved anyway when the AS5600 is the platter: finding it later must not push the
+  // sensors past the budget.
+  const bool encoderExpected = g_as5600.canRetry() && g_cfg.get(proto::ConfigKey::PlatterSource) ==
+                                                           static_cast<int32_t>(proto::PlatterSource::As5600);
+  if (!g_adc.begin(hal::sensor_budget::i2cReserveUs(encoderExpected, g_as5600.present(), g_as5600.readUs()))) {
+    ESP_LOGE(TAG, "ADC failed: fader and knob will read 0");
+  }
   if (CONFIG_EPDJ_TOUCH_PAD_COUNT > 0 && !g_touch.begin(CONFIG_EPDJ_TOUCH_PAD_COUNT)) {
     ESP_LOGE(TAG, "touch pads failed: no platter input");
   }
@@ -264,6 +305,7 @@ extern "C" void app_main(void) {
   g_rt.led = ledOn ? &g_led : nullptr;
   g_rt.radioOn = radioOn;
   g_rt.linkGroupDefault = id.linkGroup;
+  g_rt.caps = id.caps;
   g_rt.dacPresent = dacPresent;
 
   if (radioOn) ESP_LOGI(TAG, "link group %u (%s)", static_cast<unsigned>(app::effectiveLinkGroup(g_rt)),

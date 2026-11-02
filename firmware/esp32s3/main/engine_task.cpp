@@ -47,6 +47,7 @@ void engineLoop(Runtime* rt) {
   OutputPump<EngineIo> pump(io);
   uint64_t lastLedUs = 0;
   uint64_t prevT0 = 0;
+  bool encoderCapsSet = rt->as5600->present();
   TickType_t lastWake = xTaskGetTickCount();
 
   for (;;) {
@@ -84,13 +85,23 @@ void engineLoop(Runtime* rt) {
     // ---- 2. sample the hardware and run the engine ----
     // The encoder first, and every tick: jog is the latency-critical input, so it is sampled right at the timestamp and not
     // after the ADC's conversions. Without an encoder (or when a read fails) angleValid stays false and the engine reports
-    // no platter motion at all; angle12 is never used then.
+    // no platter motion at all; angle12 is never used then. A chip that is missing or failing is asked again every 500 ms
+    // (As5600::readAngle, encoder_retry.h): in between the call returns at once without touching the bus. When it answers
+    // again the engine sees angleValid go true after a gap longer than its 3 ms bridge and re-anchors on that sample, so
+    // the platter's position at that moment is not motion. Only the AS5600 platter has a reason to look for an encoder
+    // that is missing; any other source keeps reading one that is there, as before.
     RawInputs in;
     in.nowUs = hal::nowUs();
-    if (rt->as5600->present()) {
+    const bool wantEncoder = rt->as5600->present() || rt->cfg->get(proto::ConfigKey::PlatterSource) ==
+                                                          static_cast<int32_t>(proto::PlatterSource::As5600);
+    if (wantEncoder) {
       uint16_t a = 0;
       in.angleValid = rt->as5600->readAngle(&a, in.nowUs);
       if (in.angleValid) in.angle12 = a;
+    }
+    if (!encoderCapsSet && rt->as5600->present()) {  // Info.caps says an AS5600 is there as soon as it is
+      encoderCapsSet = true;
+      engine.setCaps(static_cast<uint16_t>(rt->caps | proto::caps::kAs5600));
     }
     in.faderRaw = rt->adc->fader();
     in.knobRaw = rt->adc->knob();

@@ -479,6 +479,20 @@
         "BOOTLOADER",
         1
       ]
+    ],
+    "JogUntouched": [
+      [
+        "AUTO",
+        0
+      ],
+      [
+        "REPORT",
+        1
+      ],
+      [
+        "SUPPRESS",
+        2
+      ]
     ]
   },
   "bitfields": {
@@ -898,6 +912,16 @@
         "max": 255,
         "default": 0,
         "desc": "Radio rig id. Units only link with peers that share it, so two rigs in one room do not cross-link."
+      },
+      {
+        "id": 33,
+        "name": "jogUntouched",
+        "type": "enum",
+        "enum": "JogUntouched",
+        "min": 0,
+        "max": 2,
+        "default": 0,
+        "desc": "Whether platter motion with no hand on it is sent as jog. AUTO: a free-spinning platter coasts for seconds after release and would bend the pitch the whole time, so once the hold pad has registered a touch since power-up, untouched motion is suppressed; until then it is reported, so the encoder works before the pad does. REPORT: always send it (pitch-bend nudge). SUPPRESS: send jog only while touched. Telemetry jogTotal always counts all motion."
       }
     ]
   },

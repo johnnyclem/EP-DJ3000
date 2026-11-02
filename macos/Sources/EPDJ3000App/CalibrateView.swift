@@ -34,12 +34,14 @@ extension CalibrationStep {
     func instruction(source: PlatterSource) -> String {
         switch self {
         case .encoder:
-            return "Spin the platter by hand, at least one full turn, then let go. The app checks that the AS5600 answered at start-up and that its angle follows the spin smoothly. The dial shows the raw angle; which way it turns does not matter yet, the next step fixes that."
+            return "Spin the platter by hand, at least one full turn, then let go. The app checks that the AS5600 answered at start-up and that its angle follows the spin smoothly. It reads the chip's angle directly, so it makes no difference whether the hold pad sees your hand or what the jogUntouched setting says. The dial shows the raw angle; which way it turns does not matter yet, the next step fixes that."
         case .direction:
             switch source {
             case .touchRing:
                 return "Put a finger on the platter and slide it clockwise (as seen from above) for at least a quarter turn. If the count goes negative the jog direction gets flipped."
-            case .as5600, .touchHoldOnly:
+            case .as5600:
+                return "Spin the platter clockwise (as seen from above) for at least a quarter turn. The count is the unit's own jog total, which includes the movement of an untouched platter even when the unit is set not to send that as jog, so no hand on the hold pad is needed. If the count goes negative the jog direction gets flipped."
+            case .touchHoldOnly:
                 return "Spin the platter clockwise (as seen from above) for at least a quarter turn. If the count goes negative the jog direction gets flipped."
             }
         case .holdPad:

@@ -139,6 +139,11 @@ What the sources say, and what that means for this unit:
   jog was "not learnable" and the virtual Pioneer device would not learn buttons.
 * None of that is this unit. It shows the route is fragile and version dependent, not that it fails. (This unit's `touch`
   note is the hold pad's: a hand on the spinning platter, not its motion.)
+* The unit's default `jogUntouched` is `AUTO` (contract v1.4): it sends jog for an untouched platter until the hold pad has
+  registered a touch since power-up and only while a hand is on the platter after that, so a coasting platter does not reach the
+  jog rows once the pad has worked. To get a nudge from spinning the platter without touching it after that,
+  set `jogUntouched` = `REPORT` (config key 33, value 1) in the macOS app's Settings or with the SysEx frame in
+  [`../README.md`](../README.md#untouched-platter-motion-joguntouched); that only matters if you get the jog rows working at all.
 * If you want to try anyway: delete the leading `#` on the `JogTouch` and `JogScratch` rows, import,
   and see whether the rows survive (EXPORT again and look). One MIDI code cannot drive two functions,
   so the unit's single jog CC cannot be both `JogScratch` and `JogPitchBend`; swap the command name if

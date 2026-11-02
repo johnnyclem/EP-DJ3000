@@ -20,6 +20,9 @@ private final class DeckRig {
 
     func send(_ events: MidiEvent...) { deck.handle(events, at: time) }
 
+    /// Forgets the fraction of a tick `run(jogSpeed:)` was carrying, so two runs that differ only in earlier jog quantise alike.
+    func dropJogRemainder() { carry = 0 }
+
     func note(_ n: UInt8, _ down: Bool) -> MidiEvent {
         down ? .noteOn(channel: ch, note: n, velocity: 127) : .noteOff(channel: ch, note: n, velocity: 0)
     }
@@ -251,6 +254,38 @@ final class DeckModelTests: XCTestCase {
         d.run(0.2, jogSpeed: 3)  // free-spinning platter, not touched
         XCTAssertEqual(d.status.playheadFrames, 96_000)
         XCTAssertEqual(d.deck.controller.jogTicks, Int(3 * nominal * 0.2), accuracy: 3)
+    }
+
+    /// Contract v1.4 (`jogUntouched`): by default (AUTO) a unit whose hold pad has registered a touch sends no jog while
+    /// nobody touches the platter, while `REPORT` sends the coasting too. The player must sound the same either way, so it
+    /// cannot depend on it.
+    func testThePlayerDoesTheSameWhetherOrNotUntouchedJogIsSent() {
+        func session(coastingReported: Bool) -> [(frames: Double, speed: Double, touched: Bool)] {
+            let d = DeckRig()
+            d.tap()   // playing
+            var log = [(frames: Double, speed: Double, touched: Bool)]()
+            func mark() { log.append((d.status.playheadFrames, Double(d.status.speed), d.status.touched)) }
+            d.run(0.2); mark()
+            // The platter coasts after a flick, nobody on it.
+            d.run(0.4, jogSpeed: coastingReported ? 3 : nil); mark()
+            d.dropJogRemainder()
+            d.send(d.note(Proto.Note.touch, true))
+            d.run(0.3, jogSpeed: 2); mark()        // a scratch under a hand
+            d.send(d.note(Proto.Note.touch, false))
+            d.run(0.2); mark()                     // released, the platter still coasting but nothing is sent when suppressed
+            d.dropJogRemainder()
+            d.run(0.4, jogSpeed: coastingReported ? 1 : nil); mark()
+            return log
+        }
+        let suppressed = session(coastingReported: false)
+        let reported = session(coastingReported: true)
+        XCTAssertEqual(suppressed.count, reported.count)
+        for (i, (a, b)) in zip(suppressed, reported).enumerated() {
+            XCTAssertEqual(a.frames, b.frames, "playhead at checkpoint \(i)")
+            XCTAssertEqual(a.speed, b.speed, "speed at checkpoint \(i)")
+            XCTAssertEqual(a.touched, b.touched, "touch at checkpoint \(i)")
+        }
+        XCTAssertEqual(suppressed[1].speed, 1.0, "untouched jog does not bend the track; the player has no nudge")
     }
 
     func testTouchStartsFromZeroVelocityNotTheLastGesture() {

@@ -8,8 +8,8 @@ down, and is not the path to follow now.
 Two things are verified by tests in simulation only (`firmware/core`, `docs/E2E.md`): the firmware turns AS5600 angles into
 jog (1024 ticks per revolution, exact) and turns a pad reading into touch/tap. Two things are **not validated by anyone**:
 that a conductive-PLA platter that spins can give a usable hold signal (this file lists two ways to try, both untested),
-and that the mechanics below produce the 1 to 3 mm magnet gap (the check against the SCAD is in
-[`README.md`](README.md)).
+and that the mechanics below produce the 1 to 3 mm magnet gap (the check against the current 16 mm SCAD is in
+[`README.md`](README.md): **as drawn the stack-up leaves no room for the breakout**, and has a one-line fix).
 
 ## The default build
 
@@ -36,10 +36,17 @@ AS5600 nothing to measure. Wiring and the 3.3 V / 5 V strap trap: [`WIRING.md`](
 what it does not: [`README.md`](README.md).
 
 **What the firmware does with it.** The encoder gives the angle: 4096 counts per revolution, 4 counts per jog tick, so
-1024 ticks per revolution. Motion is reported **whether or not anyone is touching the platter** (a platter that keeps
-spinning after the hand leaves still sends jog; DJ apps treat that as pitch bend). `jogInvert` is the software twin of the
-AS5600's DIR pin. The pad gives only "a finger is on the platter": touch-down and touch-up notes, tap-play, and the tempo
-nudge in SYNC_MASTER. It has no say in the angle, so a noisy pad hurts hold/tap detection, never the jog count.
+1024 ticks per revolution. The firmware **counts** all motion, touched or not (telemetry's `jogTotal`), but whether motion with no
+hand on the platter is **sent** is the `jogUntouched` setting (contract v1.4). The default, AUTO, sends it **until the hold pad has
+registered a touch since power-up** (so the encoder works before the pad does) and then stops: a free-spinning platter coasts for
+seconds after the hand leaves, and sent as jog that coast would bend the pitch the whole time (the original Field Jog firmware
+sends jog only while touched). After that proof, jog goes out only while the pad says touched; REPORT always sends untouched
+motion as a pitch nudge, SUPPRESS never does. `jogInvert` is the software twin of the
+AS5600's DIR pin. The pad gives "a finger is on the platter": touch-down and touch-up notes, tap-play, the tempo nudge in
+SYNC_MASTER, and now also **whether the jog is sent at all**. It has no say in the angle, so a noisy pad hurts hold/tap detection and
+the jog gate, never the jog count. After a touch longer than 7 s the pad's release is only believed once the platter has made no tick for
+80 ms (a dropout in the middle of a long scratch must not end scratch mode); the flip side is that a hand lifted off a platter that is
+still spinning, after such a long touch, keeps the touch on until the platter stops.
 
 ## The conductive-PLA platter has two jobs, and the second one is unsolved
 
@@ -68,9 +75,9 @@ capacitance in series with the platter-to-foil capacitance.
   modulation anyway.
 * The platter must **not** be grounded anywhere, and the steel axle and bearing must not connect it to a ground: a floating
   plate is the idea. Whether the bearing and the M3 screw make the platter float or ground it is not known.
-* Mechanics, checked against the SCAD (see `README.md`): the platter's underside sits at the well floor (z = 24.9 mm), so
+* Mechanics, checked against the current SCAD (see `README.md`): the platter's underside sits at the well floor (z = 15.3 mm), so
   there is **no designed air gap** and no recess for foil. A foil pad on the well floor would be rubbed by the spinning
-  platter; a recess, and a wire path through the 6.2 mm top plate to the DevKit, are not drawn.
+  platter; a recess, and a wire path through the 4.2 mm top plate to the DevKit, are not drawn.
 * A non-conductive layer between foil and platter (a 0.1 mm sheet, or the foil's own adhesive) keeps them from shorting; a
   short would be a galvanic contact, which is option (b) by accident.
 
@@ -82,21 +89,26 @@ head in its pocket, and the shank carries the finger's signal down to the contac
 
 * Contact resistance and noise of a sliding metal contact on a 3 mm shank are unknown; a dry sliding contact makes
   intermittent readings, which the touch detector would read as touches and releases. The pad signal only says "a finger is
-  on it", so a bad contact breaks hold and tap detection, not the jog angle.
+  on it", so a bad contact breaks hold and tap detection, and (once the pad has registered a touch, under `jogUntouched` AUTO) the
+  jog gate (jog goes out only while touched), not the jog angle the firmware counts.
 * Whether the conductive PLA makes a reliable connection with the screw head is unknown. The M3 head and the magnet at the
-  shank's end leave little room: the SCAD's magnet zone starts at z = 12.2 mm and the contact would have to sit between the
-  bearing's underside (z = 21.5 mm) and the magnet, around the shank. Nothing is drawn for it.
+  shank's end leave little room: the SCAD's magnet zone is z = 8.1 to 10.6 mm and the contact would have to sit between the
+  bearing's underside (z = 12.0 mm) and the magnet, around the shank, through the sleeve's 5.6 mm bore (z 10.7 to 12.0). Nothing is
+  drawn for it.
 * Wear: a spring rubbing a rotating shaft wears both.
 * The bearing itself is **not** a contact (balls on grease): do not count on the bearing's inner and outer race being
   connected through it.
 
 ### Without a hold pad (`EPDJ_TOUCH_PAD_COUNT = 0`, or nothing wired to GPIO4)
 
-Jog works; **nothing that depends on a finger being on the platter does:**
+Jog works (with `jogUntouched` AUTO, untouched motion **is** sent until a pad has registered a touch, which with no pad is
+always: the encoder works before the pad does); **nothing that depends on a finger being on the platter does:**
 
 * **No touch note is ever sent**, so DJ apps never enter scratch mode. The platter is a pitch-bend wheel: motion goes to
   the app's jog/pitch-bend input, not to its scratch engine. (Mixxx: untouched motion -> `[ChannelN],jog`; touched motion
-  -> `scratchEnable`/`scratchTick`.)
+  -> `scratchEnable`/`scratchTick`.) A pad that is configured but not connected or not working behaves the same way: it never
+  registers a touch, so AUTO keeps sending the untouched jog and the platter stays a pitch wheel (a floating pad that reports a
+  phantom touch counts as proof, and silences coasting from then on: `docs/BRINGUP.md`).
 * **No tap-play** (touch and release without moving toggles play/pause).
 * In **SYNC_MASTER** the platter is not a tempo wheel (the nudge counts ticks only while touched).
 * The status LED never shows "touched".
@@ -122,15 +134,19 @@ estimate, not a measurement; the boot log prints the real `idle peak count`.
 
 ## The encoder: what to expect (from memory of the datasheet; verify against the part you hold)
 
-* **Raw angle.** The firmware reads the RAW ANGLE register (0x0C). As far as I remember the datasheet that is the unscaled,
-  unfiltered angle, so the chip's slow filter and hysteresis settings (which this firmware never touches) do not apply to
-  it, and the delay is the chip's conversion time (roughly 150 us) plus the I2C read. Not measured.
+* **Which register, and the chip's filters.** By default the firmware writes the chip's CONF register at start-up (watchdog off,
+  hysteresis 0, slow filter 16x, fast-filter threshold setting 7 = 10 LSB, the original Field Jog firmware's settings) and reads the
+  filtered ANGLE register (0x0E). `EPDJ_AS5600_FILTERED_ANGLE` off reads RAW ANGLE (0x0C), documented as unscaled and unmodified,
+  which is what this firmware read before. The slow filter costs lag (the datasheet excerpts we saw quote roughly 2 ms; unchecked)
+  and buys quiet at rest; whether the buy is worth the lag on the real chip is the bench A/B described in `WIRING.md`. Neither the
+  chip's noise nor its delay has been measured here.
 * **Noise at rest.** The tracker needs four counts of net movement for one tick and carries the remainder, so jitter cannot
-  accumulate into drift. In simulation (white noise, `firmware/core/test/test_engine_as5600.cpp`): +-1 count never makes a
-  tick; +-2 and +-3 counts make the total flicker between two neighbouring values for some starting positions (about a
-  third and nearly nine tenths of them), never more; +-4 counts flickers by up to two. The real chip's raw-angle noise is not
-  known to me. If the idle `angle` in telemetry wanders by more than a count or two, fix the mechanics (gap, magnet
-  centring, a wobbling axle) before blaming the firmware.
+  accumulate into drift. In simulation (`firmware/core/test/test_engine_as5600.cpp`, results in `firmware/core/README.md`): with a
+  finger down and the platter still, the filtered register stays within one tick of where it started for up to 4 counts rms of
+  raw chip noise and is silent up to 3; the raw register is quiet only up to about 1 count rms and flickers by several ticks, over a
+  hundred times a second, beyond that. Those noise figures are a model, not a measurement. If the idle `angle` in telemetry wanders by
+  more than a count or two, fix the mechanics (gap, magnet centring, a wobbling axle) before blaming the firmware, and A/B the
+  register switch.
 * **Resolution.** 12 bits is 0.088 degrees per count; a tick (4 counts) is 0.35 degrees.
 * **Alignment.** The magnet centred under the chip to within about a millimetre; an off-centre or wobbling magnet shows up as
   angle error that repeats every revolution.

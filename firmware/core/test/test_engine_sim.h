@@ -112,6 +112,9 @@ struct Deck {
   void set(ConfigKey k, int32_t v) {
     CHECK(cfg.set(k, v) == ConfigStatus::Ok);
   }
+  // jogUntouched = REPORT. The contract default AUTO sends no jog for motion with no hand on the platter when a hold pad
+  // is wired (and a Deck has one), so a test about the motion itself, and not about that policy, says so.
+  void reportUntouched() { set(ConfigKey::JogUntouched, static_cast<int32_t>(proto::JogUntouched::Report)); }
 
   void drain() {
     OutEvent ev;

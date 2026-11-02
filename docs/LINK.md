@@ -143,6 +143,10 @@ The sender classifies each message; each class has the delivery semantics it nee
 | Events | Note On/Off, CC 21 (tempo nudge), latch overflow, everything on cable 2 | queue (64), batches of up to 8, **stop-and-wait with retries** (section 6) | applied once, in order, or counted as abandoned after the retry budget |
 | Refused | system messages, program change... | `forwardMidi` returns false | - |
 
+The bridge carries the jog the engine **sent**, so contract v1.4's `jogUntouched` policy has already been applied when a tick reaches
+the counter: a deck whose AUTO policy refuses a coasting platter never adds that coast to its cumulative counter (refused ticks are
+discarded at the source, not queued), and the bridging deck's host sees the same thing a directly attached host would.
+
 **Receiver rules.** A state block is applied only if its packet `seq` is newer than the last applied one
 (serial arithmetic); older or equal ones are ignored, which makes duplicates and reordering harmless. The
 jog counter's difference to the previous applied counter, read as a signed 16-bit value, is the number of

@@ -1,4 +1,4 @@
-# EP-DJ3000 wire protocol (contract v1.3)
+# EP-DJ3000 wire protocol (contract v1.4)
 
 The contract between the **firmware**, the **macOS app** and the **DJ-software
 mappings**. The machine-readable source of truth is
@@ -11,7 +11,7 @@ reproduce those vectors.
 
 Normative words: **MUST**, **SHOULD**, **MAY** as in RFC 2119.
 
-**Revision.** This is contract revision 1.3; the wire version byte (`Info.protocolVersion`, SysEx `ver`) is still 1, and no
+**Revision.** This is contract revision 1.4; the wire version byte (`Info.protocolVersion`, SysEx `ver`) is still 1, and no
 message layout changed after 1.1. The revision label exists only in these documents, not in the JSON.
 
 * **1.1** renamed `Peer.reserved` to `Peer.status` (a `PeerStatus` bit field), added the `linkGroup` config key, put the USB
@@ -21,6 +21,12 @@ message layout changed after 1.1. The revision label exists only in these docume
 * **1.3** changed the default `platterSource` from `TOUCH_RING` to `AS5600` (a free-spinning platter over a magnetic encoder; the
   touch ring is kept as an experimental option). A unit that saved its config under an older revision keeps its old values
   until `LOAD_DEFAULTS` + `SAVE_CONFIG`.
+* **1.4** added the `jogUntouched` config key (id 33, enum `JogUntouched`: AUTO = 0, REPORT = 1, SUPPRESS = 2, default AUTO):
+  whether platter motion with no hand on it is sent as `jog` (section 2.2). By default a unit stops sending it once its hold pad
+  has registered a touch since power-up, so **a mapping that relied on an untouched `jog` as a nudge needs `jogUntouched` = REPORT**. `Telemetry.jogTotal`
+  now counts all platter motion rather than the jog that was sent. No message layout changed; the config dump grows from 33
+  to 34 keys. A unit that saved its config under an older revision keeps its saved values for keys 0 to 32 and takes the
+  default for key 33.
 
 
 ## 1. USB topology
@@ -92,8 +98,26 @@ one deck's LEDs following the other's.
 * Positive delta = **clockwise as seen from above** when `jogInvert = 0`.
 * The device accumulates motion and emits **at most one jog message every 2 ms (500 Hz)**.
   Each message carries `clamp(accum, -63, 63)`; the unsent remainder carries to the next message, so no motion is lost.
-* While the platter is untouched (`platterSource = AS5600`, the default: a free-spinning platter) motion is still reported;
-  with `TOUCH_RING` it is reported only while a finger is down.
+* **Which motion is sent: `jogUntouched` (config key 33, since 1.4).** The unit measures all platter motion, touched or not.
+  `Telemetry.jogTotal` counts all of it (after `jogInvert`), whatever is sent. Whether motion with **no hand on the platter**
+  also goes out as `jog` depends on the setting:
+
+  | `jogUntouched` | Motion with no hand on the platter |
+  |---|---|
+  | `AUTO` (0, default) | **sent** until the hold pad has registered at least one touch since power-up (or since `platterSource` changed), **not sent** after that; always **sent** when the unit has no hold pad |
+  | `REPORT` (1) | always sent (a nudge or pitch bend from a coasting platter) |
+  | `SUPPRESS` (2) | never sent: jog only while touched |
+
+  The reason for the default: a free-spinning platter coasts for seconds after the hand leaves it, and sent as jog that
+  coasting would bend the pitch the whole time. But the unit cannot tell a pad that is connected and works from one that is
+  not, only whether the pad has **reported a touch** (a `touch` note on, section 2.3): until it has, `AUTO` sends untouched
+  motion, so a platter turned on the bench before the pad exists still produces jog (the encoder works before the pad does).
+  After the first touch the unit treats the pad as working and the coast is silent. That proof is kept in RAM only: it starts
+  over at every power-up and whenever `platterSource` changes, and a phantom touch from a floating or noisy pad counts as one.
+  Touched motion is always sent. Untouched motion that is not sent is discarded, not queued: nothing bursts out when a hand next
+  lands. "Touched" is the state the `touch` note reports (section 2.3).
+* The setting only matters for `platterSource = AS5600`, the one source with a free-spinning platter. With `TOUCH_RING` jog is
+  only ever produced while a finger is down, and `TOUCH_HOLD_ONLY` produces none.
 * On touch-down the engine MUST re-anchor its angle reference so the first sample after touching never produces a jump.
 
 ### 2.3 Touch and tap-play
@@ -107,6 +131,13 @@ one deck's LEDs following the other's.
   emit a `play` note pulse (127, then 0 after >= 10 ms). In SYNC_MASTER this also toggles the local transport
   (SYNC_FOLLOW only mirrors a transport, and DJ mode has none).
   A tap MUST NOT also be reported as scratching (jog messages produced during the tap window are still sent; the host ignores sub-threshold motion).
+* **Motion-sticky release (`AS5600`, `TOUCH_HOLD_ONLY`).** A pad on a spinning platter can drop out in the middle of a long
+  contact, which would end scratch mode and start it again a moment later. So once a touch has lasted more than 7 s, the unit
+  accepts the pad's release only after the platter has made no jog tick for 80 ms; shorter touches release at once, and a still
+  platter releases within 80 ms, so it cannot stick. The price: a hand lifted off a platter that is still spinning after a
+  long touch keeps `touch` on until the platter stops. The two times are constants in the firmware (`StickyTouch` in
+  `firmware/core/include/epdj/jog.h`), not config keys. The idea comes from the original Field Jog firmware
+  ([`REFERENCE-ORIGINAL-FIRMWARE.md`](REFERENCE-ORIGINAL-FIRMWARE.md)). The touch ring has no such release.
 
 ### 2.4 Fader and knob
 
@@ -244,6 +275,7 @@ Enums and bit fields:
 | `CalKind` | FADER = 0, KNOB = 1 |
 | `TransportState` | STOPPED = 0, PLAYING = 1, PAUSED = 2 |
 | `RebootMode` | NORMAL = 0, BOOTLOADER = 1 |
+| `JogUntouched` | AUTO = 0, REPORT = 1, SUPPRESS = 2 |
 <!-- END GENERATED:enums -->
 
 <!-- BEGIN GENERATED:bitfields -->
@@ -257,8 +289,9 @@ Enums and bit fields:
 | `PeerStatus` | CONFLICT = bit 0 |
 <!-- END GENERATED:bitfields -->
 
-Payload structs. `Telemetry.jogTotal` is the cumulative sum of the jog ticks the unit has emitted, **after** `jogInvert` is applied,
-wrapping as an `i32`. `CalResult.rawMin/rawMax` are the values written to the config (with the 1% inset) when `applied = 1`, otherwise the
+Payload structs. `Telemetry.jogTotal` is the cumulative sum of the platter's jog ticks, **after** `jogInvert` is applied, wrapping
+as an `i32`. Since 1.4 it counts **all** platter motion, including motion the unit did not send as `jog` because nobody was
+touching the platter (`jogUntouched`, section 2.2), so the direction check needs no hand on the platter. `CalResult.rawMin/rawMax` are the values written to the config (with the 1% inset) when `applied = 1`, otherwise the
 measured extremes. `Peer.status` bit 0 (`PeerStatus.CONFLICT`) means two units claim
 the same deck id.
 
@@ -312,6 +345,7 @@ Exceptions that need a reboot to take effect: `dacMode`, `deckId` (via `SET_DECK
 | 30 | `ledBrightness` | u8 | 0..255 | 64 | Status LED brightness. |
 | 31 | `buttonDebounceMs` | u8 | 1..30 | 4 | Button debounce time. |
 | 32 | `linkGroup` | u8 | 0..255 | 0 | Radio rig id. Units only link with peers that share it, so two rigs in one room do not cross-link. |
+| 33 | `jogUntouched` | enum `JogUntouched` | 0..2 | 0 | Whether platter motion with no hand on it is sent as jog. AUTO: a free-spinning platter coasts for seconds after release and would bend the pitch the whole time, so once the hold pad has registered a touch since power-up, untouched motion is suppressed; until then it is reported, so the encoder works before the pad does. REPORT: always send it (pitch-bend nudge). SUPPRESS: send jog only while touched. Telemetry jogTotal always counts all motion. |
 <!-- END GENERATED:config -->
 
 ### 3.2 Calibration recipes
@@ -322,8 +356,8 @@ Calibration is **host-driven** over the telemetry stream (`STREAM`), with on-dev
 |---|---|
 | Fader | `CAL_BEGIN(FADER)`, user sweeps the pot end to end, `CAL_END(FADER, apply=1)`. The device keeps min/max of the raw reading, rejects a span < 1500 counts with `CAL_FAILED`, and writes `faderRawMin/Max` (with a 1% inset). |
 | Knob | Same with `KNOB`. |
-| Encoder check (`AS5600`) | Host: stream telemetry while the user spins the platter by hand. `Info.caps` AS5600 clear: no chip answered at boot (I2C wiring, 3.3 V). `StateFlags.ANGLE_VALID` never set: it answered at boot but reads fail now. Valid but `Telemetry.angle` moves less than one full turn (4096 counts) in about 10 s: no magnet, too far, or not on the axle. Angle jumping implausibly far between samples: magnet off-centre, too weak or too strong, or a noisy bus. A smooth full turn: OK. Nothing is written to the unit. |
-| Platter direction | Host: ask the user to spin the platter clockwise while streaming (by hand on the AS5600 platter, a finger on the ring). `jogTotal` is measured after `jogInvert`, so if it decreases the current setting is backwards: write `jogInvert = 1 - current`. |
+| Encoder check (`AS5600`) | Host: stream telemetry while the user spins the platter by hand. `Info.caps` AS5600 clear: no chip has answered (the unit re-probes every 500 ms, so the bit can turn on late; I2C wiring, 3.3 V). `StateFlags.ANGLE_VALID` never set: it answered at boot but reads fail now. Valid but `Telemetry.angle` moves less than one full turn (4096 counts) in about 10 s: no magnet, too far, or not on the axle. Angle jumping implausibly far between samples: magnet off-centre, too weak or too strong, or a noisy bus. A smooth full turn: OK. Nothing is written to the unit. Reads the angle only, so it needs no hand on the hold pad and does not depend on `jogUntouched`. |
+| Platter direction | Host: ask the user to spin the platter clockwise while streaming (by hand on the AS5600 platter, a finger on the ring). `jogTotal` is measured after `jogInvert` and counts all motion, so no hand on the hold pad is needed and `jogUntouched` does not matter (on the ring there is only motion under a finger). If it decreases the current setting is backwards: write `jogInvert = 1 - current`. |
 | Hold pad (`AS5600`, `TOUCH_HOLD_ONLY`) | Same rules as the touch ring with one sector: stream telemetry, collect `touchRaw[0]` idle for 1 s (noise), then a hand on the platter. Compute the per-mille rise, set `touchOnPermille` = 50% of it and `touchOffPermille` = 60% of that (never below 3x idle noise); `SET_CONFIG`; `SAVE_CONFIG`. This does not show the pad keeps seeing the hand while the platter turns. |
 | Touch ring (`TOUCH_RING`, experimental) | Host: stream telemetry, collect `touchRaw` idle for 1 s (noise), then a finger on each sector. Compute per-mille rise, set `touchOnPermille` = 50% of the weakest sector's rise and `touchOffPermille` = 60% of that (never below 3x idle noise); `SET_CONFIG`; `SAVE_CONFIG`. |
 | Platter source | Host reads `Info.caps`: AS5600 present -> `AS5600` (the default); else TOUCH_RING present (3 or more pads wired) -> `TOUCH_RING` (experimental); else `TOUCH_HOLD_ONLY`. |

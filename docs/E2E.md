@@ -27,7 +27,7 @@ tools/e2e.sh swift
 tools/e2e.sh build      # only build the simulator
 ```
 
-About 25 s on a 4-core laptop (33 Node tests, 69 Swift tests). Environment: `EPDJ_E2E_BUILD` (build directory, default `firmware/core/build-e2e`, git-ignored),
+About 25 s on a 4-core laptop (41 Node tests, 75 Swift tests). Environment: `EPDJ_E2E_BUILD` (build directory, default `firmware/core/build-e2e`, git-ignored),
 `EPDJ_E2E_SANITIZE=ON|OFF` (default ON: the simulator is built with ASan + UBSan, and a sanitizer report fails the test
 that provoked it), `EPDJ_SWIFT_SCRATCH` (`--scratch-path` for SwiftPM). Needs cmake and a C++17 compiler, Node 18+
 and a Swift toolchain (5.9 is the manifest's tools version; it was run with 6.0.3); a missing Node or Swift is printed as SKIP, never counted as a pass.
@@ -82,7 +82,7 @@ terminator (`{"e":"done",...}` or `{"e":"error",...}`).
 request timeouts and the 2 s stream keep-alive happen in virtual time):
 
 * `DeviceClient`: `getInfo` (a factory unit says `platterSource == AS5600` and `Caps` has AS5600; a ring build says
-  TOUCH_RING and not AS5600; `LOAD_DEFAULTS` returns a unit to the encoder); broadcast vs deck-addressed requests and the virtual timeout; `dumpConfig` (all 33 keys,
+  TOUCH_RING and not AS5600; `LOAD_DEFAULTS` returns a unit to the encoder); broadcast vs deck-addressed requests and the virtual timeout; `dumpConfig` (all 34 keys,
   closed by `ACK[GET_CONFIG]`) against the contract's defaults; set/get; every key's range ends accepted and one step
   beyond rejected with `OUT_OF_RANGE`; `SET_CONFIG deckId` -> `NOT_SUPPORTED`; `SAVE_CONFIG` persists (and `FLASH_ERROR`
   surfaces), `LOAD_DEFAULTS` keeps the deck, a restart brings back what was saved; `SET_DECK` -> restart -> the client
@@ -98,8 +98,18 @@ request timeouts and the 2 s stream keep-alive happen in virtual time):
   touch), a too-light finger, and the **platter-direction wizard** with a correct and a reversed platter on the AS5600
   (the default: which way it counts depends on how the magnet and breakout were mounted) and on the ring.
 * `ControllerState`: a one-revolution spin of the AS5600 platter with a hand on the hold pad folds into **exactly 1024**
-  ticks (both decks, both directions, equal to `jogTotal`), and the same spin with no hand on it is the same 1024 ticks of
-  motion and no touch note; the ring's one-revolution sweep folds into the ticks the firmware counted (1020..1024 of 1024
+  ticks (both decks, both directions, equal to `jogTotal`). **`jogUntouched` (contract v1.4)**, on the default unit: **before the hold pad has registered a
+  touch the unit reports an untouched spin** (a quarter turn is exactly 256 ticks on the wire, no touch note; the encoder works
+  before the pad does), and SUPPRESS silences it while going back to AUTO reports again, so a policy change proves nothing about the
+  pad; after a hand has landed on the pad and let go (a short touch, `provePad` in both suites) **a platter that nobody touches
+  sends no jog** while telemetry's `jogTotal` still counts the whole revolution; a touch-held scratch followed by a coast delivers
+  every touched tick (512 pushed by hand, plus the few the pad takes to notice the release, at most 530 in all) and none of the
+  512 coasting ones, with exactly one touch-on and one touch-off; on a proven pad the key set live from the host walks AUTO (silent)
+  -> REPORT (exactly the quarter turn made since) -> SUPPRESS (silent) -> AUTO (still silent: switching the policy does not undo
+  the proof); **the proof starts over** when `platterSource` is changed live (TOUCH_HOLD_ONLY and back, each change applied between
+  two samples) and at a reboot (the unit comes back reporting); with no pad (`touch=0`) AUTO reports, so the encoder works before
+  the pad does; and with `jogUntouched = REPORT` the same untouched spin is the same 1024 ticks of motion and no touch note, as
+  under v1.3. The ring's one-revolution sweep folds into the ticks the firmware counted (1020..1024 of 1024
   in the runs so far, exact equality with `jogTotal`); 5 revolutions, wire rules (never 0 or 64, >= 2 ms apart), fader and
   knob equal to telemetry `faderOut/knobOut`, role changes, buttons, tap pulses and the tap rules (`tapMaxMs`,
   `tapMoveTicks`, `tapPlay`, pulse >= 10 ms), debounce, the CUE+REV chord (mode cycle, deck swap), SYNC_MASTER transport /
@@ -132,13 +142,24 @@ a strict mock Mixxx engine (unknown controls/API calls throw, values are range-c
   on the experimental ring (`platter=ring`, within 4 %): the sum Mixxx receives equals the wire total equals the
   firmware's `jogTotal`; `scratchEnable` once per touch with 1024 intervals; nothing leaks into pitch bend; `jogInvert`
   (exactly -1024 for a clockwise revolution).
-* The default hardware: a **full one-revolution spin of the untouched platter reaches the script as exactly 1024 ticks** of
-  `[ChannelN],jog` pitch bend (the mock reads and zeroes the accumulator every 2 ms like Mixxx does per audio callback); a
-  **hold-pad touch switches Mixxx into scratch mode** (`scratchEnable`, ticks, `scratchDisable`) whether or not the platter
-  moves; a hand that lets go of a spinning platter scratches until the release and the coasting ticks become pitch bend,
-  none lost; a flick released at once leaves no `scratchTick` after `scratchDisable` (the ring, unlike the encoder, also
-  leaves no pitch bend); failing reads give no ticks and no jump when they recover; an encoder that never answers gives
-  Mixxx no jog at all while the pad still scratches.
+* The default hardware (contract v1.4: the key `jogUntouched` is AUTO). **By default**: before the hold pad has registered a touch,
+  untouched platter motion reaches Mixxx as pitch bend (and never as `scratchTick`), and the first short touch on the pad ends that:
+  the same spin then reaches Mixxx as nothing (no scratch, no pitch bend) while the firmware counts it; touched motion all goes to
+  `scratchTick`, exactly (the 2-revolution sweeps above are this path, 2048 ticks exactly); a hand that lets go of a spinning
+  platter scratches until the release and the coast is silent (the one thing that can follow the touch-off is the last tick or two
+  still in the 500 Hz emitter, a nudge of at most 3 ticks); the key changed live over SysEx; the proof restarting after a live
+  `platterSource` change and after a reboot; and with no pad (`touch=0`) untouched motion becomes pitch bend. **With
+  `jogUntouched = REPORT`** (set over SysEx, as the v1.3 tests assumed): a **full one-revolution spin of the untouched platter
+  reaches the script as exactly 1024 ticks** of `[ChannelN],jog` pitch bend (the mock reads and zeroes the accumulator every 2 ms
+  like Mixxx does per audio callback), and a hand that lets go of a spinning platter scratches until the release and the coasting
+  ticks become pitch bend, none lost. Either way a **hold-pad touch switches Mixxx into scratch mode** (`scratchEnable`, ticks,
+  `scratchDisable`) whether or not the platter moves; a flick released at once leaves no `scratchTick` after `scratchDisable` (the
+  ring, unlike the encoder, also leaves no pitch bend); failing reads give no ticks and no jump when they recover; an encoder that
+  never answers gives Mixxx no jog at all while the pad still scratches.
+* **The frames `docs/BRINGUP.md` tells a person without the Mac app to send**: the three `jogUntouched` frames (AUTO / REPORT /
+  SUPPRESS) are read out of the document itself, compared byte for byte with the Node SysEx codec's, fed to the firmware, ACKed
+  and visible in the unit's config; and the `GET_CONFIG 0xFF` frame answers 34 `CONFIG` frames in key order then the ACK
+  (35 frames, 521 bytes), so the document and the firmware cannot drift apart.
 * Fader: 0..1 over the whole travel, monotonic, ends exactly at the wire value / 16383, MSB before LSB in one engine
   tick, no chatter from +-3 counts of noise for 5 s, on the wire in the same tick as the ADC change; `faderRole` selects
   volume / crossfader / rate; knob -> Quick Effect; `knobRole = BPM` -> deck BPM.
@@ -181,9 +202,13 @@ Observations (working as designed, but worth knowing):
   noise made it net -2..+3 ticks in 10 s over six noise seeds. A finger landing on a record playing at 1x holds it
   (speed under 0.05) 12 ms after it touches down, on the hold pad.
 * **A platter that keeps turning after the hand leaves** (only an encoder can do this): the touch-up note comes when the
-  finger leaves the pad, whatever the platter is doing, and the ticks that follow reach Mixxx as pitch bend, not as
-  `scratchTick` (apart from the few ms before the release is detected). In the Node test 512 ticks pushed by hand and 512
-  coasting after the release all reach Mixxx: the wire total equals the firmware's `jogTotal`, 1024.
+  finger leaves the pad, whatever the platter is doing (for a touch shorter than 7 s; after a longer one the release waits for the
+  platter to stop, `firmware/core/README.md`, "Motion-sticky touch release"). What follows depends on `jogUntouched`. By default
+  (AUTO, the touch having proved the pad) **nothing**: in the Node test 512 ticks pushed by hand and 512 coasting after the release, and Mixxx
+  receives the 512 (plus the few ms made before the release is detected) as `scratchTick` and none of the coast; the firmware's
+  `jogTotal` is 1024. With REPORT the 512 coasting ticks reach Mixxx as pitch bend, not as `scratchTick`, and the wire total
+  equals `jogTotal`. Mixxx was never shown a hard case for this decision: nothing here says what a coasting platter does to a
+  real deck's pitch.
 * **Wizard thresholds** for the simulated touch ring (`platter=ring`): rises 42..43 per mille, idle noise 6.0 per mille
   peak to peak -> `touchOnPermille 21`, `touchOffPermille 18` (the 3x-noise floor dominates, so hysteresis is 3 per
   mille). A finger that peaks at 14 per mille makes the wizard give up with `noFingerDetected(sector: 0)` after its 10 s
@@ -208,11 +233,37 @@ ignoring `angleValid` (caught by three core tests and by the Swift and Node "rea
 constant angle is silent either way: that is why the failing-reads test keeps the platter turning), and the angle
 difference without wrap handling (caught by the wrap cases and by the one-lap tests).
 
+For the v1.4 work (`jogUntouched`, the motion-sticky touch release, the AS5600 CONF word and the re-probe policy) 31 mutants of the
+firmware were built in a scratch directory and run against the core and host-check tests; the list and the result are in
+`firmware/core/README.md`, "Mutation check". The Swift and Node suites were not re-run per mutant.
+
+For the pad-proof rule of `jogUntouched = AUTO` (untouched jog is sent until the hold pad has registered a touch since
+power-up) nine mutants of `Engine` were built from scratch copies of `firmware/core` (the repository was not touched) and run
+against both end-to-end suites (Node 41 tests, Swift 75):
+
+| Mutant | Node fails | Swift fails |
+|---|---|---|
+| the old rule: AUTO suppresses whenever a pad is configured | 3 (untouched spin before any touch; source change; reboot) | 2 (the same ideas) |
+| AUTO never suppresses | 6 | 5 |
+| the proof is never set | 6 | 5 |
+| the proof is granted at boot (`force`d config sets it) | 2 (before any touch; reboot) | 2 |
+| a `platterSource` change does not clear the proof | 1 (source change) | 1 |
+| a `jogUntouched` change clears the proof | 1 (live policy changes) | 1 |
+| SUPPRESS behaves as AUTO | 1 (SUPPRESS before any touch) | 1 |
+| REPORT behaves as SUPPRESS | 4 | the run aborts (an existing REPORT test unwraps a missing value) |
+| the initial value of the `padProven_` member flipped to true | 0 | 0 |
+
+The last one is an equivalent mutant, not a gap: the constructor applies the whole configuration with `force`, which clears the
+proof, so the member's initial value never shows. The tests that were rewritten to prove the pad first and then expect silence
+(`ControllerStateE2ETests` and `run.mjs`) also pass on the old rule, because a coast after a proven pad is silent under both rules;
+what separates the rules are the tests added next to them, and the two original tests that pinned the old rule (they spun an
+untouched platter from boot and expected silence) failed against the new engine before they were rewritten (Node run, 2 of 38).
+
 ## What this does NOT prove
 
 * **Real hardware.** The sensor models are the engine tests' models. The AS5600 is ideal: the angle is exact, there is no
-  chip latency (the AS5600's slow filter and its 12-bit noise are not modelled; `as5600 noise=` adds noise in counts but
-  it is white), no magnet misalignment or eccentricity, no I2C failures other than the ones a test asks for. The hold pad
+  chip latency (the AS5600's slow filter is not modelled here and neither is the choice between its ANGLE and RAW ANGLE registers; `as5600 noise=` adds noise in counts but
+  it is white; the unit tests in `firmware/core/test/test_engine_as5600.cpp` have a filtered-chip noise model, itself unmeasured), no magnet misalignment or eccentricity, no I2C failures other than the ones a test asks for. The hold pad
   is a clean 40 per mille finger with uniform noise, **and nothing in here says a conductive platter that spins can give
   such a signal**: how the hold pad is coupled to a rotating platter is undecided and unvalidated (`hardware/PLATTER.md`).
   The ring model is the same finger with no coupling between sectors beyond the footprint, no drift, no EMI. Printed
@@ -233,6 +284,9 @@ difference without wrap handling (caught by the wrap cases and by the one-lap te
   nobody listens to it.
 * **Long-term behaviour.** The longest run is a minute of virtual time with a scratch every second; the engine's own
   `test_engine_stability` covers hours.
+* **The HAL's encoder re-probe.** The simulator drives the engine side of it (`as5600 valid=0`, then `valid=1`: no ticks while
+  blind, ANGLE_VALID down and back, a re-anchor and no jump) but not the 500 ms retry timing or the I2C transactions, which are
+  `firmware/esp32s3/components/epdj_hal` (host-tested as pure policy in `tools/host_checks`, never run against a chip).
 * **Anything the simulator was not asked to do**: a second host on the same cable, cable 2 SysEx (not bridged by design),
   USB suspend, a host that stops reading.
 

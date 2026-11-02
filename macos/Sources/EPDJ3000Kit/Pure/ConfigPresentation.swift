@@ -30,6 +30,11 @@ public enum ConfigPresentation {
             return .choice([ConfigChoice(value: Int32(PlatterSource.as5600.rawValue), label: "AS5600 encoder (default)"),
                             ConfigChoice(value: Int32(PlatterSource.touchRing.rawValue), label: "Touch ring (experimental)"),
                             ConfigChoice(value: Int32(PlatterSource.touchHoldOnly.rawValue), label: "Hold only")])
+        case .jogUntouched:
+            // The label that starts with "Auto" is the contract default (ConfigPresentationTests pins that).
+            return .choice([ConfigChoice(value: Int32(JogUntouched.auto.rawValue), label: "Auto (suppress coasting once the hold pad has worked)"),
+                            ConfigChoice(value: Int32(JogUntouched.report.rawValue), label: "Always send"),
+                            ConfigChoice(value: Int32(JogUntouched.suppress.rawValue), label: "Only while touched")])
         case .faderRole: return .choice(choices(FaderRole.self))
         case .faderCurve: return .choice(choices(FaderCurve.self))
         case .knobRole: return .choice(choices(KnobRole.self))
@@ -52,7 +57,7 @@ public enum ConfigPresentation {
     public static func section(for key: ConfigKey) -> String {
         switch key {
         case .deckId, .midiChannel, .mode: return "Identity and mode"
-        case .platterSource, .jogInvert, .touchSectors, .touchOnPermille, .touchOffPermille, .tapPlay, .tapMaxMs, .tapMoveTicks:
+        case .platterSource, .jogInvert, .jogUntouched, .touchSectors, .touchOnPermille, .touchOffPermille, .tapPlay, .tapMaxMs, .tapMoveTicks:
             return "Platter"
         case .faderRole, .faderRawMin, .faderRawMax, .faderInvert, .faderDeadLoPermille, .faderDeadHiPermille, .faderCurve:
             return "Slide pot"
@@ -81,12 +86,22 @@ public enum ConfigPresentation {
     /// Whether the unit looks at this key with the given platter source. The editor greys out what is not used so a
     /// setting that does nothing is not mistaken for one that does.
     public static func isApplicable(_ key: ConfigKey, platterSource: PlatterSource) -> Bool {
-        key != .touchSectors || platterSource == .touchRing
+        switch key {
+        case .touchSectors: return platterSource == .touchRing
+        // The ring only moves under a finger and hold-only has no rotation, so only a free-spinning platter has an
+        // "untouched" motion to send or not (PROTOCOL.md section 2.2).
+        case .jogUntouched: return platterSource == .as5600
+        default: return true
+        }
     }
 
     /// Why `isApplicable` said no, for the line under the row.
     public static func inapplicableNote(for key: ConfigKey) -> String? {
-        key == .touchSectors ? "Only used with the touch ring." : nil
+        switch key {
+        case .touchSectors: return "Only used with the touch ring."
+        case .jogUntouched: return "Only used with the AS5600 platter: the touch ring sends jog only under a finger, hold-only sends none."
+        default: return nil
+        }
     }
 
     public static func unit(for key: ConfigKey) -> String? {

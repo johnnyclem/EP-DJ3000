@@ -86,6 +86,28 @@ EPDJ_TEST(engine_sysex_get_info_reports_the_live_unit) {
   CHECK_EQ(ask(d, 0, Cmd::GetInfo).size(), 0);  // addressed to the other deck: not ours
 }
 
+EPDJ_TEST(engine_info_caps_follow_setCaps_so_an_encoder_found_after_boot_is_reported) {
+  // The platform re-probes an AS5600 that did not answer at boot (encoder_retry.h). When it turns up, Info.caps must say so,
+  // or a host that reads caps (the Mac app's encoder check) keeps calling it a wiring fault that is already fixed.
+  Deck d(0);
+  const uint16_t withoutEncoder = proto::caps::kTrsMidi | proto::caps::kLink | proto::caps::kStatusLed;
+  d.engine.setCaps(withoutEncoder);
+  d.run(5);
+  const auto caps = [&]() {
+    const std::vector<Reply> r = ask(d, 0, Cmd::GetInfo);
+    CHECK_EQ(r.size(), 1);
+    proto::Info info;
+    if (r.size() == 1 && proto::deserialize(r[0].payload.data(), r[0].payload.size(), &info)) return info.caps;
+    return static_cast<uint16_t>(0xFFFF);
+  };
+  CHECK_EQ(caps(), withoutEncoder);
+  d.engine.setCaps(static_cast<uint16_t>(withoutEncoder | proto::caps::kAs5600));
+  CHECK_EQ(caps(), withoutEncoder | proto::caps::kAs5600);
+  d.in.dacPresent = true;  // the engine still adds the DAC bit on top
+  d.run(2);
+  CHECK_EQ(caps(), withoutEncoder | proto::caps::kAs5600 | proto::caps::kDac);
+}
+
 EPDJ_TEST(engine_accepts_input_before_the_first_step) {
   Deck d(1, 0x0B);
   d.set(ConfigKey::Mode, 1);

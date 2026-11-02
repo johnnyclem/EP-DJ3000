@@ -43,6 +43,9 @@ struct DeckCardView: View {
             Divider()
             sendControls
         }
+        // The drawn platter follows the chip's angle while the telemetry stream runs (see `platterAngle`).
+        .onAppear { session.acquireTelemetry() }
+        .onDisappear { session.releaseTelemetry() }
     }
 
     private var header: some View {
@@ -68,9 +71,12 @@ struct DeckCardView: View {
         let speed = session.model.platterSpeed(at: HostClock.now())
         return HStack(alignment: .top, spacing: 16) {
             VStack(spacing: 8) {
-                PlatterView(angle: state.jogAngleRadians, touched: state.touched)
+                PlatterView(angle: platterAngle(state), touched: state.touched)
                     .frame(width: 200, height: 200)
-                Text(String(format: "%+.2f x  (%d ticks)", speed, state.jogTicks))
+                // What the unit has SENT as jog. A unit that suppresses untouched motion (jogUntouched AUTO once the hold
+                // pad has registered a touch, or SUPPRESS; PROTOCOL.md section 2.2) leaves this at zero while the drawing
+                // above still turns.
+                Text(String(format: "jog sent: %+.2f x  (%d ticks)", speed, state.jogTicks))
                     .font(.caption).monospacedDigit().foregroundStyle(.secondary)
             }
             VStack(alignment: .leading, spacing: 10) {
@@ -90,6 +96,17 @@ struct DeckCardView: View {
             }
             .frame(maxWidth: .infinity)
         }
+    }
+
+    /// The chip's angle while the telemetry stream runs, the jog stream's angle otherwise: with untouched jog suppressed
+    /// (AUTO once the hold pad has registered a touch since power-up, or SUPPRESS) a coasting platter sends no jog, but it
+    /// should still turn on screen.
+    private func platterAngle(_ state: ControllerState) -> Double {
+        PlatterDisplay.reading(
+            jogRadians: state.jogAngleRadians,
+            telemetry: session.telemetry,
+            platterSource: CalibrationFlow.source(config: session.config[.platterSource], info: session.info?.platterSource),
+            jogInvert: (session.config[.jogInvert] ?? 0) != 0).radians
     }
 
     private func faderTitle(_ role: FaderRole?) -> String {

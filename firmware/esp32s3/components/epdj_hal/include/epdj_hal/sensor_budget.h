@@ -60,6 +60,17 @@ inline unsigned adcOversample(unsigned i2cReadUs, unsigned conversionUs, unsigne
   return n;
 }
 
+// The I2C read time the ADC's share is computed against. The measured read when the encoder answered at boot. When it
+// did not but may still turn up (the runtime re-probe, encoder_retry.h), a reserve instead: the ADC oversampling is
+// fixed at boot, so finding the encoder later must not push the two past kTotalUs. About 150 to 200 us is what a 400 kHz
+// register read costs with the IDF driver (docs/BRINGUP.md); a chip that turns out slower than the reserve shows up in
+// the diagnostics (as5600.cpp) rather than silently.
+constexpr unsigned kAbsentReadReserveUs = 200;
+inline unsigned i2cReserveUs(bool encoderExpected, bool answered, unsigned measuredUs) {
+  if (answered) return measuredUs;
+  return encoderExpected ? kAbsentReadReserveUs : 0;
+}
+
 // Microseconds the sensors take in one engine tick with this oversampling. May exceed kTotalUs when even one conversion
 // per channel does not fit; callers report that.
 inline unsigned sensorUs(unsigned i2cReadUs, unsigned conversionUs, unsigned oversample) {

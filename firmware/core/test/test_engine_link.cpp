@@ -20,6 +20,7 @@ struct Pair {
   Pair(uint32_t seed, double loss, double dup, bool bHasHost = false)
       : a(0, 0x0A, 0, 3), b(1, 0x0B, 7300000, 4), rig(seed) {
     b.in.usbMounted = bHasHost;
+    b.reportUntouched();  // bScript turns the platter with and without a finger; these tests count every tick it makes
     rig.decks = {&a, &b};
     rig.air.loss = loss;
     rig.air.dup = dup;

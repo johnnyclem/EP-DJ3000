@@ -38,7 +38,7 @@ static_assert(usb::kStringCount == 8, "esp_tinyusb keeps exactly 8 string descri
 
 // A GET_CONFIG dump (PROTOCOL.md section 3: one CONFIG frame per key, then the ACK) must fit the MIDI TX FIFO in one
 // go, so the engine task never has to hold an event back for it. Every frame is its own SysEx message, and a
-// message of n bytes is ceil(n / 3) four-byte USB-MIDI packets: 33 x 5 + 4 = 169 packets = 676 bytes.
+// message of n bytes is ceil(n / 3) four-byte USB-MIDI packets: 34 x 5 + 4 = 174 packets = 696 bytes (contract v1.4: 34 keys).
 constexpr size_t kDumpPackets = proto::kConfigCount * ((kConfigFrameBytes + 2) / 3) + (kAckFrameBytes + 2) / 3;
 static_assert(CFG_TUD_MIDI_TX_BUFSIZE >= kDumpPackets * 4,
               "CFG_TUD_MIDI_TX_BUFSIZE (epdj_tusb_config.h) cannot hold a full GET_CONFIG dump");

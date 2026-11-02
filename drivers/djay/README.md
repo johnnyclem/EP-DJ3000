@@ -101,14 +101,17 @@ exactly, so I can't tell which works. Try in order:
   stop on touch, the community list says Scratch alone needs the deck paused first. On the default
   `AS5600` platter the touch note comes from the one hold pad, so this plan only works once that pad
   reliably sees a hand on the spinning platter (`docs/BRINGUP.md`, first bring-up step 3).
-* **Plan B, simple:** `jog` CC 22 -> Scratch (no touch detection), ignore the touch note. The default
-  `AS5600` platter reports motion whether or not a hand is on it, so a platter coasting after a flick
-  would keep moving the track: untested, and probably a poor way to play. (With the experimental
-  touch-ring platter the unit only reports motion while a finger is on it, so Plan B scratches there,
-  but touching does not stop playback.)
+* **Plan B, simple:** `jog` CC 22 -> Scratch (no touch detection), ignore the touch note. Once the hold pad has registered a touch
+  the unit sends jog only under a hand (next bullet), so Plan B scratches while you hold the platter and a platter coasting after a
+  flick sends nothing; before the first touch, or with `jogUntouched` = `REPORT`, a coasting platter would keep moving the track,
+  which is probably a poor way to play. Touching does not stop playback in Plan B. Untested.
 * **Nudge:** the unit has no separate "side of the wheel" message. With the free-spinning `AS5600`
-  platter (the default) you can map CC 22 to **Pitch bend** instead of Scratch to nudge tempo; you
-  cannot have both from one CC.
+  platter you can map CC 22 to **Pitch bend** instead of Scratch to nudge tempo; you cannot have both from one CC. That
+  only does something for a platter nobody is touching if the unit sends it. The unit's default `jogUntouched` is `AUTO`,
+  which sends untouched motion until the hold pad has registered a touch since power-up and none after that. To get a nudge from
+  spinning the platter without touching it after the pad has worked, set `jogUntouched` = `REPORT` (config key 33, value 1) in
+  the macOS app's Settings or with the SysEx frame in
+  [`../README.md`](../README.md#untouched-platter-motion-joguntouched).
 
 Control type: the unit sends `64 + delta` (64 = no motion, 63 = -1, 65 = +1, delta up to 63).
 That is the "3Fh/41h" family; "01h/7Fh" would be two's complement and is wrong. The official page says
@@ -136,6 +139,13 @@ counterclockwise(-1)". The unit sends bigger steps when you spin fast (up to 63 
 Test: drag the platter slowly, then fast, in the same direction. Track speed should follow. If it
 does not, djay is reading direction only; the fix would be a "one tick per message" jog mode in the
 firmware, which the contract does not have today.
+
+## Field-tested reference
+
+The Field Jog sketch this shell was modelled on has been used with a DJ app, and its CC scheme and jog encoding are written up
+as a reference in [`docs/REFERENCE-ORIGINAL-FIRMWARE.md`](../../docs/REFERENCE-ORIGINAL-FIRMWARE.md). Its mapping file for djay was
+not seen, and its jog is about ten times finer per revolution than ours, so read that document before treating its numbers as
+a djay setting.
 
 ## Limitations
 

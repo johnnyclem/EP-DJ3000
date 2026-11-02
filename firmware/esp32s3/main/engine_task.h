@@ -28,6 +28,7 @@ struct Runtime {
   bool radioOn = false;
   uint8_t linkGroupDefault = 0;  // Engine::Identity::linkGroup: the build-time rig id, used while the config key is 0
   bool dacPresent = false;
+  uint16_t caps = 0;  // Engine::Identity::caps as built at boot; the AS5600 bit is added to it if the encoder turns up later
 };
 
 // The radio group the engine uses right now: the linkGroup config key when non-zero, else the build default

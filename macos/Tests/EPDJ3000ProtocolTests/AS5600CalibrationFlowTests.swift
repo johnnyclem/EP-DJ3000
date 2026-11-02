@@ -118,7 +118,7 @@ final class AS5600CalibrationFlowTests: XCTestCase {
                 var wizard = PlatterDirectionCalibration(currentInvert: (settings[.jogInvert] ?? 0) != 0)
                 let frames = platter.spin(turns: 0.5, steps: 40)
                 XCTAssertTrue(frames.allSatisfy { StateFlags(rawValue: $0.flags).isDisjoint(with: .touched) },
-                              "an AS5600 platter reports motion without a hand on it")
+                              "jogTotal counts the motion of an untouched platter (contract v1.4: all motion, whatever jogUntouched says)")
                 for t in await receive(frames, from: dev, via: client) { wizard.feed(t) }
                 let result = try wizard.finish()
                 XCTAssertLessThan(result.netTicks, 0, "clockwise lowered jogTotal, so the setting is backwards")
@@ -171,6 +171,58 @@ final class AS5600CalibrationFlowTests: XCTestCase {
         let final = try await client.dumpConfig()
         XCTAssertEqual(final[.platterSource], 0, "calibrating did not change the platter source")
         XCTAssertEqual(final[.jogInvert], 1)
+    }
+
+    /// Contract v1.4: with `jogUntouched` SUPPRESS, or AUTO once the hold pad has registered a touch since power-up, the
+    /// unit sends no jog for an untouched platter, so nothing arrives on the MIDI jog stream while the user spins it by
+    /// hand (a fresh unit on AUTO would send it, which changes nothing here). The two wizards that need a spin must not
+    /// care: the encoder check reads `Telemetry.angle`, the direction step reads `jogTotal`, which counts all motion.
+    /// Neither looks at the touched flag or at `touchRaw`.
+    func testTheEncoderAndDirectionStepsNeedNoHandOnTheHoldPadWhateverJogUntouchedSays() async throws {
+        let dev = FakeDevice(deck: .a)
+        let client = connect(dev)
+        for policy in JogUntouched.allCases {
+            try await client.setConfig(.jogUntouched, Int32(policy.rawValue))
+            let settings = try await client.dumpConfig()
+            XCTAssertEqual(settings[.jogUntouched], Int32(policy.rawValue))
+            let info = try await client.getInfo()
+            try await client.startStream(rateHz: rate)
+
+            // No hand and no working pad: the touched flag is clear and the pad reads zero throughout.
+            var platter = SimPlatter()
+            let spin = platter.spin(turns: 1.5, steps: 75).map { frame -> Telemetry in
+                var t = frame
+                t.touchRaw = [UInt16](repeating: 0, count: 8)
+                return t
+            }
+            XCTAssertTrue(spin.allSatisfy { StateFlags(rawValue: $0.flags).isDisjoint(with: .touched) && $0.touchRaw.allSatisfy { $0 == 0 } })
+            let delivered = await receive(spin, from: dev, via: client)
+
+            var diagnosis = EncoderDiagnosis(caps: Caps(rawValue: info.caps), rateHz: rate)
+            var wizard = PlatterDirectionCalibration(currentInvert: false)
+            for t in delivered {
+                diagnosis.feed(t)
+                wizard.feed(t)
+            }
+            XCTAssertTrue(diagnosis.verdict?.isOK ?? false, "\(policy): \(diagnosis.phase)")
+            let result = try wizard.finish()
+            XCTAssertGreaterThan(result.netTicks, 0, "\(policy)")
+            XCTAssertFalse(result.invert, "\(policy)")
+            try await client.stopStream()
+        }
+    }
+
+    func testTheDirectionStepDependsOnJogTotalCountingAllMotion() throws {
+        // The reverse of the test above: a unit whose jogTotal followed only the jog it SENT would sit still for an
+        // untouched spin under SUPPRESS, and the step could not decide. This is why PROTOCOL.md section 2.2 says the
+        // total counts everything, and what the end-to-end suite has to keep true of the real firmware.
+        var platter = SimPlatter()
+        var wizard = PlatterDirectionCalibration(currentInvert: false)
+        for var t in platter.spin(turns: 0.5, steps: 40) {
+            t.jogTotal = 0
+            wizard.feed(t)
+        }
+        XCTAssertThrowsError(try wizard.finish()) { XCTAssertEqual($0 as? CalibrationError, .insufficientMotion(ticks: 0)) }
     }
 
     func testAUnitWhoseChipNeverAnsweredIsToldSoFromItsInfo() async throws {

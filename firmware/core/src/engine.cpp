@@ -291,9 +291,11 @@ void Engine::applyConfig(bool force) {
   const auto v = [&](K k) { return cfg_.get(k); };
 
   if (changed(K::PlatterSource) || changed(K::JogInvert) || changed(K::TapMaxMs) || changed(K::TapMoveTicks)) {
+    if (changed(K::PlatterSource)) padProven_ = false;
     if (!force && changed(K::PlatterSource)) {  // the tracker restarts without a touch-up: close the touch we reported
       noteOff(&heldTouch_);
       nudgeAcc_ = 0;
+      sticky_.reset();
     }
     JogTracker::Config jc;
     jc.source = static_cast<proto::PlatterSource>(v(K::PlatterSource));
@@ -519,6 +521,8 @@ void Engine::runPlatter() {
 
   JogTracker::Input ji;
   ji.touched = tr.touched;
+  const bool holdPad = source != proto::PlatterSource::TouchRing;
+  if (holdPad) ji.touched = sticky_.update(tr.touched, now_);
   switch (source) {
     case proto::PlatterSource::TouchRing:
       ji.angleValid = tr.angleValid;
@@ -536,8 +540,10 @@ void Engine::runPlatter() {
   angleValidSeen_ = ji.angleValid;
 
   const JogTracker::Output o = jog_.update(ji, now_);
+  if (holdPad) sticky_.noteMotion(o.ticks != 0, now_);
 
   if (o.touchDown) {
+    padProven_ = true;
     noteOn(proto::note::kTouch, &heldTouch_);
     nudgeAcc_ = 0;
   }
@@ -552,9 +558,9 @@ void Engine::runPlatter() {
         setTempo(bpm::nudge(bpm_, steps), TempoSource::Nudge);
       }
     }
-  } else {
+  } else if (jog_.touched() || o.touchUp || sendsUntouchedJog()) {
     jogOut_.add(o.ticks);
-  }
+  }  // else: motion with no hand on the platter, refused by jogUntouched. Gone, not queued: no burst at the next touch.
 
   if (o.touchUp) {
     noteOff(&heldTouch_);
@@ -563,6 +569,24 @@ void Engine::runPlatter() {
       playPulse();
     }
   }
+}
+
+// jogUntouched (PROTOCOL 3.1): is platter motion with no hand on it sent as jog? On the AS5600 platter AUTO says no, because a
+// free-spinning platter coasts for seconds after the hand leaves and would bend the pitch the whole time (the original Field
+// Jog author sends jog only while touched), but only once the hold pad has registered a touch since power-up (padProven_).
+// Until then jog is sent, so the encoder works before the pad does. A ring only ever produces motion while touched, so the
+// policy cannot matter there.
+bool Engine::sendsUntouchedJog() const {
+  switch (static_cast<proto::JogUntouched>(cfg_.get(ConfigKey::JogUntouched))) {
+    case proto::JogUntouched::Report:
+      return true;
+    case proto::JogUntouched::Suppress:
+      return false;
+    case proto::JogUntouched::Auto:
+      break;
+  }
+  const auto source = static_cast<proto::PlatterSource>(cfg_.get(ConfigKey::PlatterSource));
+  return !(source == proto::PlatterSource::As5600 && in_.touchCount > 0 && padProven_);
 }
 
 void Engine::playPulse() {

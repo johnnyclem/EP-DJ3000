@@ -95,9 +95,14 @@ only if every sample reads low, so a loose or noisy strap means "no DAC" (the bo
 
 **Line out:** from the DAC board's L, R and GND to a 3.5 mm TRS jack, with 100 Ω in series with each output and a
 100 pF to ground after it if the cable picks up noise. The EP-136's inputs are line level. Keep the line-out jack
-physically far from the MIDI jack and the touch wires. **The line-out jack and the MIDI jack are both 3.5 mm TRS and the
+physically far from the MIDI jack and the touch wires. **The line-out jack and the MIDI jacks are all 3.5 mm TRS and the
 MIDI ring carries 3.3 V through 33 Ω: label them or use a different connector for one of them**, or a swapped cable puts
 DC on a mixer input.
+
+**The redrawn shell's other jack holes** (`README.md`): the top edge has holes for MIDI in, MIDI out, USB, **line in** and line out, and
+the fader end one for **headphones**. MIDI in, MIDI out and line out are wired as described in this file. **Line in and headphones are
+not wired and not supported**: the PCM5102A is output-only, there is no input path in the firmware or in the USB audio function
+(host-to-device only), and no headphone amplifier or cue mix is designed.
 
 `dacMode = AUTO` (the default) means "the strap is fitted". It does not detect a DAC: the optional I2C codec probe
 (`EPDJ_DAC_PROBE_I2C`) is compiled out by default and the PCM5102A has no I2C anyway.
@@ -147,9 +152,10 @@ the loop current (~5 mA, measured across the 33 Ω resistor), and the 31250 baud
 
 ## AS5600 (the default platter: free-spinning on a bearing)
 
-Mechanics are `field-jog/README.md` and `field-jog/field-jog.scad`: 683ZZ bearing, M3 x 12 axle, a 6 x 2.5 mm **diametric**
-magnet on the shank's end, the AS5600 breakout on the pad under the platter, chip up, **1 to 3 mm** from the magnet
-(`PLATTER.md`, `README.md`).
+Mechanics are `field-jog/README.md` and `field-jog/field-jog.scad`: 683ZZ bearing, an M3 axle (the BOM's M3 x 12 is too long for the
+16 mm shell: [`README.md`](README.md)), a 6 x 2.5 mm **diametric** magnet on the shank's end, the AS5600 breakout on the pad under the
+platter, chip up, **1 to 3 mm** from the magnet (`PLATTER.md`, `README.md`). **As drawn the SCAD leaves 1.9 mm between the board seat
+and the magnet zone, which a breakout cannot fit: the stack-up is computed in [`README.md`](README.md) and has a one-line fix.**
 
 | AS5600 breakout | Connect to | Note |
 |---|---|---|
@@ -192,7 +198,7 @@ default) is this pad. Without it jog still works, but the unit never sends a tou
 chip, which this firmware has never run on):
 
 ```
-platter: source AS5600 | AS5600 answered at 0x36, magnet detected, read <N> us | touch pads wired: 1 (GPIO4 = hold pad)
+platter: source AS5600 | AS5600 answered at 0x36, magnet detected, conf=0x1C00, angle reg 0x0E (filtered), read <N> us | touch pads wired: 1 (GPIO4 = hold pad)
 ```
 
 | It says | It means | Do |
@@ -201,16 +207,56 @@ platter: source AS5600 | AS5600 answered at 0x36, magnet detected, read <N> us |
 | `magnet too weak` (WARN) | too far, too small, off-centre, or axially magnetised | closer (1 to 3 mm), centre it on the chip, check it is diametric |
 | `magnet too strong` (WARN) | too close | further away |
 | `magnet not detected` (WARN) | nothing in range | as for too weak; check the magnet is there at all |
-| `AS5600 NOT answering at 0x36` and `!!! platterSource is AS5600 but no encoder answered ... JOG WILL BE SILENT !!!` (WARN) | nothing ACKed on the bus | SDA GPIO21, SCL GPIO47, 3V3, GND, the strap, pull-ups, the breakout's soldering; then **reboot** (it is not retried while running) |
+| `AS5600 NOT answering at 0x36 (...), asking again every 500 ms` and `!!! platterSource is AS5600 but no encoder answered ... JOG IS SILENT until one does ... !!!` (WARN) | nothing ACKed on the bus | SDA GPIO21, SCL GPIO47, 3V3, GND, the strap, pull-ups, the breakout's soldering. **No reboot needed**: the chip is asked again every 500 ms and the log says `as5600: encoder appeared at 0x36 after boot ...` when it answers |
+| `conf=0x1C00` | the chip took the filter configuration (below) | nothing |
+| `conf=0x0000 (wrote 0x1C00)` and a WARN, or `conf=?` | the chip did not take CONF (a burned configuration, or the write/read-back failed on the bus) | check the bus; jog still works with whatever the chip does |
+| `as5600: encoder stopped answering at 0x36 ...` / `... answering again at 0x36 ...` (while running) | two failed reads in a row, then the first good trial read (one per 500 ms) | a loose wire; jog resumes from the platter's present position with no jump |
 | `sens: ... angle=NNNN(bad)` | the last read failed | a loose wire; the diagnostics also warn when the count of failed reads grows |
 | `an AS5600 answered but platterSource is ...` (WARN) | a config saved before contract v1.3 kept TOUCH_RING | `LOAD_DEFAULTS` then `SAVE_CONFIG`, or set `platterSource` 0 |
 
-The unit reports the same thing to the host: `Info.caps` has the AS5600 bit only if the chip answered, and the telemetry flag
-`ANGLE_VALID` follows each read. With no chip the unit sends no jog at all, rather than something made up.
+The unit reports the same thing to the host: `Info.caps` has the AS5600 bit once the chip has answered (at boot, or later: the
+bit is set when the re-probe finds it), and the telemetry flag `ANGLE_VALID` follows each read. With no chip the unit sends no jog
+at all, rather than something made up.
+
+**Chip configuration and which register the angle comes from.** At start-up, and again whenever the chip starts answering, the
+firmware writes the AS5600's CONF register (`0x07`, 16 bits, high byte first) and reads it back:
+
+| Field (CONF bits) | Value written | Why |
+|---|---|---|
+| WD, watchdog (13) | 0, off | the watchdog drops the chip into low-power mode after a minute without movement |
+| HYST, hysteresis (3:2) | 0, off | no dead band of its own: the engine's 4-counts-per-tick quantisation already is one |
+| SF, slow filter (9:8) | 0 = 16x | the lowest-noise setting: quietens a platter at rest (at the price of lag at low speed) |
+| FTH, fast-filter threshold (12:10) | 7 = **10 LSB** | a step larger than the threshold switches to the fast filter, so a scratch is not delayed by the slow one. Code 7 is out of order in the table: 1..7 are 6, 7, 9, 18, 21, 24, **10** LSB |
+| PM, power mode (1:0) | 0, nominal | |
+| OUTS, PWMF (5:4, 7:6) | 0 | nothing is connected to the OUT pin |
+
+= `0x1C00`, the word printed as `conf=` in the boot line. These are the settings of the Arduino sketch the shell was modelled on (its
+code is not copied; its licence is unknown). CONF is volatile RAM; the firmware never sends the one-time BURN command. The register
+layout was checked against four independent implementations (Rob Tillaart's Arduino library, the Linux IIO driver, TinyGo, Adafruit
+CircuitPython); the ams-OSRAM datasheet PDF itself could not be fetched, so nothing was read from it (`as5600_regs.h` has the details).
+
+The angle is read from **ANGLE (`0x0E`)**, the scaled output and, as far as the sketch and the datasheet's wording imply, the one the
+filters act on, instead of **RAW ANGLE (`0x0C`)**, which is documented as "unscaled and unmodified". That is what the original
+sketch reads, and what our HAL read before this change was `0x0C`. **What is not established by anything we could read is that the
+filters leave RAW ANGLE alone; and ANGLE is also scaled by ZPOS/MPOS/MANG** (a chip that someone burned with a limited range gives
+fewer than 1024 ticks a lap; the encoder check's "one lap = 4096 counts" would show it). So the choice is a build switch,
+`EPDJ_AS5600_FILTERED_ANGLE` (menuconfig, default **on**): build once each way and compare, on the bench, (1) the idle `angle=` in the
+`sens:` line with the platter still (peak to peak over a few seconds), and (2) how a fast scratch feels. The expected cost of the
+filter is lag (the datasheet excerpts we saw quote roughly 2 ms for the slow filter, 0.3 ms for the fast one; unchecked). A model of
+what the filter buys at rest is in [`firmware/core/README.md`](../firmware/core/README.md); the real chip's noise has not been
+measured.
+
+**The hold pad is not read like the original's.** The original sketch reads its touch plate with an ADC-based capacitive technique on
+one analog pin and raised a series resistor to 1 M ohm to make it more sensitive. The ESP32-S3 has a dedicated capacitive touch
+peripheral, which the HAL uses, and it measures differently. **Whether a series resistor helps, hurts or is irrelevant on the S3 with a
+platter behind a rotating contact is untested**: the 330 ohm to 1 k ohm optional resistor above is for ESD and EMI, not for
+sensitivity, and no value has been tried.
 
 **I2C transaction cost** (what the 1 kHz loop assumes; measured at boot and printed in the `adc:` line, never on a chip yet):
 a register read at 400 kHz is about 45 clocks, 112 us on the wire plus driver overhead, so about 150 to 200 us of every
-millisecond. It comes out of the same 400 us sensor budget as the ADC conversions (`firmware/esp32s3/README.md`).
+millisecond. It comes out of the same 400 us sensor budget as the ADC conversions (`firmware/esp32s3/README.md`). If the chip did not
+answer at boot, 200 us are reserved for it anyway so that finding it later cannot overspend the budget. A chip that is absent or lost
+costs one failed read (timeout 2 ms) per 500 ms.
 
 ## Touch pads
 

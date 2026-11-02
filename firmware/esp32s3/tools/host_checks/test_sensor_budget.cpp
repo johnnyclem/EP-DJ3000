@@ -59,3 +59,25 @@ EPDJ_TEST(oversampling_never_overspends_unless_one_conversion_already_does) {
   }
   CHECK_EQ(sensorUs(150, 30, 4), 390);
 }
+
+EPDJ_TEST(an_encoder_that_may_turn_up_later_keeps_its_share_of_the_budget_reserved) {
+  using namespace epdj::hal::sensor_budget;
+  CHECK_EQ(i2cReserveUs(true, true, 130), 130u);    // answered at boot: the measured read
+  CHECK_EQ(i2cReserveUs(true, true, 0), 0u);        // answered but not measurable: as before
+  CHECK_EQ(i2cReserveUs(true, false, 0), kAbsentReadReserveUs);  // not there, but asked again while running: a reserve
+  CHECK_EQ(i2cReserveUs(false, false, 0), 0u);      // not the AS5600 platter: nothing to reserve
+  CHECK_EQ(i2cReserveUs(false, true, 150), 150u);   // a chip that is there is read whatever the platter source
+  // The point: size the ADC for the reserve, boot without the chip, find it later with a read no slower than the reserve:
+  // the sensors still fit in kTotalUs whenever more than the minimum oversampling was chosen.
+  for (unsigned conv = 5; conv <= 120; conv += 5) {
+    bool squeezed = false;
+    const unsigned n = adcOversample(i2cReserveUs(true, false, 0), conv, 8, &squeezed);
+    for (unsigned realRead = 0; realRead <= kAbsentReadReserveUs; realRead += 10) {
+      if (n > 1) CHECK(sensorUs(realRead, conv, n) <= kTotalUs);
+    }
+  }
+  // Without the reserve the same late chip would have overspent: the ADC fills the whole budget and the read comes on top.
+  bool squeezed = false;
+  const unsigned greedy = adcOversample(0, 20, 8, &squeezed);
+  CHECK(sensorUs(150, 20, greedy) > kTotalUs);
+}

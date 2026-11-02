@@ -1,18 +1,18 @@
 # EP-DJ3000 bill of materials: what changes from the Field Jog
 
 Baseline: the BOM in [`field-jog/README.md`](../field-jog/README.md) (Pro Micro/Pico + AS5600 + bearing + magnetic
-loose crossfader). This lists only the **delta**. Nothing here has been ordered or fitted; part choices are
-suggestions, and the mechanical consequences for the printed shell are called out because they are not small
-(`README.md` has the full list of what is not drawn).
+loose crossfader), for the shell as **redrawn to 16 mm**. This lists only the **delta**. Nothing here has been ordered or fitted;
+part choices are suggestions, and the mechanical consequences for the printed shell are called out because they are not small
+(`README.md` has the full list of what is not drawn, and which of the jack holes the design wires).
 
 ## Kept from the Field Jog (the platter is the AS5600 build)
 
 | Part | Qty | Notes |
 |---|---|---|
 | 683ZZ bearing, 3 x 7 x 3 mm | 1 | pressed into the deck, as in the Field Jog README |
-| M3 x 12 button-head screw | 1 | the axle; head in the platter's pocket, shank down through the bearing |
+| M3 button-head screw | 1 | the axle; head in the platter's pocket, shank down through the bearing. **The Field Jog list says M3 x 12; in the 16 mm shell that puts the magnet in the floor.** About M3 x 5 or x 6 is what the stack-up in [`README.md`](README.md) wants (the head height used there is from memory): choose it together with the AS5600 pad height |
 | 6 x 2.5 mm **diametric** magnet | 1 | glued to the shank's end. **Diametrically** magnetised (poles on opposite sides of the round face); an axial magnet (poles on the flat faces) gives the AS5600 nothing to measure. Field Jog's own list says "diametric" for the AS5600 and "axial is fine" for the fader lock: do not mix the two up |
-| AS5600 breakout | 1 | I2C, address 0x36 (not an AS5600L). **Check its 3.3 V / 5 V strap before powering it from 3V3**: many are strapped for 5 V (`WIRING.md`). Solder wires, no tall pin headers; two M2 holes 16 mm apart on the SCAD pad, so the breakout's own holes must match that spacing (measure yours) |
+| AS5600 breakout | 1 | I2C, address 0x36 (not an AS5600L). **Check its 3.3 V / 5 V strap before powering it from 3V3**: many are strapped for 5 V (`WIRING.md`). Solder wires, no tall pin headers; two M2 holes 16 mm apart on the SCAD pad, so the breakout's own holes must match that spacing (measure yours). **Measure its PCB and chip height**: the stack-up in [`README.md`](README.md) needs `encoder_pad_top` set from them |
 | M2 screws | 2 | the AS5600 board to its pad |
 | 2 x 6 x 6 mm tactile switches, vertical 9 mm 10 k pot for the knob | 2, 1 | CUE/REV and the orange knob, as in the Field Jog |
 
@@ -36,16 +36,27 @@ suggestions, and the mechanical consequences for the printed shell are called ou
 | Resistors 4.7 kΩ | 2 (only if the AS5600 breakout has no pull-ups) | SDA and SCL to 3V3 |
 | 100 nF ceramic capacitor | 2-4 | wiper filters (fader, knob); optionally across CUE/REV |
 | **PCM5102A breakout** ("GY-PCM5102" type) | 1 | USB audio output, I2S, no I2C, no MCLK. Only when you want audio. |
-| 3.5 mm TRS jack (stereo, panel mount) | 1 | line out to the EP-136 / any mixer. Only for topology A (`docs/ARCHITECTURE.md` section 1). **Looks identical to the MIDI jack and must not be confused with it** (see `README.md`) |
+| 3.5 mm TRS jack (stereo, panel mount) | 1 | line out to the EP-136 / any mixer (the rightmost of the top-edge holes). Only for topology A (`docs/ARCHITECTURE.md` section 1). **Looks identical to the MIDI jacks and must not be confused with them** (see `README.md`) |
 | Pin header/jumper for the DAC strap | 1 | GPIO14 to GND on the DAC board |
 | 100 Ω resistor | 2 | series with each line-out channel |
-| **TRS MIDI**: 3.5 mm TRS jack | 1 | the Field Jog has a blank hole for it. Type A wiring. |
+| **TRS MIDI**: 3.5 mm TRS jack | 2 | MIDI in and MIDI out, the two leftmost holes of the top edge. Type A wiring. |
 | H11L1 optocoupler (3.3 V capable) | 1 | MIDI IN isolation. Not 6N137/6N138 (5 V parts). |
 | 1N4148 diode | 1 | MIDI IN LED reverse protection |
 | 220 Ω, 1 kΩ resistors | 1 each | MIDI IN |
 | 33 Ω (0.5 W), 10 Ω resistors | 1 each | MIDI OUT at 3.3 V (see WIRING.md) |
 | 74LVC1G34 (or any 3.3 V buffer) | 1 (optional) | MIDI OUT driver |
 | WS2812 / "NeoPixel" LED | 0-1 | already on the DevKitC-1: **GPIO38 on v1.1 boards (the default build), GPIO48 on v1.0**; choose the revision in `menuconfig` (`EPDJ_BOARD_REV`). On another board a WS2812 has to be wired to the pin `kStatusLed` names |
+
+## In the shell, not in this design (no part is listed because nothing supports them)
+
+The redrawn shell has holes and space for more than the firmware does anything with (`README.md`, "What the redrawn shell's new
+features have in the firmware and the wiring"). There is deliberately **no bill-of-materials line** for:
+
+| Drawn in the shell | Why there is no part |
+|---|---|
+| a **line in** jack (top edge) | the PCM5102A is output-only; a line input needs an ADC or an I2S codec, firmware and a USB audio input path |
+| a **headphone** jack (fader end) | a headphone amplifier and a cue/monitor mix are not designed |
+| a flat **LiPo** in the battery bay | no cell holder, charger, protection, power path, switch or battery sense is designed; the unit is bus powered |
 
 ## Only for the experimental touch ring (not the current path)
 

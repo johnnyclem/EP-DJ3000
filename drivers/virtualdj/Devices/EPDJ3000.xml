@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<device name="EPDJ3000" type="MIDI" description="EP-DJ3000 Deck" author="EP-DJ3000 project" version="800" decks="1" vid="0x1209" pid="0x0001">
+  <!--
+    EP-DJ3000 device definition for VirtualDJ (MIDI controller).
+
+    STATUS: NEVER LOADED INTO VIRTUALDJ. The file FORMAT follows VirtualDJ's
+    official documentation (below) and is cross-checked against the wire contract
+    (protocol/epdj3000.json) by drivers/test/virtualdj/check.mjs. How VirtualDJ
+    BEHAVES with it (detection, deck assignment of two units, jog feel, LEDs) is
+    untested: VirtualDJ is closed source and was not available where this was
+    written. See README.md next to Devices/ and Mappers/.
+
+    Format sources (read 2026-11-01):
+      https://www.virtualdj.com/wiki/ControllerDefinitionMIDI.html   element and attribute reference
+      https://www.virtualdj.com/wiki/Controller%20Developers.html    definition plus mapping, install folders
+      https://virtualdj.com/forums/222179/VirtualDJ_Technical_Support/Mapping_Jog_Wheels_(DDJ-1000).html
+          the VirtualDJ development manager's pattern for a touch-sensitive jog: a jog element
+          mapped to touchwheel plus a touch note mapped to touchwheel_touch, tuned with full=""
+    The mapping that gives these names their VDJscript actions is Mappers/EP-DJ3000.xml.
+
+    DESIGN
+    * One EP-DJ3000 is one single-deck controller (decks="1"), like a CDJ. VirtualDJ assigns each
+      connected unit to a deck, so deck="1" below means "this unit's deck", not literally deck 1.
+    * Units default to MIDI channel 1 (Deck A, zero-based 0) and channel 2 (Deck B, zero-based 1).
+      Every element therefore exists twice: channel 0 with the plain name, channel 1 with the
+      suffix _CH2. Both twins are mapped to the same action, so either unit works whichever deck
+      VirtualDJ gives it. Output (LEDs) is sent on both channels; a unit acts on its own.
+    * 14-bit sliders: cc is the LSB controller, ccmsb the MSB (as in the official EQ_LOW example).
+      The unit sends MSB then LSB.
+    * Jog: relative CC, value 64 + delta (delta -63..+63), 1024 ticks per revolution, positive =
+      clockwise. That is zero="0x40" full="1024". Not inverted.
+    * The slide pot sends ONE of CROSSFADER / LEVEL / PITCH depending on the unit's faderRole.
+    * vid/pid are the contract's DEV PLACEHOLDER (pid.codes test PID 0x1209:0x0001). Change both
+      here and in the audio line when the unit gets a real PID. check.mjs follows the contract.
+    * Not defined on purpose: bpm, bpmNudge, tap, transport. The unit only sends them in its
+      clock-master modes, which are not a DJ-software mode. See README.md.
+  -->
+
+  <!-- Built-in USB sound card, present only when a DAC is fitted (dacMode AUTO/ON). Offers a preset button in Audio settings. -->
+  <audio description="EP-DJ3000 Deck" output="1" mixer="no" vid="0x1209" pid="0x0001" />
+
+  <!-- Unit on MIDI channel 1 (zero-based 0): Deck A by default -->
+  <button note="0x24" name="CUE" deck="1" channel="0" />
+  <button note="0x25" name="REV" deck="1" channel="0" />
+  <button note="0x26" name="JOG_TOUCH" deck="1" channel="0" />
+  <button note="0x27" name="PLAY" deck="1" channel="0" />
+  <jog cc="0x16" zero="0x40" full="1024" name="JOG" deck="1" channel="0" />
+  <slider cc="0x37" ccmsb="0x17" name="CROSSFADER" channel="0" />
+  <slider cc="0x27" ccmsb="0x07" name="LEVEL" deck="1" channel="0" />
+  <slider cc="0x39" ccmsb="0x19" name="PITCH" deck="1" channel="0" />
+  <slider cc="0x38" ccmsb="0x18" name="KNOB" deck="1" channel="0" />
+  <led note="0x24" name="LED_CUE" default="CUE" deck="1" channel="0" />
+  <led note="0x27" name="LED_PLAY" default="PLAY" deck="1" channel="0" />
+
+  <!-- Unit on MIDI channel 2 (zero-based 1): Deck B by default -->
+  <button note="0x24" name="CUE_CH2" deck="1" channel="1" />
+  <button note="0x25" name="REV_CH2" deck="1" channel="1" />
+  <button note="0x26" name="JOG_TOUCH_CH2" deck="1" channel="1" />
+  <button note="0x27" name="PLAY_CH2" deck="1" channel="1" />
+  <jog cc="0x16" zero="0x40" full="1024" name="JOG_CH2" deck="1" channel="1" />
+  <slider cc="0x37" ccmsb="0x17" name="CROSSFADER_CH2" channel="1" />
+  <slider cc="0x27" ccmsb="0x07" name="LEVEL_CH2" deck="1" channel="1" />
+  <slider cc="0x39" ccmsb="0x19" name="PITCH_CH2" deck="1" channel="1" />
+  <slider cc="0x38" ccmsb="0x18" name="KNOB_CH2" deck="1" channel="1" />
+  <led note="0x24" name="LED_CUE_CH2" default="CUE_CH2" deck="1" channel="1" />
+  <led note="0x27" name="LED_PLAY_CH2" default="PLAY_CH2" deck="1" channel="1" />
+</device>

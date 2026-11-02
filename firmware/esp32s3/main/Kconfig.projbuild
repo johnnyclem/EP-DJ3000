@@ -1,0 +1,150 @@
+menu "EP-DJ3000"
+
+    config EPDJ_HW_REV
+        int "Hardware revision reported in Info.hwRev"
+        range 0 255
+        default 1
+
+    menu "Platter and sensors"
+
+        choice EPDJ_PLATTER_DEFAULT
+            prompt "Platter source on a unit with no saved configuration"
+            default EPDJ_PLATTER_TOUCH_RING
+            help
+                Only the first-boot default: the setting is a live config key (platterSource) the
+                macOS app can change and save.
+
+            config EPDJ_PLATTER_TOUCH_RING
+                bool "Segmented conductive-PLA ring on touch pads (finger-slide scratching)"
+            config EPDJ_PLATTER_AS5600
+                bool "AS5600 magnetic encoder under a free-spinning platter"
+            config EPDJ_PLATTER_HOLD_ONLY
+                bool "Touch/hold detection only, no rotation"
+        endchoice
+
+        config EPDJ_TOUCH_PAD_COUNT
+            int "Number of touch pads wired (platter sectors; 0 = none)"
+            range 0 8
+            default 8
+            help
+                Pads are GPIO4.. in order, sector 0 first (board_pins.h). With an AS5600 platter wire
+                only pad 0 (GPIO4) as the hold pad and set this to 1.
+
+        config EPDJ_TOUCH_CHARGE_DISCHARGE_TIMES
+            int "Touch measurement: charge/discharge cycles per pad"
+            range 1 65535
+            default 500
+            help
+                The raw count is the RTC_FAST clock cycles those cycles take, so it grows with pad
+                capacitance. Fewer cycles scan faster but quantise coarser. The firmware logs the
+                share of 1 ms reads that carried a new value (touch fresh%); if it is below ~90 reduce
+                this. docs/BRINGUP.md has the procedure.
+
+        config EPDJ_TOUCH_INTERVAL_CYCLES
+            int "Touch measurement: sleep between scans (RTC_SLOW cycles)"
+            range 0 65535
+            default 16
+
+        config EPDJ_ADC_OVERSAMPLE
+            int "ADC conversions averaged per fader/knob sample"
+            range 1 32
+            default 8
+            help
+                About 20 us each, twice per millisecond. 8 trades ~0.3 ms of the engine task for roughly
+                3x less ADC noise.
+
+        config EPDJ_AS5600_ENABLE
+            bool "Probe for an AS5600 encoder on I2C at boot"
+            default y
+
+    endmenu
+
+    menu "USB"
+
+        config EPDJ_USB_AUDIO
+            bool "Add a UAC2 audio output function when a DAC is present"
+            default y
+            help
+                Without it the unit is MIDI-only whatever the DAC strap says. The function exists only if
+                the DAC is detected (or dacMode forces it) at boot: USB descriptors cannot change later.
+
+        choice EPDJ_AUDIO_RING
+            prompt "Audio buffer between USB and the DAC"
+            default EPDJ_AUDIO_RING_2048
+            help
+                Half of it is the playback delay the rate-matching loop aims for. 2048 frames = 21 ms
+                of buffering; 1024 halves the latency but gives USB timing less room.
+
+            config EPDJ_AUDIO_RING_1024
+                bool "1024 frames (10.7 ms target delay)"
+            config EPDJ_AUDIO_RING_2048
+                bool "2048 frames (21 ms target delay)"
+            config EPDJ_AUDIO_RING_4096
+                bool "4096 frames (43 ms target delay)"
+        endchoice
+
+        config EPDJ_AUDIO_RING_FRAMES
+            int
+            default 1024 if EPDJ_AUDIO_RING_1024
+            default 2048 if EPDJ_AUDIO_RING_2048
+            default 4096 if EPDJ_AUDIO_RING_4096
+
+        config EPDJ_DAC_PROBE_I2C
+            bool "Also probe known I2S codec I2C addresses when detecting a DAC"
+            default n
+            help
+                The DAC-present strap pin is always checked. This adds a scan of a few codec control
+                addresses on the shared I2C bus (ES8388, ES8311/TLV320DAC3100, WM8960, PCM512x).
+
+    endmenu
+
+    menu "MIDI and radio"
+
+        config EPDJ_TRS_MIDI
+            bool "3.5 mm TRS MIDI on UART1"
+            default y
+
+        config EPDJ_LINK
+            bool "ESP-NOW link to the other deck"
+            default y
+
+        config EPDJ_LINK_CHANNEL
+            int "Wi-Fi channel for the link (both decks must match)"
+            depends on EPDJ_LINK
+            range 1 13
+            default 1
+
+        config EPDJ_LINK_GROUP
+            int "Rig id: units with different ids ignore each other"
+            depends on EPDJ_LINK
+            range 0 255
+            default 0
+
+    endmenu
+
+    choice EPDJ_FIRST_BOOT_DECK
+        prompt "Deck on a unit with no saved configuration"
+        default EPDJ_FIRST_BOOT_DECK_A
+        help
+            Flash one image with B for the second unit, or swap later with CUE+REV held 5 s.
+
+        config EPDJ_FIRST_BOOT_DECK_A
+            bool "Deck A"
+        config EPDJ_FIRST_BOOT_DECK_B
+            bool "Deck B"
+    endchoice
+
+    menu "Diagnostics"
+
+        config EPDJ_LOG_SENSORS
+            bool "Log raw fader, knob, angle and touch counts once a second"
+            default y
+
+        config EPDJ_LOG_PERIOD_S
+            int "Seconds between statistics lines (0 = off)"
+            range 0 3600
+            default 10
+
+    endmenu
+
+endmenu

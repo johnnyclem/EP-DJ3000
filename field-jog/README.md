@@ -37,6 +37,21 @@ the spinning disc to be flush. The shell is.
 A 256 mm bed (Bambu X1 / P1 / A1) fits the 240 mm length. A 220 mm bed
 does not. The pin holes are measured from the bottom (fader) end.
 
+## Lettering
+
+Don't engrave the deck. The first print tore out everywhere the type was
+cut into the top skin. FDM will not hold a shallow indent on a face this
+thin.
+
+The top 45 mm is a separate flat plate, 1.6 mm, sitting flush over the
+battery bay. It is blank on purpose. Silkscreen it, or stick a vinyl
+label on it, the way the Sidekick faceplate is printed and not molded
+with type. Two M2 screws hold it, on the platter side of the bay. Pull
+the knob off before lifting the plate. The pot stays on the deck.
+
+Under the plate is a bay beside the Pico. A flat LiPo fits. There is no
+cell holder. The long-side pin holes are unchanged.
+
 ## Technic pins
 
 Five holes on the left edge, five on the right. Round LEGO Technic pin

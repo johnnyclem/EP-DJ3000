@@ -45,7 +45,8 @@ function Home() {
         The long edge matches the EP row, and the width matches a Sidekick. The 76 mm
         platter is centered, with 6 mm of deck on each side. The knob sits above it.
         It is 16 mm thick, the same as a K.O. II and a Sidekick, so the cases sit flush.
-        The bearing hangs in a sleeve under the platter. The fader lock rides in the cavity.
+        The deck is not engraved. Type tore out of the first print. The top 45 mm
+        is a blank plate over the battery bay, meant to be silkscreened.
         Pin holes are 16, 25, 48, 216 and 224 mm from the fader end, 8 mm off the
         bottom, on both long sides.
       </p>

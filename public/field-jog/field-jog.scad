@@ -14,7 +14,7 @@
 // Print the top and the platter face-up. See README.md.
 
 /* [Export] */
-part = "all"; // [all, section, top, bottom, platter, fader, fader_lock, knob, button, plus, tab, foot]
+part = "all"; // [all, section, top, bottom, platter, fader, fader_lock, knob, button, plus, faceplate, foot]
 
 /* [Body] */
 W = 88;
@@ -78,7 +78,17 @@ platter_cy = 148;
 knob_x = W - 14;
 knob_y = H - 22;
 fader_cx = W / 2;
-name_rule_y = platter_cy + platter_d / 2 + 8;
+
+// Removable cover over the top 19% of the deck. Flush, 1.6 mm, no engraving.
+// Silkscreen this plate. Cut type into the FDM skin and the top layers tear out.
+plate_t = 1.6;
+plate_x0 = 7;
+plate_y0 = 188;
+plate_w = 74;
+plate_h = 45;
+plate_ledge = 4.2;
+// Two M2s in the ledge on the platter side of the bay.
+plate_screws = [[22, 191], [48, 191]];
 
 encoder_pad_top = 6.2;
 encoder_pad_w = 26;
@@ -128,8 +138,9 @@ module rounded_box(w, h, z, r) {
 module screw_positions() {
     translate([screw_inset, screw_inset]) children();
     translate([W - screw_inset, screw_inset]) children();
-    translate([screw_inset, H - screw_inset]) children();
-    translate([W - screw_inset, H - screw_inset]) children();
+    // Below the battery plate, clear of the platter. The plate owns the top end.
+    translate([screw_inset, 176]) children();
+    translate([W - screw_inset, 176]) children();
 }
 
 module foot_positions() {
@@ -264,6 +275,10 @@ module top_plate() {
             // Sleeve drops into the tray so a 3 mm bearing fits in a 16 mm case.
             translate([platter_cx, platter_cy, ledge_z])
                 cylinder(d = bearing_d + 6.4, h = body_h - well_d - ledge_z, $fn = 48);
+            // M2 bosses under the battery-plate screws. Hang into the tray.
+            for (p = plate_screws)
+                translate([p[0], p[1], tray_h - 4])
+                    cylinder(d = 5.4, h = 4 + eps, $fn = 24);
         }
 
         // platter well
@@ -303,52 +318,20 @@ module top_plate() {
                 cylinder(d = 2.8, h = skin + 2 * eps, $fn = 18);
         }
 
-        // nameplate rule. Stops short of the side walls.
-        translate([10, name_rule_y, body_h - 0.45])
-            cube([W - 20, 0.7, 0.5]);
+        // Battery cover rebate. The plate sits flush. Nothing is engraved.
+        translate([plate_x0, plate_y0, body_h - plate_t])
+            cube([plate_w, plate_h, plate_t + eps]);
 
-        // orange bar pocket
-        translate([10, name_rule_y + 2.6, body_h - 0.65])
-            cube([18, 2.2, 0.7]);
+        // Bay. Stops short of the knob so the pot still has a deck to clamp to.
+        translate([plate_x0 + plate_ledge, plate_y0 + 6, tray_h - eps])
+            cube([knob_x - 10 - (plate_x0 + plate_ledge),
+                  plate_h - 6 - plate_ledge,
+                  skin + 2 * eps]);
 
-        // USB tab pocket, top-left, clear of the knob
-        translate([8, H - 16, body_h - 0.65])
-            cube([24, 8, 0.7]);
-        translate([platter_cx, platter_cy, body_h - 0.4])
-            for (a = [0:30:330])
-                rotate([0, 0, a])
-                    translate([platter_d / 2 + platter_clear / 2 + 1.1, -0.3, 0])
-                        cube([2.6, 0.6, 0.45]);
-
-        // type. Smaller than the 120 mm deck so the word clears the knob.
-        translate([10, name_rule_y + 14, body_h - 0.48])
-            linear_extrude(0.52)
-                text("SCRATCH", size = 8, font = "Liberation Sans:style=Bold",
-                     halign = "left", valign = "baseline", spacing = 1.02);
-        translate([10, name_rule_y + 6.4, body_h - 0.42])
-            linear_extrude(0.46)
-                text("スクラッチ", size = 4.2, font = "IPAGothic",
-                     halign = "left", valign = "baseline");
-        translate([25.8, H - 6.2, body_h - 0.4])
-            linear_extrude(0.42)
-                text("MIDI", size = 2.6, font = "Liberation Sans:style=Bold",
-                     halign = "center", valign = "center", spacing = 1.05);
-        translate([62.2, H - 6.2, body_h - 0.4])
-            linear_extrude(0.42)
-                text("LINE", size = 2.6, font = "Liberation Sans:style=Bold",
-                     halign = "center", valign = "center", spacing = 1.05);
-        translate([hp_x, 7.2, body_h - 0.4])
-            linear_extrude(0.42)
-                text("HP", size = 2.6, font = "Liberation Sans:style=Bold",
-                     halign = "center", valign = "center", spacing = 1.05);
-        translate([btn_x1, btn_y + 12, body_h - 0.4])
-            linear_extrude(0.42)
-                text("CUE", size = 3.0, font = "Liberation Sans:style=Bold",
-                     halign = "center", valign = "baseline", spacing = 1.08);
-        translate([btn_x2, btn_y + 12, body_h - 0.4])
-            linear_extrude(0.42)
-                text("REV", size = 3.0, font = "Liberation Sans:style=Bold",
-                     halign = "center", valign = "baseline", spacing = 1.08);
+        // Plate screws, from the rebate floor down into the bosses.
+        for (p = plate_screws)
+            translate([p[0], p[1], body_h - plate_t - 6])
+                cylinder(d = 1.8, h = 6 + eps, $fn = 16);
     }
 }
 
@@ -474,6 +457,10 @@ module button() {
         cube([4.3, 4.3, 5.2]);
 }
 
+module orange_bar() {
+    cube([23.6, 2.05, 0.55]);
+}
+
 module usb_tab() {
     difference() {
         cube([23.6, 7.6, 0.6]);
@@ -484,8 +471,19 @@ module usb_tab() {
     }
 }
 
-module orange_bar() {
-    cube([23.6, 2.05, 0.55]);
+module faceplate() {
+    difference() {
+        cube([plate_w, plate_h, plate_t]);
+        // Pot bushing. Pull the knob off, then lift the plate.
+        translate([knob_x - plate_x0, knob_y - plate_y0, -eps])
+            cylinder(d = 13, h = plate_t + 2 * eps, $fn = 36);
+        for (p = plate_screws) {
+            translate([p[0] - plate_x0, p[1] - plate_y0, plate_t - 0.7])
+                cylinder(d = 4.0, h = 0.9, $fn = 20);
+            translate([p[0] - plate_x0, p[1] - plate_y0, -eps])
+                cylinder(d = 2.2, h = plate_t + 2 * eps, $fn = 16);
+        }
+    }
 }
 
 module button_placed(x, y) {
@@ -518,10 +516,9 @@ module assembly_solids() {
         button_placed(btn_x1, btn_y);
         button_placed(btn_x2, btn_y);
     }
-    color([0.93, 0.40, 0.09]) {
-        translate([10.2, name_rule_y + 2.7, body_h - 0.6]) orange_bar();
-        translate([8.2, H - 15.8, body_h - 0.6]) usb_tab();
-    }
+    color([0.94, 0.94, 0.92])
+        translate([plate_x0, plate_y0, body_h - plate_t])
+            faceplate();
     color([0.18, 0.18, 0.18])
         foot_positions()
             translate([0, 0, -1.45])
@@ -572,6 +569,8 @@ if (part == "all") {
     button();
 } else if (part == "plus") {
     plus_mark();
+} else if (part == "faceplate") {
+    faceplate();
 } else if (part == "tab") {
     usb_tab();
 } else if (part == "bar") {

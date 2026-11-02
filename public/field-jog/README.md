@@ -1,5 +1,14 @@
 # FIELD JOG
 
+> **Superseded for the firmware, kept for the mechanics.** This is the original Field Jog (Pro Micro or Pico, AS5600 over a
+> bearing platter, hall-sensor loose fader). The project has moved to an **ESP32-S3 deck** (`firmware/`, `macos/`,
+> `drivers/`, `docs/`; start at the [root README](../README.md)) with a fixed **segmented conductive-PLA platter** sensed
+> by capacitive touch, a **slide pot** instead of the hall fader, native-USB MIDI plus an optional USB DAC, TRS MIDI, and
+> an ESP-NOW link between two decks. What changed against the text below: the MIDI map is new (the slide pot defaults to CC
+> 7/39 channel volume, jog stays CC 22, CUE/REV stay notes 36/37, knob stays CC 24: `docs/PROTOCOL.md`), and `firmware/field_jog.ino`
+> is not the firmware any more. The shell below was redrawn to 16 mm, with USB-C and four 3.5 mm jacks on the top end and a headphone jack on the fader end. It is still the hall-fader, AS5600, Pico-bay body, not an enclosure for the ESP32-S3 deck (no slide-pot mount, no segmented platter). See [`hardware/README.md`](../hardware/README.md). The Technic-pin hole positions below are the
+> original author's and have not been checked against real EP hardware.
+
 A scratch deck shell that sits in the same row as a Teenage Engineering
 EP-133 K.O. II and an EP-136 K.O. Sidekick.
 
@@ -27,6 +36,21 @@ the spinning disc to be flush. The shell is.
 
 A 256 mm bed (Bambu X1 / P1 / A1) fits the 240 mm length. A 220 mm bed
 does not. The pin holes are measured from the bottom (fader) end.
+
+## Lettering
+
+Don't engrave the deck. The first print tore out everywhere the type was
+cut into the top skin. FDM will not hold a shallow indent on a face this
+thin.
+
+The top 45 mm is a separate flat plate, 1.6 mm, sitting flush over the
+battery bay. It is blank on purpose. Silkscreen it, or stick a vinyl
+label on it, the way the Sidekick faceplate is printed and not molded
+with type. Two M2 screws hold it, on the platter side of the bay. Pull
+the knob off before lifting the plate. The pot stays on the deck.
+
+Under the plate is a bay beside the Pico. A flat LiPo fits. There is no
+cell holder. The long-side pin holes are unchanged.
 
 ## Technic pins
 

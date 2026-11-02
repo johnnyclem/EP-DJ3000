@@ -59,8 +59,55 @@ label on it, the way the Sidekick faceplate is printed and not molded
 with type. Two M2 screws hold it, on the platter side of the bay. Pull
 the knob off before lifting the plate. The pot stays on the deck.
 
-Under the plate is a bay beside the Pico. A flat LiPo fits. There is no
+The plate has one opening: a 23.2 × 6.4 mm slot for a 0.91 inch SSD1306,
+128×32, yellow-over-blue, I2C. That is the 0.91 inch panel, not the 0.96
+inch (the 0.96 is 128×64 and would dominate the plate). The module is
+about 36 × 12 × 2.4 mm. Tape it to the underside, pins bent down into the
+bay. It shares I2C with the AS5600 (display `0x3C`, encoder `0x36`).
+
+## One board
+
+Standalone playback (SD card, headphones, the screen, jog as a pitch
+wheel) stays on the ESP32-S3 that already runs MIDI, the link, and USB
+audio. Do not add a Teensy or a Daisy until that chip actually drops
+samples.
+
+- Line out is the I2S DAC already in the firmware (PCM5102A or the board's DAC).
+- Headphones are a small amp on that same I2S stream, into the jack on the fader end.
+- The card is a microSD on SDMMC, 1-bit is enough. First files are WAV. Varispeed is a read pointer, not a decoder. MP3 is a later problem.
+- The screen is a view, not a controller. Yellow row: track name. Blue rows: BPM, time, cue.
+- MIDI clock stays where it is, on the ESP, out the TRS jacks.
+
+A second MCU is two firmwares and a private protocol in a 10 mm cavity.
+The only reason to split later is a measurement: Wi-Fi link plus USB audio
+plus a scratch voice underruns the S3. Until then, one chip.
+
+Under the plate is a bay beside the board. A flat LiPo fits next to the
+display module. There is no
 cell holder. The long-side pin holes are unchanged.
+
+## Audio kit
+
+The brain is an ESP32-Audio-Kit V2.2. The PCB is 82 × 73 mm, ±0.2.
+The 73 mm side goes across the deck. Turned the other way, an 82 mm
+board has under half a millimeter of clearance inside an 88 mm shell,
+and a print will fuse it to the walls.
+
+The board sits at x = 7.5, y = 54, in a lip on the tray floor. That
+clears the pin ribs at 16, 25 and 48 mm, and it stops at y = 136, just
+short of the encoder pad. The scratch fader is now a 40 mm slot below
+it (about 27 mm of throw). Cue and play stay in that strip. The kit's
+own six keys are the pads, so the deck has no holes over the PCB until
+the button centers are measured off the real board.
+
+Headphone and line-in face a long side. Don't cut those holes yet. A
+3.5 mm plug can reach across the 5 mm gap, but only if the hole is on
+the jack's real center.
+
+Cue and play are 15 mm round caps in the fader strip, left of the cap.
+Reverse is the small cap on the right. Tempo is still the knob. The
+slot is still a loose scratch fader, just shorter, because the audio
+kit now owns the middle of the deck.
 
 ## Technic pins
 

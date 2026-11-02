@@ -37,8 +37,8 @@ shaft_hole = 5.6;     // ledge hole, clears an M3 shank, supports the bearing ra
 
 /* [Fader] */
 fader_slot_w = 8.0;
-fader_slot_l = 64;
-fader_y0 = 26;
+fader_slot_l = 40;
+fader_y0 = 10;
 fader_stem_w = 7.2;
 fader_stem_l = 13.0;
 fader_stem_below = 3.2;
@@ -90,20 +90,39 @@ plate_ledge = 4.2;
 // Two M2s in the ledge on the platter side of the bay.
 plate_screws = [[22, 191], [48, 191]];
 
+// 0.91" SSD1306, 128x32, yellow over blue. Not the 0.96" (that one is 128x64).
+// Active area is 22.38 x 5.58. The window shows the pixels and a hair of black glass.
+// The 36 x 12 mm module tapes to the underside of the plate, pins bent down into the bay.
+oled_w = 23.2;
+oled_h = 6.4;
+oled_cx = 31;   // plate-local, left of the knob
+oled_cy = 30;
+
 encoder_pad_top = 6.2;
 encoder_pad_w = 26;
 encoder_pad_d = 20;
 
-pico_w = 21;          // board width
-pico_l = 51;
-pico_x0 = W / 2 - pico_w / 2;
-pico_y0 = H - wall - pico_l - 1.2;
+// ESP32-Audio-Kit V2.2. PCB is 82 x 73 (±0.2). The 73 mm side goes across
+// the deck. 82 mm across an 88 mm shell leaves no room once the pin ribs exist.
+// Sits below the encoder pad (pad starts at y = 138) and above the short fader.
+kit_w = 73;
+kit_l = 82;
+kit_x0 = wall + ((W - 2 * wall) - kit_w) / 2;
+kit_y0 = 54;
 
-btn_y = 58;
-btn_x1 = 17;
-btn_x2 = W - 17;
-btn_well = 13.2;
-btn_hole = 6.0;
+// Cue and play stay in the fader strip, left of the cap. The audio kit's
+// own keys are the pads, so there are no extra holes over that PCB.
+play_x = 18;
+play_y = 20;
+cue_x = 18;
+cue_y = 38;
+play_d = 15;
+play_h = 7.0;
+loop_d = 10;
+loop_h = 5.2;
+rev_x = 70;
+rev_y = 28;
+stem_past = 2.4;      // how far the stem pokes through the skin onto a tactile
 
 hall_x = fader_cx + 13;
 hall_z_top = 7.0;
@@ -200,13 +219,14 @@ module bottom() {
                        platter_cy - encoder_pad_d / 2,
                        floor_t - eps])
                 cube([encoder_pad_w, encoder_pad_d, encoder_pad_top - floor_t + eps]);
-            // Pico / Pro Micro side rails. USB end faces the top wall.
-            translate([pico_x0 - 2.4, pico_y0, floor_t])
-                cube([1.6, pico_l, 2.4]);
-            translate([pico_x0 + pico_w + 0.6, pico_y0, floor_t])
-                cube([1.6, pico_l, 2.4]);
-            translate([pico_x0 - 2.4, pico_y0 - 1.4, floor_t])
-                cube([pico_w + 4.6, 1.4, 2.4]);
+            // Audio-kit locating lip. The opening is 0.6 mm over the PCB.
+            // Ribs at y = 16, 25, 48 stay below the board.
+            difference() {
+                translate([kit_x0 - 1.3, kit_y0 - 1.3, floor_t])
+                    cube([kit_w + 2.6, kit_l + 2.6, 0.8]);
+                translate([kit_x0 - 0.3, kit_y0 - 0.3, floor_t - eps])
+                    cube([kit_w + 0.6, kit_l + 0.6, 1.2]);
+            }
             // Hall posts. Magnet in the fader lock passes these.
             translate([hall_x, fader_y0 + 12, floor_t - eps])
                 cylinder(d = hall_d, h = hall_z_top - floor_t + eps, $fn = 24);
@@ -298,13 +318,10 @@ module top_plate() {
         translate([fader_cx, 0, tray_h - eps])
             y_round_slot(fader_slot_w, fader_y0, fader_y0 + fader_slot_l, 0, skin + 2 * eps);
 
-        // buttons: shallow well + stem hole
-        for (bx = [btn_x1, btn_x2]) {
-            translate([bx - btn_well / 2, btn_y - btn_well / 2, body_h - 1.5])
-                cube([btn_well, btn_well, 1.5 + eps]);
-            translate([bx, btn_y, tray_h - eps])
-                cylinder(d = btn_hole, h = skin + 2 * eps, $fn = 28);
-        }
+        // Stem holes only. No square wells: a shallow pocket tears the top skin.
+        for (p = [[play_x, play_y], [cue_x, cue_y], [rev_x, rev_y]])
+            translate([p[0], p[1], tray_h - eps])
+                cylinder(d = 5.2, h = skin + 2 * eps, $fn = 28);
 
         // pot / knob bushing
         translate([knob_x, knob_y, tray_h - eps])
@@ -448,13 +465,22 @@ module knob() {
     }
 }
 
-module button() {
+module round_cap(d, h) {
     hull() {
-        translate([-5.7, -5.7, 0]) cube([11.4, 11.4, 2.2]);
-        translate([-5.0, -5.0, 2.2]) cube([10.0, 10.0, 2.2]);
+        cylinder(d = d, h = 1.2, $fn = 64);
+        translate([0, 0, h - 1.4]) cylinder(d = d - 1.4, h = 1.4, $fn = 64);
     }
-    translate([-2.15, -2.15, 4.2])
-        cube([4.3, 4.3, 5.2]);
+    translate([0, 0, h - 0.6])
+        cylinder(d = 4.4, h = skin + stem_past + 0.6, $fn = 24);
+}
+
+module button() { round_cap(play_d, play_h); }
+module loop_button() { round_cap(loop_d, loop_h); }
+
+module cap_placed(x, y, d, h) {
+    translate([x, y, body_h + h])
+        rotate([180, 0, 0])
+            round_cap(d, h);
 }
 
 module orange_bar() {
@@ -483,15 +509,10 @@ module faceplate() {
             translate([p[0] - plate_x0, p[1] - plate_y0, -eps])
                 cylinder(d = 2.2, h = plate_t + 2 * eps, $fn = 16);
         }
+        // OLED aperture. Sharp rectangle, no bezel. Yellow band faces the jack end.
+        translate([oled_cx - oled_w / 2, oled_cy - oled_h / 2, -eps])
+            cube([oled_w, oled_h, plate_t + 2 * eps]);
     }
-}
-
-module button_placed(x, y) {
-    // Cap is 4.4 tall in the print model and the stem grows off the top of it.
-    // Flip so the stem enters the deck and the cap sits in the well.
-    translate([x, y, body_h + 4.4 - 1.25])
-        rotate([180, 0, 0])
-            button();
 }
 
 module foot() {
@@ -513,8 +534,9 @@ module assembly_solids() {
         translate([knob_x, knob_y, body_h])
             knob();
     color([0.12, 0.12, 0.13]) {
-        button_placed(btn_x1, btn_y);
-        button_placed(btn_x2, btn_y);
+        cap_placed(play_x, play_y, play_d, play_h);
+        cap_placed(cue_x, cue_y, play_d, play_h);
+        cap_placed(rev_x, rev_y, loop_d, loop_h);
     }
     color([0.94, 0.94, 0.92])
         translate([plate_x0, plate_y0, body_h - plate_t])
@@ -567,6 +589,8 @@ if (part == "all") {
     knob();
 } else if (part == "button") {
     button();
+} else if (part == "loop") {
+    loop_button();
 } else if (part == "plus") {
     plus_mark();
 } else if (part == "faceplate") {
@@ -587,6 +611,6 @@ echo("KNOB", knob_x, knob_y);
 echo("FADER_TRAVEL", fader_slot_l - fader_stem_l);
 echo("ENCODER_PAD_TOP_Z", encoder_pad_top);
 echo("HALL_POST_TOP_Z", hall_z_top);
-echo("PICO_ORIGIN", pico_x0, pico_y0);
+echo("KIT", kit_x0, kit_y0, kit_w, kit_l);
 echo("USB_WINDOW_Z", usb_z0, usb_z0 + usb_h);
 echo("TECHNIC", technic_ys, "z", technic_z, "d", technic_d);

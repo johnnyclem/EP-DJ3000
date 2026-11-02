@@ -17,7 +17,7 @@ const AMP_H = 269;
 const GAP = 10;
 
 const GEAR: Record<GearId, { w: number; t: number; h: number; top: [number, number, number]; color: string }> = {
-  jog: { w: 88, t: 26, h: 240, top: [240, 88, 26], color: GREY },
+  jog: { w: 88, t: 16, h: 240, top: [240, 88, 16], color: GREY },
   ko: { w: 176, t: 16, h: 240, top: [240, 176, 16], color: GREY },
   riddim: { w: 176, t: 16, h: 240, top: [240, 176, 16], color: CREAM },
   mixer: { w: 88, t: 16, h: 240, top: [240, 88, 16], color: GREY },
@@ -34,15 +34,15 @@ function qBasis(x: [number, number, number], y: [number, number, number], z: [nu
 
 export function jogPose(face: FaceId): { position: [number, number, number]; quaternion: [number, number, number, number] } {
   if (face === "right") {
-    return { position: [AMP_W / 2 + GAP + 13, 0, 120], quaternion: qBasis([0, 1, 0], [0, 0, 1], [1, 0, 0]) };
+    return { position: [AMP_W / 2 + GAP + 8, 0, 120], quaternion: qBasis([0, 1, 0], [0, 0, 1], [1, 0, 0]) };
   }
   if (face === "left") {
-    return { position: [-(AMP_W / 2 + GAP + 13), 0, 120], quaternion: qBasis([0, -1, 0], [0, 0, 1], [-1, 0, 0]) };
+    return { position: [-(AMP_W / 2 + GAP + 8), 0, 120], quaternion: qBasis([0, -1, 0], [0, 0, 1], [-1, 0, 0]) };
   }
   if (face === "back") {
-    return { position: [0, AMP_D / 2 + GAP + 13, 120], quaternion: qBasis([-1, 0, 0], [0, 0, 1], [0, 1, 0]) };
+    return { position: [0, AMP_D / 2 + GAP + 8, 120], quaternion: qBasis([-1, 0, 0], [0, 0, 1], [0, 1, 0]) };
   }
-  return { position: [0, 0, AMP_H + GAP + 13], quaternion: qBasis([0, -1, 0], [1, 0, 0], [0, 0, 1]) };
+  return { position: [0, 0, AMP_H + GAP + 8], quaternion: qBasis([0, -1, 0], [1, 0, 0], [0, 0, 1]) };
 }
 
 function pose(face: FaceId, gear: GearId) {

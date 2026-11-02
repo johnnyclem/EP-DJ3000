@@ -6,9 +6,7 @@
 > by capacitive touch, a **slide pot** instead of the hall fader, native-USB MIDI plus an optional USB DAC, TRS MIDI, and
 > an ESP-NOW link between two decks. What changed against the text below: the MIDI map is new (the slide pot defaults to CC
 > 7/39 channel volume, jog stays CC 22, CUE/REV stay notes 36/37, knob stays CC 24: `docs/PROTOCOL.md`), and `firmware/field_jog.ino`
-> is not the firmware any more. **The mechanical files below were not redrawn: this shell does not fit the new design**
-> (Pico-sized bay, one micro-USB window, one jack hole, hall-fader slot with no pot mount, plain disc platter), so there is
-> no enclosure for it yet. See [`hardware/README.md`](../hardware/README.md). The Technic-pin hole positions below are the
+> is not the firmware any more. The shell below was redrawn to 16 mm, with USB-C and four 3.5 mm jacks on the top end and a headphone jack on the fader end. It is still the hall-fader, AS5600, Pico-bay body, not an enclosure for the ESP32-S3 deck (no slide-pot mount, no segmented platter). See [`hardware/README.md`](../hardware/README.md). The Technic-pin hole positions below are the
 > original author's and have not been checked against real EP hardware.
 
 A scratch deck shell that sits in the same row as a Teenage Engineering
@@ -25,13 +23,16 @@ the cavities so parts you already printed drop in.
 |---|---|---|---|
 | Height | 240 mm | 240 mm | **240 mm** |
 | Width | 88 mm | 176 mm | **88 mm** |
-| Thickness | 16 mm | 16 mm | **26 mm** |
+| Thickness | 16 mm | 16 mm | **16 mm** |
 
 The long edge matches the EPs, and the width matches a Sidekick. The 76 mm
 platter is centered, with 6 mm of deck on each side. The knob moves above
 the platter, because a 16 mm knob will not sit beside a 3 inch jog in 88 mm.
-The body is 26 mm thick because a 683ZZ bearing, a magnet, and a fader lock
-have to live under the deck. 16 mm is not enough. Don't sand it down to match.
+The body is 16 mm thick, same as the EPs, so the cases sit flush on a desk.
+A 683ZZ is 3 mm tall. It lives in a sleeve that hangs under the deck,
+and the fader lock rides in the cavity beside it. The platter stands
+about 3 mm proud of the case, the way a K.O. knob does. Don't expect
+the spinning disc to be flush. The shell is.
 
 A 256 mm bed (Bambu X1 / P1 / A1) fits the 240 mm length. A 220 mm bed
 does not. The pin holes are measured from the bottom (fader) end.
@@ -95,7 +96,8 @@ The orange pieces are 0.6 mm. Print them slow, on a clean plate.
 - 2× 6×6 mm tactile switches. Glue them under the button holes so the actuator passes into the stem.
 - 1× vertical 9 mm pot, 10k, if you want the orange knob to do something. Bushing is the 7.3 mm hole. The knob is a friction fit on a 6 mm shaft.
 - 1× Raspberry Pi Pico, or a Pro Micro. Rails are sized for a Pico (21×51 mm) with the USB connector toward the top edge. A Pro Micro fits in the same bay with a bit of foam.
-- 1× 3.5 mm TRS jack, optional, in the hole on the right wall. Labeled MIDI. Not wired by the sketch; it's a hole for a sync/MIDI jack if you want one later.
+- 4× 3.5 mm TRS jacks on the top end, beside the USB-C window. Left pair is MIDI in and MIDI out. Right pair is line in and line out.
+- 1× 3.5 mm TRS headphone jack, centered on the fader end. The long sides are pin holes only.
 
 No slide pot. The crossfader is a loose block with a magnet, same idea as the red one, so it can be hit. The two halls read where it is. The curve is monotonic, not linear. Trim `FADER_LO` and `FADER_HI` in the sketch.
 
@@ -113,23 +115,20 @@ No slide pot. The crossfader is a loose block with a magnet, same idea as the re
 
 ## Firmware
 
-`firmware/field_jog.ino` targets a **Pro Micro** and the MIDIUSB library.
-It has not been run on hardware.
+Two builds.
 
-| Control | Message |
-|---|---|
-| Jog | CC 22, relative, 64 = still |
-| Fader | CC 23, 0–127 |
-| Knob | CC 24 |
-| CUE | note 36 |
-| REV | note 37 |
+`firmware/field_jog.ino` is USB MIDI on a Pro Micro (ATmega32U4). It has
+not been run on hardware. Channel 1: jog CC 22 (relative, 64 = still),
+fader CC 23, knob CC 24, CUE note 36, REV note 37. Wiring is at the top
+of the sketch. If the scratch is backwards, set `JOG_SIGN` to `-1`.
 
-Channel 1. In djay, learn CC 22 as a relative jog. If the scratch is
-backwards, set `JOG_SIGN` to `-1`.
-
-Wiring for the Pro Micro is in the top of the sketch. A Pico will run the
-same logic on the Arduino-Pico core, but the pin numbers change (Wire is
-GPIO 4/5, not D2/D3). I didn't ship a second sketch.
+`firmware/rp2040/` is the audio build. A Pico-shaped RP2040 with a USB-C
+plug. USB Audio Class 1.0, stereo, 16-bit, 48 kHz, so a phone or a
+laptop sees it as a normal input with no driver. The same samples go out
+UART0 (GP0) at 3.125 Mbaud for an optional DAC. Ground GP22 at boot to
+turn that off. The Pro Micro cannot do this. The RP2040 is full-speed
+only, so the class is UAC1, not UAC2. Pins, the UART frame, and the build
+are in `firmware/rp2040/README.md`. Not run on hardware yet.
 
 ## Files
 

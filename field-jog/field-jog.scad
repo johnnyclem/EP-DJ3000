@@ -3,12 +3,10 @@
 // Teenage Engineering EP-133 (240 x 176 x 16) and EP-136 (240 x 88 x 16).
 // Not a TE product, and not a copy of the Frisk Fader / Scratch Ninja STL.
 //
-// Default size 88 x 240 x 26 mm, the Sidekick footprint.
-//   240 mm is the long edge, so it lines up with an EP-133 or a Sidekick.
-//   88 mm is the width. The 76 mm platter is centered, with 6 mm of deck
-//   on each side. The knob sits above the platter, because it will not
-//   fit beside a 3 inch jog in 88 mm. Thickness stays 26 mm: a bearing,
-//   a magnet and a fader lock do not fit in 16 mm.
+// Default size 88 x 240 x 16 mm. Same thickness as an EP-133 and an EP-136,
+// so the cases sit flush. The 683ZZ lives in a sleeve that hangs below the
+// deck, and the fader lock rides in the cavity under it. The platter and
+// the knob stand proud of the 16 mm case, the way the K.O. knobs do.
 //
 // OpenSCAD customizer: change `part` to export one piece.
 //   openscad -D 'part="top"' -o top.stl field-jog.scad
@@ -21,17 +19,17 @@ part = "all"; // [all, section, top, bottom, platter, fader, fader_lock, knob, b
 /* [Body] */
 W = 88;
 H = 240;
-body_h = 26;
-skin = 6.2;
+body_h = 16;
+skin = 4.2;
 wall = 2.6;
-floor_t = 2.6;
+floor_t = 1.8;
 R = 3.4;
 top_shrink = 0.15;   // per side, so the deck drops in after elephant-foot
 
 /* [Platter] */
 platter_d = 76;
 platter_t = 3.8;
-well_d = 1.1;
+well_d = 0.7;
 platter_clear = 0.55; // extra diameter of the well
 bearing_d = 7.15;     // 683ZZ is 7.00 OD; 0.15 mm press fit
 bearing_h = 3.0;
@@ -43,7 +41,7 @@ fader_slot_l = 64;
 fader_y0 = 26;
 fader_stem_w = 7.2;
 fader_stem_l = 13.0;
-fader_stem_below = 3.6;
+fader_stem_below = 3.2;
 cap_w = 22;
 cap_d = 14;
 cap_h = 8;
@@ -59,7 +57,7 @@ tray_h = body_h - skin;
 screw_inset = 9;
 boss_d = 8.2;
 pilot_d = 2.15;       // M2.5 self-tap
-pilot_depth = 7.5;
+pilot_depth = 6.5;
 cbore_d = 5.6;
 cbore_h = 2.0;
 foot_d = 8.2;
@@ -82,7 +80,7 @@ knob_y = H - 22;
 fader_cx = W / 2;
 name_rule_y = platter_cy + platter_d / 2 + 8;
 
-encoder_pad_top = 8.8;
+encoder_pad_top = 6.2;
 encoder_pad_w = 26;
 encoder_pad_d = 20;
 
@@ -98,16 +96,18 @@ btn_well = 13.2;
 btn_hole = 6.0;
 
 hall_x = fader_cx + 13;
-hall_z_top = 14.2;
+hall_z_top = 7.0;
 hall_d = 6;
 
 usb_w = 12.5;
-usb_h = 7.5;
-usb_z0 = 5.2;
+usb_h = 6.2;
+usb_z0 = 4.3;          // window centered at z = 7.4, same line as the jacks
 
-midi_y = 40;
-midi_z = 10.5;
-midi_d = 6.3;
+jack_d = 6.3;          // 3.5 mm / 1/8 in TRS
+jack_z = 7.4;
+// Top edge, left to right: MIDI in, MIDI out, USB, line in, line out.
+jack_xs = [20.1, 31.6, 56.4, 67.9];
+hp_x = W / 2;          // headphone, centered on the fader end
 
 $fn = 48;
 
@@ -145,7 +145,7 @@ module technic_ribs() {
     for (y = technic_ys) {
         y0 = y - technic_d / 2 - 1.5;
         y1 = y + technic_d / 2 + 1.5;
-        z1 = technic_z + technic_d / 2 + 1.6;
+        z1 = min(technic_z + technic_d / 2 + 1.2, tray_h - 0.35);
         translate([wall - eps, y0, floor_t - eps])
             cube([rib_x, y1 - y0, z1 - floor_t]);
         translate([W - wall - rib_x, y0, floor_t - eps])
@@ -211,17 +211,24 @@ module bottom() {
 
         // M2 holes in the encoder pad, 16 mm apart, blind
         for (dx = [-8, 8])
-            translate([platter_cx + dx, platter_cy, encoder_pad_top - 5])
-                cylinder(d = 2.1, h = 5 + eps, $fn = 16);
+            translate([platter_cx + dx, platter_cy, encoder_pad_top - 4])
+                cylinder(d = 2.1, h = 4 + eps, $fn = 16);
 
-        // USB window in the top wall, lined up with a Pico laid on the floor
+        // USB-C window in the top end wall, lined up with a Pico on the floor.
         translate([W / 2 - usb_w / 2, H - wall - 1, usb_z0])
             cube([usb_w, wall + 2, usb_h]);
 
-        // optional 3.5 mm TRS (MIDI / sync) in the right wall
-        translate([W - wall - 2, midi_y, midi_z])
-            rotate([0, 90, 0])
-                cylinder(d = midi_d, h = wall + 4, $fn = 28);
+        // Four 3.5 mm jacks on that same end: MIDI in, MIDI out, line in, line out.
+        // Through the wall only, so they miss the Pico.
+        for (x = jack_xs)
+            translate([x, H - wall - 0.2, jack_z])
+                rotate([-90, 0, 0])
+                    cylinder(d = jack_d, h = wall + 0.6, $fn = 28);
+
+        // Headphone jack, centered on the fader end. The side wall stays pins only.
+        translate([hp_x, -0.4, jack_z])
+            rotate([-90, 0, 0])
+                cylinder(d = jack_d, h = wall + 0.8, $fn = 28);
 
         // feet
         foot_positions()
@@ -247,23 +254,30 @@ module y_round_slot(w, y0, y1, z, h) {
 
 module top_plate() {
     sh = top_shrink;
-    bearing_drop = 0.4; // keep the race off the underside of the platter
-    ledge_z = body_h - well_d - bearing_drop - bearing_h;
+    bearing_drop = 0.3;
+    ledge = 1.3;
+    ledge_z = body_h - well_d - bearing_drop - bearing_h - ledge;
     difference() {
-        translate([sh, sh, tray_h])
-            rounded_box(W - 2 * sh, H - 2 * sh, skin, R);
+        union() {
+            translate([sh, sh, tray_h])
+                rounded_box(W - 2 * sh, H - 2 * sh, skin, R);
+            // Sleeve drops into the tray so a 3 mm bearing fits in a 16 mm case.
+            translate([platter_cx, platter_cy, ledge_z])
+                cylinder(d = bearing_d + 6.4, h = body_h - well_d - ledge_z, $fn = 48);
+        }
 
         // platter well
         translate([platter_cx, platter_cy, body_h - well_d])
             cylinder(d = platter_d + platter_clear, h = well_d + eps, $fn = 96);
 
-        // 683ZZ pocket. Top of the race sits bearing_drop below the well floor.
-        translate([platter_cx, platter_cy, ledge_z])
-            cylinder(d = bearing_d, h = bearing_h + 0.02, $fn = 48);
+        // 683ZZ pocket, open up into the well so the bearing drops in from the top
+        // and stops on the ledge. The race ends bearing_drop below the platter.
+        translate([platter_cx, platter_cy, ledge_z + ledge])
+            cylinder(d = bearing_d, h = bearing_h + bearing_drop + 0.02, $fn = 48);
 
-        // ledge bore under the bearing
-        translate([platter_cx, platter_cy, tray_h - eps])
-            cylinder(d = shaft_hole, h = ledge_z - tray_h + 0.04, $fn = 32);
+        // ledge bore under the bearing, for the M3 shank
+        translate([platter_cx, platter_cy, ledge_z - eps])
+            cylinder(d = shaft_hole, h = ledge + 2 * eps, $fn = 32);
 
         // crossfader slot
         translate([fader_cx, 0, tray_h - eps])
@@ -315,10 +329,18 @@ module top_plate() {
             linear_extrude(0.46)
                 text("スクラッチ", size = 4.2, font = "IPAGothic",
                      halign = "left", valign = "baseline");
-        translate([W - 8, midi_y - 1.5, body_h - 0.4])
+        translate([25.8, H - 6.2, body_h - 0.4])
             linear_extrude(0.42)
-                text("MIDI", size = 2.8, font = "Liberation Sans:style=Bold",
-                     halign = "right", valign = "center", spacing = 1.1);
+                text("MIDI", size = 2.6, font = "Liberation Sans:style=Bold",
+                     halign = "center", valign = "center", spacing = 1.05);
+        translate([62.2, H - 6.2, body_h - 0.4])
+            linear_extrude(0.42)
+                text("LINE", size = 2.6, font = "Liberation Sans:style=Bold",
+                     halign = "center", valign = "center", spacing = 1.05);
+        translate([hp_x, 7.2, body_h - 0.4])
+            linear_extrude(0.42)
+                text("HP", size = 2.6, font = "Liberation Sans:style=Bold",
+                     halign = "center", valign = "center", spacing = 1.05);
         translate([btn_x1, btn_y + 12, body_h - 0.4])
             linear_extrude(0.42)
                 text("CUE", size = 3.0, font = "Liberation Sans:style=Bold",
@@ -513,7 +535,7 @@ module ghosts() {
             cylinder(d = 7, h = bearing_h, $fn = 32);
     // diametric magnet on the axle, target zone
     color([0.85, 0.15, 0.12, 0.8])
-        translate([platter_cx, platter_cy, 12.2])
+        translate([platter_cx, platter_cy, body_h - well_d - 0.3 - bearing_h - 1.3 - 2.6])
             cylinder(d = 6, h = 2.5, $fn = 24);
 }
 

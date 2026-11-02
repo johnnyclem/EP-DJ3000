@@ -38,20 +38,22 @@ function Home() {
       <dl className="grid grid-cols-3 divide-x divide-line border border-line">
         <Spec k="Height" v="240 mm" />
         <Spec k="Width" v="88 mm" />
-        <Spec k="Thick" v="26 mm" />
+        <Spec k="Thick" v="16 mm" />
       </dl>
 
       <p className="text-sm leading-relaxed text-muted">
         The long edge matches the EP row, and the width matches a Sidekick. The 76 mm
         platter is centered, with 6 mm of deck on each side. The knob sits above it.
-        It is 26 mm thick because the bearing, magnet, and fader lock need a cavity.
+        It is 16 mm thick, the same as a K.O. II and a Sidekick, so the cases sit flush.
+        The bearing hangs in a sleeve under the platter. The fader lock rides in the cavity.
         Pin holes are 16, 25, 48, 216 and 224 mm from the fader end, 8 mm off the
         bottom, on both long sides.
       </p>
 
       <a
         href="/field-jog/field-jog.zip"
-        download
+        target="_blank"
+        rel="noreferrer"
         className="flex h-12 items-center justify-center bg-accent font-semibold text-accent-fg"
       >
         Download print files
@@ -68,7 +70,8 @@ function Home() {
               </span>
               <a
                 href={`/field-jog/stl/${file}`}
-                download
+                target="_blank"
+                rel="noreferrer"
                 className="font-mono text-xs tracking-wide text-accent uppercase"
               >
                 STL
@@ -82,13 +85,13 @@ function Home() {
         <h2 className="font-mono text-xs tracking-widest uppercase">Also in the zip</h2>
         <p>OpenSCAD source, a Pro Micro MIDI sketch, and the print notes. Face-up, no supports, 0.2 mm layers.</p>
         <p className="flex gap-4">
-          <a className="text-fg underline" href="/field-jog/field-jog.scad" download>
+          <a className="text-fg underline" href="/field-jog/field-jog.scad" target="_blank" rel="noreferrer">
             SCAD
           </a>
-          <a className="text-fg underline" href="/field-jog/field_jog.ino" download>
+          <a className="text-fg underline" href="/field-jog/field_jog.ino" target="_blank" rel="noreferrer">
             Firmware
           </a>
-          <a className="text-fg underline" href="/field-jog/README.md" download>
+          <a className="text-fg underline" href="/field-jog/README.md" target="_blank" rel="noreferrer">
             Notes
           </a>
         </p>

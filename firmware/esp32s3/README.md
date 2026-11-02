@@ -11,7 +11,12 @@ First power-up: [`docs/BRINGUP.md`](../../docs/BRINGUP.md). Wiring: [`hardware/W
 
 Tested toolchain: **ESP-IDF 6.1.0** (what PlatformIO's `espressif32` 8.0.0 installs) with `espressif/esp_tinyusb`
 **3.0.0** (it bundles TinyUSB 0.21.0). The code was written for IDF 5.3+ (two version guards: ESP-NOW callback
-signature and rate API) but only 6.1.0 has been compiled.
+signature and rate API) but only 6.1.0 has been compiled. `platformio.ini` says `platform = espressif32` without a
+version, so a newer platform release changes the toolchain under you; `platform = espressif32@8.0.0` reproduces this
+build.
+
+`pio run -d firmware/esp32s3` was run from a clean copy of the tree for this README: it succeeds with no compiler
+warnings (the RAM and flash figures print at the end of the build).
 
 ### PlatformIO
 
@@ -19,7 +24,17 @@ signature and rate API) but only 6.1.0 has been compiled.
 pio run -d firmware/esp32s3                      # build; first run downloads esp_tinyusb from the component registry
 pio run -d firmware/esp32s3 -t upload            # flash over the DevKit's UART port
 pio device monitor -d firmware/esp32s3           # 921600 baud
+pio run -d firmware/esp32s3 -t menuconfig        # the "EP-DJ3000" menu below (opens a full-screen TUI)
 ```
+
+Saving menuconfig writes `sdkconfig.esp32s3` (git-ignored). IDF applies `sdkconfig.defaults` only to symbols that file does
+not already set, so after editing the defaults delete the generated file.
+
+**Two USB-C cables.** The DevKitC-1 has two ports. **UART** (the CP210x bridge) is for flashing and the log. **USB** is the
+chip's native port, which the firmware gives to TinyUSB as soon as it boots, so from the first flash on, the Mac sees a
+MIDI device there and no serial port. Keep both cables plugged in while developing. If the firmware ever hangs the native
+port, flash over UART, or hold BOOT while pressing reset. The status LED pin assumes DevKitC-1 v1.0 (GPIO48); v1.1 boards
+have it on GPIO38 (`kStatusLed`, `WIRING.md`).
 
 `platformio.ini` sets `src_dir = main` so PlatformIO and `idf.py` share one tree.
 
@@ -42,13 +57,15 @@ delete the generated sdkconfig: IDF only applies defaults to symbols that are no
 |---|---|---|
 | `EPDJ_PLATTER_*` | touch ring | first-boot platter source (afterwards the `platterSource` config key) |
 | `EPDJ_TOUCH_PAD_COUNT` | 8 | pads wired from GPIO4 up; 1 for an AS5600 build (hold pad) |
-| `EPDJ_TOUCH_CHARGE_DISCHARGE_TIMES`, `_INTERVAL_CYCLES` | 500, 16 | touch scan speed versus resolution |
-| `EPDJ_ADC_OVERSAMPLE` | 8 | conversions averaged per fader/knob sample |
+| `EPDJ_TOUCH_SCAN_TARGET_US` | 800 | boot-time auto-range: charge/discharge cycles are chosen so one scan of all pads takes about this long (0 = off) |
+| `EPDJ_TOUCH_CHARGE_DISCHARGE_TIMES`, `_INTERVAL_CYCLES` | 500, 16 | cycles per pad: the upper limit for auto-range, or the fixed value with the target at 0; sleep between measurements |
+| `EPDJ_ADC_OVERSAMPLE` | 8 | upper limit on conversions averaged per fader/knob sample; boot lowers it if a conversion is slow |
 | `EPDJ_AS5600_ENABLE` | on | probe for the encoder at boot |
-| `EPDJ_USB_AUDIO` | on | UAC2 function when a DAC is present at boot |
+| `EPDJ_USB_AUDIO` | on | USB Audio 1.0 function when a DAC is present at boot |
 | `EPDJ_AUDIO_RING_*` | 2048 frames | USB-to-DAC buffer (21 ms target delay) |
 | `EPDJ_DAC_PROBE_I2C` | off | also look for codec chips on I2C |
-| `EPDJ_TRS_MIDI`, `EPDJ_LINK`, `EPDJ_LINK_CHANNEL`, `EPDJ_LINK_GROUP` | on, on, 1, 0 | |
+| `EPDJ_TRS_MIDI`, `EPDJ_LINK`, `EPDJ_LINK_CHANNEL` | on, on, 1 | |
+| `EPDJ_LINK_GROUP` | 0 | build-time default rig id; the `linkGroup` config key (SysEx, live, saved) wins when non-zero |
 | `EPDJ_FIRST_BOOT_DECK_*` | A | flash the second unit as B |
 | `EPDJ_LOG_SENSORS`, `EPDJ_LOG_PERIOD_S` | on, 10 | diagnostics lines |
 
@@ -62,27 +79,93 @@ main/                 app_main (boot order and the THREADING MODEL comment), eng
 components/
   epdj_core/          wrapper: compiles ../../core/src in place, no copy (-Werror -Wconversion stays on)
   epdj_hal/           board_pins.h (+ static_asserts), touch, ADC, buttons, AS5600, NVS ConfigStore, TRS MIDI, LED, DAC detect
-  epdj_usb/           descriptors from core/usb_desc, esp_tinyusb install, MIDI, UAC2 control requests and audio interrupt
+  epdj_usb/           descriptors from core/usb_desc, esp_tinyusb install, MIDI, USB audio control requests and audio interrupt
     tusb_override/      CFG_TUSB_CONFIG_FILE: esp_tinyusb's config + the audio class
   epdj_audio/         USB -> ring -> I2S, rate feedback, drift fallback, volume, test tone
   epdj_link/          ESP-NOW broadcast transport
-tools/crosscheck_usb_desc/   byte-compares the descriptor builder with TinyUSB's own macros
+tools/crosscheck_usb_desc/   byte-compares the descriptor builder with TinyUSB's own macros; runs its audio and MIDI drivers on the host
+tools/host_checks/           host tests of the output policy, tick pacing and touch auto-range
 ```
 
 New `.cpp` files in `../core/src` are picked up automatically by `idf.py` (the wrapper globs with `CONFIGURE_DEPENDS`). PlatformIO ships ninja 1.7.1, too old to re-check that glob: after adding a core source file under `pio`, touch `components/epdj_core/CMakeLists.txt`.
 
-## How UAC2 got enabled
+## How USB audio got enabled
 
 `esp_tinyusb`'s `tusb_config.h` has no audio class and is compiled into TinyUSB itself. TinyUSB includes
 `CFG_TUSB_CONFIG_FILE` instead when it is defined, so `components/epdj_usb/CMakeLists.txt` defines it on the
 `esp_tinyusb` library (PUBLIC, so everything linking it agrees) as `epdj_tusb_config.h`, which includes the original
 and adds the audio class and larger MIDI FIFOs. `esp_tinyusb` 3.0 always compiles `audio_device.c`, so no source list
-had to change. The descriptor is `core/src/usb_desc.cpp`'s; it is host-tested and `tools/crosscheck_usb_desc/run.sh`
-shows it is byte-identical to what TinyUSB's `TUD_MIDI_*`/`TUD_AUDIO20_*` macros produce (173 and 316 bytes).
+had to change.
 
-Read the **UAC2 at full speed** risk in `docs/BRINGUP.md` before trusting USB audio on macOS.
+The audio function is **USB Audio Class 1.0**, not 2.0 (`docs/ARCHITECTURE.md` decision 5): the ESP32-S3 is full-speed
+only, and TinyUSB's UAC1 driver sends the feedback value as three bytes 10.14 the way a full-speed host expects, where its
+UAC2 driver always sends four bytes 16.16. The firmware hands `tud_audio_n_fb_set()` a Q16.16 value that is already a
+multiple of 4, so the driver's `>> 2` is exact and the wire bytes are `FeedbackController::encodeUsb()`'s.
+
+The descriptor is `core/src/usb_desc.cpp`'s (host-tested).
+
+### Sizing of the SysEx reply path
+
+A `GET_CONFIG` dump (`0xFF`) answers one `CONFIG` frame per key (33 keys, ids 0-32) and then `ACK[GET_CONFIG]`: 34 SysEx
+frames, 506 bytes on the wire.
+
+| Stage | Size | Dump needs | |
+|---|---|---|---|
+| engine output ring (`Engine::kOutQueueBytes`) | 4096 B, records carry a 4-byte header | 642 B | `static_assert` in `core/src/engine.cpp` |
+| USB-MIDI packets (4 bytes per 3 bytes of SysEx) | TX FIFO `CFG_TUD_MIDI_TX_BUFSIZE` = 1024 B | 169 packets = 676 B | `static_assert` in `usb_device.cpp`; it was 512 B, which refuses 40 of the 169 packets in one go |
+| engine task, per 1 ms iteration | up to 64 output events | 34 events | `kMaxOutPerIteration` |
+
+The whole dump therefore goes into the FIFO in the iteration that produced it. If the host is slow to read the port, the
+engine task keeps one event in hand and retries every millisecond (`usb: ... tx stalls`); only after 100 ms does it give up
+on the rest of that frame (`drops`), and a dump that ends without its ACK is incomplete by definition. After that give-up the
+USB sink counts as stalled: every later event is dropped on its first refused packet (still `drops`), and the first accepted
+packet clears the state, so a host that never reads the MIDI port (some hosts only read it while an application has it open) costs TRS MIDI and the radio one 100 ms window instead of 100 ms per event. Packets already in the FIFO stay there and reach
+the first reader that opens the port. Requests from the
+host are small and sequential (the app waits for each answer), so the 256-byte RX FIFO and the 128-packet receive queue
+are not close to their limits.
+
+### A one-line patch to TinyUSB's audio driver
+
+TinyUSB's `audiod_rx_xfer_isr` returns before re-arming the isochronous OUT endpoint when a zero-length packet arrives, and
+that ends the stream until the host re-selects the interface. `components/epdj_usb/tinyusb_audio_patch.cmake` applies the
+fix (skip the FIFO write for an empty packet) to a copy of `audio_device.c` in the build directory at configure time, and
+`CMakeLists.txt` swaps the copy into the `esp_tinyusb` library's sources. The managed component is never edited. If
+`esp_tinyusb` is updated and the lines have moved or been fixed, CMake stops with a message saying so. Worth reporting upstream.
+
+### Host checks of the USB layer
+
+```sh
+cd firmware/esp32s3 && sh tools/crosscheck_usb_desc/run.sh    # needs the managed_components download from one build; no chip
+```
+
+1. The descriptor builder's bytes against the same descriptors written with TinyUSB's own `TUD_MIDI_*` /
+   `TUD_AUDIO10_*` macros (173 bytes MIDI only, 294 with audio).
+2. TinyUSB's real `audio_device.c` and `midi_device.c`, compiled for the host with the firmware's own TinyUSB
+   configuration, open those descriptors; `usb_audio.cpp` (unmodified) answers the audio driver. It checks which
+   endpoints open, the feedback bytes on the wire for 20 000 values against `encodeUsb`, that OUT packets reach
+   `pushFromUsb`, the mute / volume / sampling frequency requests (including the ones that must stall), and that a real
+   `GET_CONFIG` dump produced by `ConfigServer` fits the MIDI TX FIFO and comes out of the bulk IN endpoint byte for byte.
+   Only the layer below the class drivers (endpoint transfers, control status) is a recorder.
+
+   It also feeds the driver a zero-length packet and checks that the endpoint is re-armed and the next packet arrives
+   (`EPDJ_TINYUSB_UNPATCHED=1` runs TinyUSB's own file, where that check fails).
+
+Neither is a substitute for a host: see `docs/BRINGUP.md`.
+
+### Host checks of the platform logic
+
+```sh
+cd firmware/esp32s3 && sh tools/host_checks/run.sh            # no chip, no ESP-IDF
+```
+
+The pure parts of the platform layer are headers with no ESP-IDF in them, compiled here against fakes with the core's test
+harness (AddressSanitizer + UBSan): `main/output_pump.h` (what the engine task does with each output event, including a USB
+endpoint that never drains), `main/tick_pacing.h` (when the engine task drops lost ticks) and `epdj_hal/touch_range.h` (the
+touch measurement-length fit). What they cannot cover is the FreeRTOS, USB and touch hardware behaviour around them.
 
 ## Not here
 
-No OTA (update with `REBOOT(bootloader)` from the app, which sets the ROM force-download flag, or the BOOT button), no
+No OTA. Update over the DevKit's UART port, or with BOOT + reset. `REBOOT(bootloader)` from the app stops the USB stack, hands
+the native port back to the chip's USB-Serial-JTAG (the ROM's download port) and sets the ROM force-download flag, but that
+sequence has not been tried on a chip: do not rely on it until `docs/BRINGUP.md` step 2 has been ticked. No
 BLE-MIDI, no Wi-Fi station/AP, no secrets, no network services.

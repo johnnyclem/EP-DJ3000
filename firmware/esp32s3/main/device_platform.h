@@ -15,7 +15,8 @@ class DevicePlatform final : public EnginePlatform {
   explicit DevicePlatform(hal::NvsConfigStore& store) : store_(store) {}
 
   // Restarts in ~200 ms so the ACK that is already queued can leave on the USB endpoint first.
-  // BOOTLOADER sets the ROM "force download boot" flag first (esptool over the native USB port).
+  // BOOTLOADER stops the USB stack, hands the native port back to the ROM's USB-Serial-JTAG and sets the ROM
+  // "force download boot" flag (esptool over the native port). Not tested on a chip.
   void reboot(proto::RebootMode mode) override;
   // Persists the new deck (only the deck: unsaved live tweaks stay unsaved) and restarts to re-enumerate.
   void setDeck(proto::Deck deck) override;

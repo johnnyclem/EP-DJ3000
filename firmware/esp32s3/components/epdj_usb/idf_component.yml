@@ -1,6 +1,6 @@
 dependencies:
   idf: ">=5.3"
-  # Ships its own TinyUSB (0.21.0~2 in 3.0.0) with the DWC2 port for the S3, the UAC2 audio class driver and
-  # the MIDI class driver.
+  # Ships its own TinyUSB (0.21.0 in 3.0.0) with the DWC2 port for the S3, the audio class driver (UAC1 and
+  # UAC2; this firmware uses UAC1) and the MIDI class driver.
   espressif/esp_tinyusb:
     version: "^3.0.0"

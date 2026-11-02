@@ -4,6 +4,7 @@
 import AppKit
 import EPDJ3000Engine
 import EPDJ3000Kit
+import EPDJ3000KitPure
 import EPDJ3000Protocol
 import SwiftUI
 import UniformTypeIdentifiers
@@ -158,7 +159,7 @@ struct PlayerDeckView: View {
             }
             Text(session.isVirtual
                  ? "Use the buttons, or drag the on-screen platter below. CUE: while playing it returns to the cue point; while paused it sets the cue here and previews while held."
-                 : "The unit drives this player too: touch the platter to hold the record and slide to scratch, CUE and REV work as on a CDJ, a quick tap toggles play, and the fader cuts (or sets the pitch when its role is Pitch).")
+                 : "The unit drives this player too: touch the platter to hold the record and slide to scratch, CUE and REV work as on a CDJ, a quick tap toggles play, and the fader sets the channel volume (or cuts like a crossfader, or sets the pitch, by its role).")
                 .font(.caption).foregroundStyle(.secondary)
         }
     }
@@ -217,7 +218,7 @@ struct PlayerDeckView: View {
                 HStack {
                     Text("Unit slide pot is")
                     Picker("Slide pot role", selection: Binding(
-                        get: { session.config[.faderRole] ?? 0 },
+                        get: { session.config[.faderRole] ?? ConfigTable.desc(.faderRole).defaultValue },
                         set: { new in Task { await session.setConfig(.faderRole, new) } })) {
                         ForEach(roles, id: \.value) { Text($0.label).tag($0.value) }
                     }

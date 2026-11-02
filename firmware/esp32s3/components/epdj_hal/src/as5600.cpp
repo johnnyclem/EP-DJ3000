@@ -8,7 +8,9 @@ namespace {
 const char* TAG = "as5600";
 constexpr uint8_t kRegStatus = 0x0B;  // bit 5 MD magnet detected, bit 4 ML too weak, bit 3 MH too strong
 constexpr uint8_t kRegRawAngle = 0x0C;
-constexpr unsigned kFailuresBeforeBackoff = 8;
+// Each failed read can block for its 2 ms timeout (not less: the driver counts ticks, so 1 ms may expire early),
+// so a stuck bus costs this many milliseconds of the 1 kHz loop once per backoff.
+constexpr unsigned kFailuresBeforeBackoff = 2;
 constexpr uint64_t kBackoffUs = 100000;
 }  // namespace
 

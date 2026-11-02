@@ -7,10 +7,10 @@
  *   task            core  prio  what it does
  *   engine           1     24   every 1 ms: drain input queues -> sample ADC/touch/AS5600/buttons -> Engine::step()
  *                               -> deliver Engine output (USB, TRS, radio) -> LED. The ONLY caller of the core.
- *   tinyusb          1     22   esp_tinyusb's tud_task(): enumeration, control requests (UAC2 volume/mute/clock),
+ *   tinyusb          1     22   esp_tinyusb's tud_task(): enumeration, control requests (USB audio volume/mute),
  *                               MIDI endpoint servicing. Its callbacks only copy into queues or atomics.
  *   audio            0     22   one 48-frame block per ms: ring -> drift compensator -> volume/tone -> I2S. Paced by
- *                               i2s_channel_write blocking on the DMA ring; computes the UAC2 feedback value.
+ *                               i2s_channel_write blocking on the DMA ring; computes the USB audio feedback value.
  *   link             0     21   paces ESP-NOW sends (one in flight, waits for the send callback).
  *   trs_rx           0     20   UART1 events -> time-stamped byte chunks.
  *   diag             0      3   the only task that prints in steady state.
@@ -25,12 +25,19 @@
  *                             radio      Wi-Fi task, ESP-NOW recv callback   -> radio::pop
  *     output of the engine  USB: tud_midi_n_packet_write straight from the engine task (TinyUSB serialises endpoint
  *                           access with a priority-inheriting mutex; the pattern its own FreeRTOS examples use). A full
- *                           FIFO keeps ONE event in hand and retries next tick; after 100 ms it is dropped.
+ *                           FIFO keeps ONE event in hand and retries next tick; after 100 ms it is dropped, and from then
+ *                           on USB is "stalled": later events are dropped on their first refused packet instead of each
+ *                           waiting 100 ms, so a host that does not read the port never slows TRS or the radio (output_pump.h).
  *                           TRS: UART TX ring, never blocks (drops when full). Radio: radio::send -> tx queue -> link task.
  *     USB audio             USB interrupt -> lock-free SPSC ring (no float, no locks) -> audio task. Feedback goes back
  *                           as one 32-bit store (tud_audio_n_fb_set). Float is used only in tasks: the S3 does not allow
  *                           FPU instructions in interrupts.
  *     engine <-> audio      atomics only (test tone request, volume, streaming flag).
+ *
+ *   Pacing: the engine task sleeps until the next 1 ms tick every iteration; after an overrun of more than two ticks
+ *   the lost ticks are dropped rather than caught up (tick_pacing.h), so it can never run without sleeping and starve the
+ *   TinyUSB task (same core, lower priority), IDLE1 or the watchdog. ADC conversions run with interrupts off; AdcInputs
+ *   times them at boot and keeps the engine's share of each millisecond under 400 us.
  *
  *   Priority inversion: the engine task is the highest application priority but waits on nothing a lower task can hold
  *   except TinyUSB's endpoint mutex (inheritance, critical sections of microseconds). Every queue operation it makes is
@@ -129,12 +136,22 @@ extern "C" void app_main(void) {
   }
 
   // ---- DAC ----
-  // dacMode decides at boot because the USB descriptors cannot change afterwards.
-  const hal::DacDetection dd = hal::detectDac(&g_i2c);
+  // dacMode decides at boot because the USB descriptors cannot change afterwards. Only AUTO looks at the strap
+  // (16 ms of samples, so noise on an open wire cannot enable USB audio); ON and OFF are not second-guessed.
   const auto dacMode = static_cast<proto::DacMode>(g_cfg.get(proto::ConfigKey::DacMode));
-  bool dacPresent = dacMode == proto::DacMode::On || (dacMode == proto::DacMode::Auto && dd.present());
-  ESP_LOGI(TAG, "dac: mode %d, strap %s, codec %s -> %s", static_cast<int>(dacMode), dd.strap ? "set" : "open",
-           dd.codec ? "found" : "none", dacPresent ? "present" : "absent (MIDI only)");
+  bool dacPresent = false;
+  if (dacMode == proto::DacMode::On) {
+    dacPresent = true;
+    ESP_LOGI(TAG, "dac: mode ON (forced) -> present");
+  } else if (dacMode == proto::DacMode::Off) {
+    ESP_LOGI(TAG, "dac: mode OFF -> absent (MIDI only)");
+  } else {
+    const hal::DacDetection dd = hal::detectDac(&g_i2c);
+    dacPresent = dd.present();
+    ESP_LOGI(TAG, "dac: mode AUTO, strap low %u/%u samples%s, codec %s -> %s", static_cast<unsigned>(dd.strapLow),
+             static_cast<unsigned>(hal::DacDetection::kStrapSamples), dd.strapUnstable() ? " (UNSTABLE: wire or contact?)" : "",
+             dd.codec ? "found" : "none", dacPresent ? "present" : "absent (MIDI only)");
+  }
   if (dacPresent && !audio_out::start(usb_dev::audioFeedbackSink())) {
     ESP_LOGE(TAG, "I2S output failed to start: continuing without audio");
     dacPresent = false;
@@ -174,7 +191,7 @@ extern "C" void app_main(void) {
   id.epoch = static_cast<uint16_t>(esp_random() & 0xFFFFu);
   if (id.epoch == 0) id.epoch = 1;
 #ifdef CONFIG_EPDJ_LINK_GROUP
-  id.linkGroup = CONFIG_EPDJ_LINK_GROUP;
+  id.linkGroup = CONFIG_EPDJ_LINK_GROUP;  // build-time default: the engine uses it while the linkGroup config key is 0
 #endif
 
   Engine* engine = new (g_engineStorage) Engine(g_cfg, g_platform, id);
@@ -188,7 +205,11 @@ extern "C" void app_main(void) {
   g_rt.trs = trsOn ? &g_trs : nullptr;
   g_rt.led = ledOn ? &g_led : nullptr;
   g_rt.radioOn = radioOn;
+  g_rt.linkGroupDefault = id.linkGroup;
   g_rt.dacPresent = dacPresent;
+
+  if (radioOn) ESP_LOGI(TAG, "link group %u (%s)", static_cast<unsigned>(app::effectiveLinkGroup(g_rt)),
+                        g_cfg.get(proto::ConfigKey::LinkGroup) != 0 ? "linkGroup config key" : "build default");
 
   app::startEngineTask(&g_rt);
   app::startDiagTask(&g_rt);

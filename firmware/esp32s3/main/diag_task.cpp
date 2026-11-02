@@ -24,25 +24,27 @@ void sensorLine(const Runtime& rt) {
     o += static_cast<size_t>(snprintf(touch + o, sizeof touch - o, "%u%s", static_cast<unsigned>(s.touchRaw[i].load()),
                                       i + 1 < rt.touch->count() ? " " : ""));
   }
-  ESP_LOGI(TAG, "sens: fader=%u knob=%u angle=%u%s cue=%d rev=%d touch=[%s] fresh=%u%%",
+  ESP_LOGI(TAG, "sens: fader=%u knob=%u angle=%u%s cue=%d rev=%d touch=[%s]",
            static_cast<unsigned>(s.fader.load()), static_cast<unsigned>(s.knob.load()), static_cast<unsigned>(s.angle.load()),
            rt.as5600->present() ? (s.angleValid.load() ? "" : "(bad)") : "(none)", rt.buttons->cue() ? 1 : 0,
-           rt.buttons->rev() ? 1 : 0, touch, rt.touch->freshPercent());
+           rt.buttons->rev() ? 1 : 0, touch);
 }
 
 void statsLines(const Runtime& rt) {
   LoopStats& s = loopStats();
   const Engine::Stats& es = rt.engine->stats();
-  ESP_LOGI(TAG, "loop: %lu iterations, %lu over 1 ms (max %lu us), %lu late wake-ups; out queue %u B (peak %lu), dropped %lu",
+  ESP_LOGI(TAG, "loop: %lu iterations, %lu over 1 ms (max %lu us), %lu late wake-ups, %lu resyncs; out queue %u B (peak %lu), dropped %lu",
            static_cast<unsigned long>(s.iterations.load()), static_cast<unsigned long>(s.overruns.load()),
            static_cast<unsigned long>(s.maxIterationUs.load()), static_cast<unsigned long>(s.lateWakeups.load()),
+           static_cast<unsigned long>(s.tickResyncs.load()),
            static_cast<unsigned>(rt.engine->queuedBytes()), static_cast<unsigned long>(es.outHighWaterBytes),
            static_cast<unsigned long>(es.outDropped));
   s.maxIterationUs.store(0);
 
   const usb_dev::Stats us = usb_dev::stats();
   ESP_LOGI(TAG, "usb: %s%s midi rx %lu (dropped %lu) tx %lu (rejected %lu), tx stalls %lu drops %lu",
-           usb_dev::mounted() ? "mounted" : "not mounted", usb_dev::suspended() ? " suspended" : "",
+           usb_dev::mounted() ? "mounted" : "not mounted",
+           usb_dev::suspended() ? (usb_dev::hostActive() ? " suspended" : " suspended (no host)") : "",
            static_cast<unsigned long>(us.rxPackets), static_cast<unsigned long>(us.rxDropped),
            static_cast<unsigned long>(us.txPackets), static_cast<unsigned long>(us.txRejected),
            static_cast<unsigned long>(s.usbStalls.load()), static_cast<unsigned long>(s.usbDrops.load()));
@@ -60,12 +62,13 @@ void statsLines(const Runtime& rt) {
   if (rt.radioOn) {
     const radio::Stats rs = radio::stats();
     const link::Link& lk = rt.engine->link();
-    ESP_LOGI(TAG, "link: %s, peers %u, radio rx %lu (dropped %lu) tx %lu (queue full %lu, failed %lu), core rx ok %lu corrupt %lu",
+    ESP_LOGI(TAG, "link: group %u %s, peers %u, radio rx %lu (dropped %lu) tx %lu (queue full %lu, failed %lu), core rx ok %lu corrupt %lu other-group %lu",
+             static_cast<unsigned>(effectiveLinkGroup(rt)),
              lk.linkUp() ? (lk.bridging() ? "up, bridging" : "up") : "searching", static_cast<unsigned>(lk.peers().count()),
              static_cast<unsigned long>(rs.rxPackets), static_cast<unsigned long>(rs.rxDropped),
              static_cast<unsigned long>(rs.txPackets), static_cast<unsigned long>(rs.txQueueFull),
              static_cast<unsigned long>(rs.txFailed), static_cast<unsigned long>(lk.stats().rxPackets),
-             static_cast<unsigned long>(lk.stats().rxCorrupt));
+             static_cast<unsigned long>(lk.stats().rxCorrupt), static_cast<unsigned long>(lk.stats().rxForeign));
   }
   if (rt.trs != nullptr) {
     ESP_LOGI(TAG, "trs: rx overflows %lu, tx dropped %lu", static_cast<unsigned long>(rt.trs->rxOverflows()),

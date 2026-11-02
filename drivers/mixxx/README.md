@@ -15,11 +15,14 @@ The Mixxx manual says Deck outputs "are taken post-fader, which means they inclu
 volume and crossfader adjustments and applied effects", and that the internal mixer must
 be left neutral when mixing on external hardware.
 
-So with the **default `FADER_ROLE = "crossfader"`, moving a unit's slide pot moves Mixxx's
-crossfader, which (decks on opposite sides) cuts one deck's output**: the opposite of what
-you want in that rig. For it, set `FADER_ROLE = "rate"` (CDJ-style tempo fader) or configure the unit's
-`faderRole` to `PITCH`. The crossfader default is kept because it is the contract's default
-and suits a single deck on a laptop with Mixxx's own mixer.
+The unit's default `faderRole` is `CHANNEL_VOLUME` (CC 7 / 39): each unit's slide pot cuts its own
+deck's volume (`[ChannelN],volume`) and Mixxx's crossfader is never touched, so two units do not fight
+over it. Because the Deck outputs are post-fader, that cut is audible on the Sidekick channel. Leave the
+rest of Mixxx's mixer neutral (crossfader centred, EQ flat); nothing else needs setting.
+
+The other roles: `PITCH` (CC 25 / 57) makes the pot a CDJ-style tempo fader (`[ChannelN],rate`).
+`CROSSFADER` (CC 23 / 55) is the one to avoid in this rig: by default `FADER_ROLE` sends it to Mixxx's master
+crossfader, which (decks on opposite sides) cuts one deck's output, and two units would both drive it.
 
 The orange knob drives the deck's Quick Effect (filter). That one is deliberate: applied
 effects are included in the Deck outputs, so it stays audible through the hardware mixer.
@@ -34,7 +37,7 @@ XML:
 |---|---|
 | `EP-DJ3000.midi.xml` | MIDI bindings (generated, see [Developing](#developing)) |
 | `EP-DJ3000-scripts.js` | the mapping logic |
-| `epdj3000-protocol.js` | wire constants, an exact copy of `drivers/common/epdj3000-protocol.js` |
+| `epdj3000-protocol.js` | wire constants, generated from the contract by `tools/gen_protocol.py` |
 
 Easiest on every OS: in Mixxx open *Preferences ‣ Controllers* and click **Open User
 Mapping Folder**, copy the three files in, then close and reopen *Preferences ‣
@@ -81,10 +84,11 @@ cp drivers/mixxx/EP-DJ3000.midi.xml drivers/mixxx/EP-DJ3000-scripts.js \
 | Platter tap | note 39 | toggles `[ChannelN],play`. The touch down/up of the tap scratches for a moment and releases |
 | CUE | note 36 | `cue_default` follows the button (honours Mixxx's cue mode setting). LED follows `cue_indicator` |
 | REV | note 37 | `reverseroll` while held. See `REV_BEHAVIOR` |
-| Slide pot | CC 23/55 | per `FADER_ROLE`: `[Master],crossfader` (default), deck `volume`, or deck `rate` |
-| Slide pot, unit set to CHANNEL_VOLUME / PITCH | CC 7/39 / CC 25/57 | deck `volume` / deck `rate`, regardless of `FADER_ROLE` |
+| Slide pot, unit default (`CHANNEL_VOLUME`) | CC 7/39 | deck `volume`, regardless of `FADER_ROLE` |
+| Slide pot, unit set to `PITCH` | CC 25/57 | deck `rate`, regardless of `FADER_ROLE` |
+| Slide pot, unit set to `CROSSFADER` | CC 23/55 | per `FADER_ROLE`: `[Master],crossfader` (default), deck `volume`, or deck `rate` |
 | Orange knob | CC 24/56 | `[QuickEffectRack1_[ChannelN]],super1` (the deck's filter knob) |
-| Play LED | host to unit, note 39 | lit while `[ChannelN],play` is 1 |
+| Play LED | host to unit, note 39 | lit while `[ChannelN],play` is 1. Feedback only: it never starts the unit's clock, in any mode |
 | Tempo set (unit as tempo source) | CC 20/52, BPM x 10 | `[ChannelN],bpm` = value / 10. Needs an analysed track, 20.0-300.0 only, ignored when within 0.05 BPM |
 | Tempo nudge | CC 21 (relative) | `bpm` +/- 0.1 per step, clamped to 20-300 |
 | Transport | CC 29 | 1 = `play` on, 2 = `play` off, 0 = `start_stop` (seek to start and stop) |
@@ -105,7 +109,7 @@ At the top of `EP-DJ3000-scripts.js`, as properties of `EPDJ3000Mixxx`:
 
 | Setting | Default | |
 |---|---|---|
-| `FADER_ROLE` | `"crossfader"` | `"crossfader"`, `"volume"` or `"rate"`; what CC 23/55 controls |
+| `FADER_ROLE` | `"crossfader"` | `"crossfader"`, `"volume"` or `"rate"`; what CC 23/55 controls, i.e. a unit set to `faderRole` = `CROSSFADER`. Not used for the default CC 7/39 or for CC 25/57 |
 | `REV_BEHAVIOR` | `"roll"` | `"roll"`: `reverseroll` while held (momentary reverse that resumes where the track would have been, Mixxx's "censor"). `"toggle"`: `reverse` flips each press, CDJ style |
 | `BEND_SCALE` | `1.0` | untuned |
 | `SCRATCH` | see file | `rpm`, `alpha`, `beta`, ramp on touch / release. alpha and beta are the values the Mixxx docs suggest as a starting point, untuned |
@@ -120,10 +124,14 @@ Switch to `"toggle"` if you want a latching reverse.
   a real pot, LED timing and the pitch fader's direction (it follows Mixxx's *rate slider
   direction* preference; flip `faderInvert` on the unit if it is backwards) are unknown
   until tried on the hardware.
-- With `FADER_ROLE = "crossfader"` and two units, both pots drive the one master crossfader;
-  the last one moved wins, with no soft takeover (a crossfader should follow the hand).
-- LED feedback for both decks is sent to every enabled port, on each deck's own channel.
-  This relies on the firmware ignoring channel-voice messages that are not on its channel.
+- With two units both set to `faderRole` = `CROSSFADER` and `FADER_ROLE = "crossfader"`, both pots
+  drive the one master crossfader; the last one moved wins, with no soft takeover (a crossfader should
+  follow the hand).
+- Deck volume, rate and the filter knob use soft takeover: a pot that disagrees with Mixxx's value is ignored
+  until it reaches that value, so the deck does not jump. With the default role the pot can seem dead at first.
+- LED feedback for both decks is sent to every enabled port, on each deck's own channel. That is correct
+  because a unit ignores channel-voice messages that are not on its own channel (PROTOCOL.md section 2,
+  "Channel filter"; implemented and host-tested in the firmware core, not tried on hardware).
 - Mixxx does not use MIDI clock (its MIDI controller code drops `0xF8`) and the mapping has
   no MTC, so a unit in SYNC_MASTER mode can set the deck tempo (CC 20/52) and transport but
   its clock and timecode go unused.
@@ -150,8 +158,8 @@ Run: `node drivers/test/mixxx/run.mjs` (Node only, no dependencies, exit code 1 
   channel, and a second script instance for the linked cable.
 - **Verified, static:** the XML parses with the test's own well-formedness check and with
   `xmllint`; every `<status>`/`<midino>` equals the set derived independently from
-  `protocol/epdj3000.json`; the checked-in XML equals the generator output; the protocol
-  file copy equals `drivers/common`. Engine signatures and control names were checked by
+  `protocol/epdj3000.json`; the checked-in XML equals the generator output; the `mixxx/` constants
+  file equals the one in `drivers/common` (the generator writes both). Engine signatures and control names were checked by
   reading the Mixxx 2.4 and 2.5 sources and manual, not by running them.
 - **Not verified:** that real Mixxx accepts the XML and evaluates the script, that the
   unit's ports show up and bind as described, and everything listed under Known limits.
@@ -161,9 +169,9 @@ Run: `node drivers/test/mixxx/run.mjs` (Node only, no dependencies, exit code 1 
 `EP-DJ3000.midi.xml` is generated from the contract constants so its numbers cannot drift:
 
 ```sh
+python3 tools/gen_protocol.py                 # writes the constants, here and in drivers/common
 node drivers/test/mixxx/gen-xml.mjs           # rewrite the XML
 node drivers/test/mixxx/gen-xml.mjs --check   # fail if it is stale
-cp drivers/common/epdj3000-protocol.js drivers/mixxx/   # after the contract is regenerated
 node drivers/test/mixxx/run.mjs
 ```
 

@@ -24,12 +24,14 @@
     * Units default to MIDI channel 1 (Deck A, zero-based 0) and channel 2 (Deck B, zero-based 1).
       Every element therefore exists twice: channel 0 with the plain name, channel 1 with the
       suffix _CH2. Both twins are mapped to the same action, so either unit works whichever deck
-      VirtualDJ gives it. Output (LEDs) is sent on both channels; a unit acts on its own.
+      VirtualDJ gives it. Output (LEDs) is sent on both channels; a unit ignores the channel that is
+      not its own (PROTOCOL.md section 2, channel filter) and acts on its own.
     * 14-bit sliders: cc is the LSB controller, ccmsb the MSB (as in the official EQ_LOW example).
       The unit sends MSB then LSB.
     * Jog: relative CC, value 64 + delta (delta -63..+63), 1024 ticks per revolution, positive =
       clockwise. That is zero="0x40" full="1024". Not inverted.
-    * The slide pot sends ONE of CROSSFADER / LEVEL / PITCH depending on the unit's faderRole.
+    * The slide pot sends ONE of CROSSFADER / LEVEL / PITCH depending on the unit's faderRole
+      (LEVEL, CC 7/39, by default).
     * vid/pid are the contract's DEV PLACEHOLDER (pid.codes test PID 0x1209:0x0001). Change both
       here and in the audio line when the unit gets a real PID. check.mjs follows the contract.
     * Not defined on purpose: bpm, bpmNudge, tap, transport. The unit only sends them in its

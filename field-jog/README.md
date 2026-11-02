@@ -1,5 +1,16 @@
 # FIELD JOG
 
+> **Superseded for the firmware, kept for the mechanics.** This is the original Field Jog (Pro Micro or Pico, AS5600 over a
+> bearing platter, hall-sensor loose fader). The project has moved to an **ESP32-S3 deck** (`firmware/`, `macos/`,
+> `drivers/`, `docs/`; start at the [root README](../README.md)) with a fixed **segmented conductive-PLA platter** sensed
+> by capacitive touch, a **slide pot** instead of the hall fader, native-USB MIDI plus an optional USB DAC, TRS MIDI, and
+> an ESP-NOW link between two decks. What changed against the text below: the MIDI map is new (the slide pot defaults to CC
+> 7/39 channel volume, jog stays CC 22, CUE/REV stay notes 36/37, knob stays CC 24: `docs/PROTOCOL.md`), and `firmware/field_jog.ino`
+> is not the firmware any more. **The mechanical files below were not redrawn: this shell does not fit the new design**
+> (Pico-sized bay, one micro-USB window, one jack hole, hall-fader slot with no pot mount, plain disc platter), so there is
+> no enclosure for it yet. See [`hardware/README.md`](../hardware/README.md). The Technic-pin hole positions below are the
+> original author's and have not been checked against real EP hardware.
+
 A scratch deck shell that sits in the same row as a Teenage Engineering
 EP-133 K.O. II and an EP-136 K.O. Sidekick.
 

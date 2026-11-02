@@ -162,7 +162,8 @@ EPDJ_TEST(engine_link_deck_b_controls_arrive_on_deck_a_cable_2_exactly) {
   kc.rawMax = 4095;
   kc.deadLoPermille = kc.deadHiPermille = 0;
   knob.configure(kc);
-  CHECK_EQ(lastPairOf(c2, 1, proto::cc::kCrossfaderMsb, proto::cc::kCrossfaderLsb), fader.update(2500, 0).value);
+  CHECK_EQ(lastPairOf(c2, 1, proto::cc::kChannelVolumeMsb, proto::cc::kChannelVolumeLsb), fader.update(2500, 0).value);  // the default role
+  CHECK_EQ(lastPairOf(c2, 1, proto::cc::kCrossfaderMsb, proto::cc::kCrossfaderLsb), -1);
   CHECK_EQ(lastPairOf(c2, 1, proto::cc::kKnobMsb, proto::cc::kKnobLsb), knob.update(3100, 0).value);
 
   // Buttons: every press and release, once, in order. Touch: one down, one up.
@@ -187,6 +188,7 @@ EPDJ_TEST(engine_link_deck_b_controls_arrive_on_deck_a_cable_2_exactly) {
 
 EPDJ_TEST(engine_link_bridge_latency_on_a_clean_air) {
   Pair p(3, 0.0, 0.0);
+  p.b.set(ConfigKey::FaderRole, 0);  // CROSSFADER, whatever the default is
   p.b.in.faderRaw = 1000;
   p.rig.run(kSettleMs);
   const uint64_t moveT = p.b.t;
@@ -378,6 +380,89 @@ EPDJ_TEST(engine_link_disable_and_deck_conflict) {
     CHECK_EQ(peer.deck, 0);
     CHECK_EQ(peer.status & link::Link::kPeerConflict, link::Link::kPeerConflict);
   }
+}
+
+EPDJ_TEST(engine_link_group_is_a_live_config_value) {
+  Pair p(10, 0.0, 0.0);
+  p.rig.run(kSettleMs);
+  CHECK(p.a.engine.link().routeIn() && p.b.engine.link().routeOut());
+  for (int i = 0; i < 300; ++i) {  // a finger rests on B: its touch note is held at A's host
+    p.b.ring.read(0.3, 1.0, p.b.rng, p.b.in.touchRaw);
+    p.rig.step();
+  }
+  CHECK_EQ(countEq(usbMsgs(p.a.log, 2), b({0x91, 38, 127})), 1);
+  const size_t mark = p.a.log.size();
+
+  // B joins rig 5 over SysEx: it forgets A at once, no reboot.
+  std::vector<Reply> r = ask(p.b, 1, Cmd::SetConfig, setConfigPayload(ConfigKey::LinkGroup, 5));
+  CHECK(r.size() == 1 && r[0].cmd == proto::sysex::kAck);
+  CHECK_EQ(p.b.cfg.get(ConfigKey::LinkGroup), 5);
+  CHECK(!p.b.engine.link().linkUp());
+  CHECK(p.b.engine.led().link == LedStatus::LinkLed::Searching);
+  p.rig.run(2500);
+  CHECK(!p.a.engine.link().linkUp());                                     // A timed B out ...
+  CHECK_EQ(countEq(usbMsgs(p.a.log, 2, mark), b({0x81, 38, 0})), 1);     // ... and released B's held note
+  CHECK(p.a.engine.link().stats().rxForeign > 0 && p.b.engine.link().stats().rxForeign > 0);
+  CHECK(!p.b.engine.link().routeOut() && !p.a.engine.link().routeIn());
+
+  // A follows, the two find each other again and the bridge works.
+  r = ask(p.a, 0, Cmd::SetConfig, setConfigPayload(ConfigKey::LinkGroup, 5));
+  CHECK(r.size() == 1 && r[0].cmd == proto::sysex::kAck);
+  p.rig.run(2500);
+  CHECK(p.a.engine.link().linkUp() && p.b.engine.link().linkUp());
+  CHECK(p.a.engine.link().routeIn() && p.b.engine.link().routeOut());
+  CHECK(p.a.engine.led().link == LedStatus::LinkLed::Bridging);
+  const size_t mark2 = p.a.log.size();
+  p.b.in.faderRaw = 3500;
+  p.rig.run(100);
+  CHECK(lastPairOf(usbMsgs(p.a.log, 2, mark2), 1, proto::cc::kChannelVolumeMsb, proto::cc::kChannelVolumeLsb) > 0);
+}
+
+// The radio group of a unit as its HELLO announces it.
+static uint8_t helloGroup(Engine& e, RawInputs* in, uint64_t* t) {
+  in->nowUs = *t;
+  e.step(*in);
+  *t += 1000;
+  int group = -1;
+  OutEvent ev;
+  while (e.popOut(&ev)) {
+    link::Header h;
+    const uint8_t* payload = nullptr;
+    if (ev.kind == OutEvent::Kind::Link && link::decodePacket(ev.data, ev.len, &h, &payload) == link::DecodeError::None) group = h.group;
+  }
+  return static_cast<uint8_t>(group);
+}
+
+EPDJ_TEST(engine_link_group_config_wins_over_the_build_time_default) {
+  Config cfg;
+  FakePlatform plat;
+  Engine::Identity id = Deck::ident(0x0A, 100);
+  id.linkGroup = 3;  // the platform's Kconfig value
+  Engine e(cfg, plat, id);
+  RawInputs in;
+  in.usbMounted = true;
+  uint64_t t = 1000000;
+  CHECK_EQ(helloGroup(e, &in, &t), 3);  // linkGroup 0 in the config: the build-time default applies
+
+  cfg.set(ConfigKey::LinkGroup, 9);     // live: the next packet is already in the new group
+  CHECK_EQ(helloGroup(e, &in, &t), 9);
+  cfg.set(ConfigKey::LinkGroup, 0);     // back to "not set": the default again
+  CHECK_EQ(helloGroup(e, &in, &t), 3);
+
+  Config cfg2;
+  cfg2.set(ConfigKey::LinkGroup, 200);  // a value stored in flash is used from the first packet
+  FakePlatform plat2;
+  Engine e2(cfg2, plat2, id);
+  uint64_t t2 = 1000000;
+  RawInputs in2;
+  CHECK_EQ(helloGroup(e2, &in2, &t2), 200);
+
+  Config cfg3;
+  FakePlatform plat3;
+  Engine e3(cfg3, plat3, Deck::ident(0x0C, 102));  // no default at all
+  uint64_t t3 = 1000000;
+  RawInputs in3;
+  CHECK_EQ(helloGroup(e3, &in3, &t3), 0);
 }
 
 EPDJ_TEST(engine_pair_session_is_deterministic) {

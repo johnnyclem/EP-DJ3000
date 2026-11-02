@@ -4,6 +4,7 @@
 
 import AVFoundation
 import EPDJ3000Engine
+import EPDJ3000KitPure
 import Foundation
 
 public struct LoadedTrack: Sendable {

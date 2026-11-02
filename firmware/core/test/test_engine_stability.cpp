@@ -154,13 +154,14 @@ void randomSysex(Unit& u, uint64_t nowLocal) {
   size_t n = 0;
   const uint32_t pick = r.below(100);
   if (pick < 50) {  // SET_CONFIG: a valid value most of the time, anything otherwise
-    const int key = r.below(10) == 0 ? static_cast<int>(r.below(256)) : static_cast<int>(r.below(32));
+    const int key = r.below(10) == 0 ? static_cast<int>(r.below(256)) : static_cast<int>(r.below(proto::kConfigCount));
     int32_t v = static_cast<int32_t>(r.next());
-    if (key < 32 && r.below(5) != 0) {
+    if (key < static_cast<int>(proto::kConfigCount) && r.below(5) != 0) {
       const proto::ConfigDesc& d = proto::kConfigTable[key];
       v = d.minValue + static_cast<int32_t>(r.below(static_cast<uint32_t>(d.maxValue - d.minValue + 1)));
     }
     if (key == static_cast<int>(ConfigKey::LinkEnable) && r.below(10) < 8) v = 1;  // the link should be up most of the time
+    if (key == static_cast<int>(ConfigKey::LinkGroup) && r.below(10) < 9) v = 0;   // ... and mostly in one group (the others split the rig for a while)
     uint8_t p[5];
     p[0] = static_cast<uint8_t>(key);
     syx::writeI32le(v, p + 1);
@@ -377,10 +378,11 @@ EPDJ_TEST(engine_stability_one_hour_two_units_random_everything) {
     u.in.nowUs = u.local(u.t);
     u.engine.step(u.in);
     u.t += 1000;
-    while (u.engine.popOut(&e)) cc += (e.kind == OutEvent::Kind::Message && e.len == 3 && e.data[0] == 0xB0 && (e.data[1] == 23 || e.data[1] == 55)) ? 1u : 0u;
+    while (u.engine.popOut(&e)) cc += (e.kind == OutEvent::Kind::Message && e.len == 3 && e.data[0] == 0xB0 && (e.data[1] == 7 || e.data[1] == 39)) ? 1u : 0u;
   }
-  CHECK(cc > 100);
-  n = syx::encodeFrame(0, static_cast<uint8_t>(Cmd::GetInfo), nullptr, 0, buf, sizeof buf);
+  CHECK(cc > 100);  // the default fader role is CHANNEL_VOLUME (CC 7 / 39)
+  // LOAD_DEFAULTS kept the deck the chaos left it on, so ask for that one.
+  n = syx::encodeFrame(static_cast<uint8_t>(u.cfg.get(ConfigKey::DeckId)), static_cast<uint8_t>(Cmd::GetInfo), nullptr, 0, buf, sizeof buf);
   u.engine.onSysexIn(buf, n, u.local(u.t));
   CHECK(u.engine.popOut(&e) && e.kind == OutEvent::Kind::SysEx);
 }

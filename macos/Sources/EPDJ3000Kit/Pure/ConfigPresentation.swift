@@ -40,7 +40,7 @@ public enum ConfigPresentation {
             return .toggle
         case .touchSectors, .touchOnPermille, .touchOffPermille, .tapMaxMs, .tapMoveTicks,
              .faderRawMin, .faderRawMax, .faderDeadLoPermille, .faderDeadHiPermille,
-             .knobRawMin, .knobRawMax, .bpmX10, .ledBrightness, .buttonDebounceMs:
+             .knobRawMin, .knobRawMax, .bpmX10, .ledBrightness, .buttonDebounceMs, .linkGroup:
             return .integer
         }
     }
@@ -54,7 +54,7 @@ public enum ConfigPresentation {
             return "Slide pot"
         case .knobRole, .knobRawMin, .knobRawMax, .knobInvert: return "Knob"
         case .clockOutMask, .bpmX10, .mtcEnable, .mtcFps: return "Clock, tempo and time code"
-        case .dacMode, .linkEnable, .linkBridge, .trsMidiEnable: return "Audio, link and ports"
+        case .dacMode, .linkEnable, .linkBridge, .linkGroup, .trsMidiEnable: return "Audio, link and ports"
         case .ledBrightness, .buttonDebounceMs: return "Misc"
         }
     }
@@ -66,6 +66,12 @@ public enum ConfigPresentation {
     /// PROTOCOL.md section 3.1: these only take effect after a reboot.
     public static func needsReboot(_ key: ConfigKey) -> Bool {
         key == .dacMode || key == .deckId
+    }
+
+    /// Keys the unit refuses in SET_CONFIG (NAK NOT_SUPPORTED): the deck id changes only through SET_DECK, which
+    /// restarts the unit. An editor shows these but offers a different action to change them.
+    public static func isReadOnly(_ key: ConfigKey) -> Bool {
+        key == .deckId
     }
 
     public static func unit(for key: ConfigKey) -> String? {

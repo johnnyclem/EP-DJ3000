@@ -117,7 +117,9 @@ class Engine {
     uint16_t caps = 0;      // proto::caps hardware capabilities; the engine adds kDac while a DAC is present
     link::Mac mac;          // station MAC from efuse
     uint16_t epoch = 1;     // random per boot (hardware RNG)
-    uint8_t linkGroup = 0;  // rig id
+    // Build-time rig id, used while ConfigKey::LinkGroup is 0. A non-zero config value wins over it and
+    // applies live (docs/LINK.md section 11).
+    uint8_t linkGroup = 0;
   };
 
   // USB-MIDI cables 0..2 and the 3.5 mm TRS jack.
@@ -244,9 +246,11 @@ class Engine {
   void ensureStarted();
   void applyConfig(bool force);
   void setCfg(proto::ConfigKey key, int32_t value);
-  // Like Config::effectiveChannel(), but "auto" follows the deck this unit booted as: deckId only takes
-  // effect after a restart (PROTOCOL.md 3.1), so LOAD_DEFAULTS or a SET_CONFIG of it must not move us.
+  // Like Config::effectiveChannel(), but "auto" follows the deck this unit booted as: SET_DECK (and the
+  // CUE+REV deck swap) write the new deck into the config and then restart, so until the restart the
+  // channel, the LED deck and the radio id must keep saying what the USB name says.
   uint8_t channel() const;
+  uint8_t linkGroup() const;
   bool trsEnabled() const { return cfg_.get(proto::ConfigKey::TrsMidiEnable) != 0; }
   bool isMaster() const { return mode_ == proto::Mode::SyncMaster; }
   void setMode(proto::Mode m);
@@ -261,6 +265,7 @@ class Engine {
   void runJog();
   void runFader();
   void runKnob();
+  bool knobTakesOver(uint16_t v14);
   void sendFader(uint16_t v14);
   void sendKnob(uint16_t v14);
   void resendContinuous();
@@ -378,6 +383,11 @@ class Engine {
   // continuous controls
   int32_t faderSent_ = -1, knobSent_ = -1;
   bool faderForce_ = false, knobForce_ = false;
+  // knobRole = BPM: the knob does not set the tempo until it has moved away from where it was when it
+  // was armed (boot, role or calibration change), so a boot never replaces the saved tempo.
+  enum class KnobPickup : uint8_t { Arm, Waiting, Active };
+  KnobPickup knobPickup_ = KnobPickup::Arm;
+  uint16_t knobHome_ = 0;
   uint16_t faderOut_ = 0, knobOut_ = 0;
   uint16_t angleSeen_ = 0;
   bool angleValidSeen_ = false;

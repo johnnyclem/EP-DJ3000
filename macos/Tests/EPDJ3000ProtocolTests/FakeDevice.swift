@@ -1,14 +1,25 @@
 import Foundation
 @testable import EPDJ3000Protocol
 
-/// In-memory EP-DJ3000, written against docs/PROTOCOL.md section 3 (not against DeviceClient).
-/// Answers a request only if its deck byte matches the unit's deck id or is 127.
+/// In-memory EP-DJ3000, written against docs/PROTOCOL.md section 3 (not against DeviceClient) and checked against it by
+/// FakeDeviceTests. Answers a request only if its deck byte matches the unit's deck id or is 127.
 final class FakeDevice: MidiTransport, @unchecked Sendable {
     struct State {
         var deck: UInt8
-        var config = ConfigTable.all.map(\.defaultValue)
-        /// Keys this "firmware" knows; lower it to simulate an older unit (BAD_KEY above it).
-        var keyCount = ConfigKey.allCases.count
+        /// One value per key the "firmware" has, indexed by key id. `deckId` always equals `deck`.
+        var config = State.defaultConfig(keyCount: ConfigKey.allCases.count, deck: 0)
+        /// Keys this "firmware" has. Lower it to simulate an older unit (BAD_KEY above it), raise it for a newer one
+        /// whose extra keys this build does not know.
+        var keyCount = ConfigKey.allCases.count {
+            didSet {
+                precondition(keyCount > Int(ConfigKey.deckId.rawValue))
+                if keyCount < config.count {
+                    config.removeLast(config.count - keyCount)
+                } else {
+                    config += State.defaultConfig(keyCount: keyCount, deck: deck)[config.count...]
+                }
+            }
+        }
         var info = Info(protocolVersion: Proto.protocolVersion, fwMajor: 0, fwMinor: 1, fwPatch: 2, hwRev: 1, deck: 0, mode: 0,
                         platterSource: 1, caps: 0x3E, serial: 0xDEADBEEF, uptimeS: 3600)
         var peers: [Peer] = []
@@ -21,12 +32,12 @@ final class FakeDevice: MidiTransport, @unchecked Sendable {
         var chunkSize = 0
         var interleaveRealtime = false
         var forcedNak: (command: UInt8, code: UInt8)?
-        var setDeckAcksWithNewId = false
         var sendError: Error?
 
         // Observations
         var requests: [SysExFrame] = []          // every valid frame received, whatever its deck
         var requestBytes: [[UInt8]] = []         // the raw bytes of those frames
+        var replies: [SysExFrame] = []           // every frame answered to a request, in order (not telemetry)
         var midiIn: [MidiEvent] = []             // non-SysEx events received
         var streamRate: UInt8 = 0
         var streamRefreshes = 0
@@ -40,6 +51,14 @@ final class FakeDevice: MidiTransport, @unchecked Sendable {
         var calKind: CalKind?
         var calMin = Int.max
         var calMax = Int.min
+
+        /// The factory defaults of a unit with `keyCount` keys, keeping `deck` as its deck id. Keys beyond this
+        /// build's table get a value no default has.
+        static func defaultConfig(keyCount: Int, deck: UInt8) -> [Int32] {
+            var values = (0..<keyCount).map { $0 < ConfigTable.all.count ? ConfigTable.all[$0].defaultValue : Int32(1000 + $0) }
+            values[Int(ConfigKey.deckId.rawValue)] = Int32(deck)
+            return values
+        }
     }
 
     let incoming: AsyncStream<[UInt8]>
@@ -51,6 +70,7 @@ final class FakeDevice: MidiTransport, @unchecked Sendable {
     init(deck: Deck = .a) {
         var s = State(deck: deck.rawValue)
         s.info.deck = deck.rawValue
+        s.config = State.defaultConfig(keyCount: s.keyCount, deck: deck.rawValue)
         state = s
         // AsyncStream.makeStream is macOS 14+; the package targets macOS 13.
         var continuation: AsyncStream<[UInt8]>.Continuation!
@@ -123,11 +143,27 @@ final class FakeDevice: MidiTransport, @unchecked Sendable {
                 state.midiIn.append(event)
                 continue
             }
-            guard let frame = try? SysExFrame.decode(raw) else { continue }
+            let frame: SysExFrame
+            do {
+                frame = try SysExFrame.decode(raw)
+            } catch SysExFrameError.badPacking {
+                // Framing, version and checksum were fine; only the payload could not be unpacked: BAD_LENGTH.
+                let (deck, command) = (raw[5], raw[6])
+                if !state.silent, deck == state.deck || deck == Proto.SysEx.deckAny, command < Proto.SysEx.replyFlag {
+                    let answer: [SysExFrame] = [.nak(deck: state.deck, command: command, error: .badLength)]
+                    state.replies += answer
+                    replies += answer
+                }
+                continue
+            } catch {
+                continue
+            }
             state.requests.append(frame)
             state.requestBytes.append(raw)
             guard !state.silent, frame.deck == state.deck || frame.deck == Proto.SysEx.deckAny else { continue }
-            replies += handle(frame)
+            let answer = handle(frame)
+            state.replies += answer
+            replies += answer
         }
         return replies
     }
@@ -155,6 +191,17 @@ final class FakeDevice: MidiTransport, @unchecked Sendable {
 
     // MARK: firmware model (called with the lock held)
 
+    /// Exact request payload length of each command; anything else is NAK BAD_LENGTH before any side effect.
+    static func payloadLength(_ command: SysExCmd) -> Int {
+        switch command {
+        case .getInfo, .saveConfig, .loadDefaults, .linkStatus: return 0
+        case .getConfig, .stream, .calBegin, .setDeck, .reboot, .identify: return 1
+        case .calEnd: return 2
+        case .testTone: return 4
+        case .setConfig: return 5
+        }
+    }
+
     private func handle(_ f: SysExFrame) -> [SysExFrame] {
         let me = state.deck
         func ack(_ c: UInt8) -> [SysExFrame] { [.ack(deck: me, command: c)] }
@@ -163,31 +210,30 @@ final class FakeDevice: MidiTransport, @unchecked Sendable {
         if let forced = state.forcedNak, forced.command == f.code {
             return [SysExFrame(deck: me, code: Proto.SysEx.nak, payload: [forced.command, forced.code])]
         }
-        switch f.kind {
-        case let .unknown(code) where code != Proto.SysEx.ack && code != Proto.SysEx.nak:
-            return nak(code, .unknownCmd)
-        case .command: break
-        default: return []  // replies, ACKs and NAKs are not for us
+        guard case let .command(command) = f.kind else {
+            if case .unknown(let code) = f.kind, code != Proto.SysEx.ack, code != Proto.SysEx.nak { return nak(code, .unknownCmd) }
+            return []  // replies, ACKs and NAKs are not for us
         }
         let p = f.payload
+        guard p.count == Self.payloadLength(command) else { return nak(f.code, .badLength) }
 
-        switch SysExCmd(rawValue: f.code)! {
+        switch command {
         case .getInfo:
             var info = state.info
             info.deck = me
             return [SysExFrame(deck: me, reply: .info, payload: info.serialized())]
 
         case .getConfig:
-            guard p.count == 1 else { return nak(f.code, .badLength) }
             if p[0] == 0xFF {
-                return (0..<state.keyCount).map { configReply(UInt8($0)) }
+                // One CONFIG per key the unit has, then the ACK that tells the host the dump is over.
+                return (0..<state.keyCount).map { configReply(UInt8($0)) } + ack(f.code)
             }
             guard Int(p[0]) < state.keyCount else { return nak(f.code, .badKey) }
             return [configReply(p[0])]
 
         case .setConfig:
-            guard p.count == 5 else { return nak(f.code, .badLength) }
             guard Int(p[0]) < state.keyCount, let key = ConfigKey(rawValue: p[0]) else { return nak(f.code, .badKey) }
+            guard key != .deckId else { return nak(f.code, .notSupported) }  // the deck changes through SET_DECK
             let value = Int32(bitPattern: UInt32(p[1]) | UInt32(p[2]) << 8 | UInt32(p[3]) << 16 | UInt32(p[4]) << 24)
             let d = ConfigTable.desc(key)
             guard (d.minValue...d.maxValue).contains(value) else { return nak(f.code, .outOfRange) }
@@ -200,18 +246,15 @@ final class FakeDevice: MidiTransport, @unchecked Sendable {
             return ack(f.code)
 
         case .loadDefaults:
-            state.config = ConfigTable.all.map(\.defaultValue)
+            state.config = State.defaultConfig(keyCount: state.keyCount, deck: state.deck)  // keeps deckId
             return ack(f.code)
 
         case .stream:
-            guard p.count == 1 else { return nak(f.code, .badLength) }
-            guard p[0] <= 100 else { return nak(f.code, .outOfRange) }
-            state.streamRate = p[0]
+            state.streamRate = min(p[0], 100)
             if p[0] > 0 { state.streamRefreshes += 1 }
             return ack(f.code)
 
         case .calBegin:
-            guard p.count == 1 else { return nak(f.code, .badLength) }
             guard let kind = CalKind(rawValue: p[0]) else { return nak(f.code, .notSupported) }
             state.calKind = kind
             state.calMin = .max
@@ -219,7 +262,7 @@ final class FakeDevice: MidiTransport, @unchecked Sendable {
             return ack(f.code)
 
         case .calEnd:
-            guard p.count == 2 else { return nak(f.code, .badLength) }
+            guard p[1] <= 1 else { return nak(f.code, .outOfRange) }
             guard let kind = CalKind(rawValue: p[0]), state.calKind == kind else { return nak(f.code, .calNotActive) }
             let (lo, hi) = (state.calMin, state.calMax)
             state.calKind = nil
@@ -235,14 +278,13 @@ final class FakeDevice: MidiTransport, @unchecked Sendable {
             return [SysExFrame(deck: me, reply: .calResult, payload: result.serialized())]
 
         case .setDeck:
-            guard p.count == 1 else { return nak(f.code, .badLength) }
             guard Deck(rawValue: p[0]) != nil else { return nak(f.code, .outOfRange) }
             state.deck = p[0]
-            // The contract does not say which id this ACK carries, so the fake can do either.
-            return [.ack(deck: state.setDeckAcksWithNewId ? p[0] : me, command: f.code)]
+            state.config[Int(ConfigKey.deckId.rawValue)] = Int32(p[0])
+            return ack(f.code)  // `me` is the deck the unit had when the request arrived: the ACK carries the OLD id
 
         case .reboot:
-            guard p.count == 1 else { return nak(f.code, .badLength) }
+            guard p[0] <= 1 else { return nak(f.code, .outOfRange) }
             state.lastReboot = p[0]
             return ack(f.code)
 
@@ -250,13 +292,13 @@ final class FakeDevice: MidiTransport, @unchecked Sendable {
             return [SysExFrame(deck: me, reply: .link, payload: [UInt8(state.peers.count)] + state.peers.flatMap { $0.serialized() })]
 
         case .testTone:
-            guard p.count == 4 else { return nak(f.code, .badLength) }
+            let (on, freq, atten) = (p[0], UInt16(p[1]) | UInt16(p[2]) << 8, p[3])
+            guard on <= 1, on == 0 || ((20...20000).contains(freq) && atten <= 96) else { return nak(f.code, .outOfRange) }
             guard state.hasDac else { return nak(f.code, .notSupported) }
             state.lastTone = p
             return ack(f.code)
 
         case .identify:
-            guard p.count == 1 else { return nak(f.code, .badLength) }
             state.lastIdentify = p[0]
             return ack(f.code)
         }

@@ -1,6 +1,7 @@
 // Test tab: MIDI monitor, raw telemetry, SysEx log and bench tools.
 
 import EPDJ3000Kit
+import EPDJ3000KitPure
 import EPDJ3000Protocol
 import SwiftUI
 

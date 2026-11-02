@@ -158,18 +158,16 @@ public actor DeviceClient {
         return value
     }
 
-    /// Every key this build knows. Completes when all of them arrived; a unit that stops short times out.
+    /// Every key the unit has: one CONFIG frame each, then ACK[GET_CONFIG] ends the dump (docs/PROTOCOL.md section 3),
+    /// so a unit with more or fewer keys than this build knows still finishes. Keys this build does not know are
+    /// skipped; keys the unit does not have are absent from the result. Without the ACK the request times out.
     public func dumpConfig() async throws -> [ConfigKey: Int32] {
         let frames = try await perform(Exchange(
-            command: .getConfig, payload: [0xFF], reply: .config, expectedFrames: ConfigKey.allCases.count, timeout: timeout,
-            accepts: { frame, seen in
-                guard let (key, _) = Self.parseConfig(frame) else { return false }
-                return !seen.contains { Self.parseConfig($0)?.0 == key }
-            }))
+            command: .getConfig, payload: [0xFF], reply: .config, untilAck: true, timeout: timeout))
         var out = [ConfigKey: Int32]()
         for f in frames {
-            guard let (key, value) = Self.parseConfig(f) else { throw DeviceError.malformedReply(.getConfig) }
-            out[key] = value
+            guard let (id, value) = Self.parseConfig(f) else { throw DeviceError.malformedReply(.getConfig) }
+            if let key = ConfigKey(rawValue: id) { out[key] = value }
         }
         return out
     }
@@ -277,7 +275,8 @@ public actor DeviceClient {
         var payload: [UInt8] = []
         /// Data reply that completes the request; nil = a plain ACK does.
         var reply: SysExReply?
-        var expectedFrames = 1
+        /// Collect every `reply` frame and complete on the ACK of the command (a GET_CONFIG dump).
+        var untilAck = false
         var timeout: Double
         /// Whether a reply frame belongs to this request, given the frames already collected.
         var accepts: (SysExFrame, [SysExFrame]) -> Bool = { _, _ in true }
@@ -386,17 +385,14 @@ public actor DeviceClient {
     }
 
     private func route(_ frame: SysExFrame) {
-        // PROTOCOL.md does not say whether SET_DECK's ACK carries the old or the new id; accept both, since
-        // the unit reboots right after and a timeout would misreport a command that worked.
-        let isSetDeckAck = pending.map { $0.exchange.command == .setDeck && frame.deck == $0.exchange.payload.first } ?? false
-        guard target == Proto.SysEx.deckAny || frame.deck == target || isSetDeckAck else { return }
+        guard target == Proto.SysEx.deckAny || frame.deck == target else { return }
         guard let p = pending else {
             routeUnsolicited(frame)
             return
         }
         switch frame.kind {
-        case let .ack(command) where command == p.exchange.command.rawValue && p.exchange.reply == nil:
-            complete(p.id, .success([frame]))
+        case let .ack(command) where command == p.exchange.command.rawValue && (p.exchange.reply == nil || p.exchange.untilAck):
+            complete(p.id, .success(p.exchange.untilAck ? p.frames : [frame]))
         case let .nak(command, code) where command == p.exchange.command.rawValue:
             if let e = SysExError(rawValue: code) {
                 complete(p.id, .failure(DeviceError.nak(p.exchange.command, e)))
@@ -404,8 +400,11 @@ public actor DeviceClient {
                 complete(p.id, .failure(DeviceError.unknownNak(p.exchange.command, code: code)))
             }
         case let .reply(reply) where reply == p.exchange.reply && p.exchange.accepts(frame, p.frames):
-            pending?.frames.append(frame)
-            if p.frames.count + 1 >= p.exchange.expectedFrames { complete(p.id, .success(p.frames + [frame])) }
+            if p.exchange.untilAck {
+                pending?.frames.append(frame)
+            } else {
+                complete(p.id, .success([frame]))
+            }
         default:
             routeUnsolicited(frame)
         }
@@ -428,12 +427,12 @@ public actor DeviceClient {
         for i in 0..<4 { out.append(UInt8((u >> UInt32(8 * i)) & 0xFF)) }
     }
 
-    private static func parseConfig(_ frame: SysExFrame) -> (ConfigKey, Int32)? {
+    private static func parseConfig(_ frame: SysExFrame) -> (key: UInt8, value: Int32)? {
         let p = frame.payload
-        guard p.count >= 5, let key = ConfigKey(rawValue: p[0]) else { return nil }
+        guard p.count >= 5 else { return nil }
         var u: UInt32 = 0
         for i in 0..<4 { u |= UInt32(p[1 + i]) << UInt32(8 * i) }
-        return (key, Int32(bitPattern: u))
+        return (p[0], Int32(bitPattern: u))
     }
 }
 

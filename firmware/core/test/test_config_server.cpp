@@ -211,24 +211,35 @@ EPDJ_TEST(get_config_single_key) {
   CHECK_BYTES(rep.payload, cat({13}, i32(4001)));
 }
 
-EPDJ_TEST(get_config_dump_all_sends_one_frame_per_key_in_order) {
+EPDJ_TEST(get_config_dump_all_sends_one_frame_per_key_in_order_then_an_ack) {
   Rig r;
   r.config.set(ConfigKey::BpmX10, 1285);
   r.config.set(ConfigKey::MidiChannel, 5);
   CHECK(r.send(0, 0x02, {0xFF}) == Result::Replied);
-  CHECK_EQ(r.sink.replies.size(), proto::kConfigCount);
-  for (size_t i = 0; i < r.sink.replies.size(); ++i) {
+  CHECK_EQ(r.sink.replies.size(), proto::kConfigCount + 1);
+  if (r.sink.replies.size() != proto::kConfigCount + 1) return;
+  for (size_t i = 0; i < proto::kConfigCount; ++i) {
     CHECK_EQ(r.sink.replies[i].cmd, 0x42);
     CHECK_EQ(r.sink.replies[i].payload[0], i);
     CHECK_EQ(syx::readI32le(r.sink.replies[i].payload.data() + 1), r.config.get(static_cast<ConfigKey>(i)));
   }
   CHECK_EQ(syx::readI32le(r.sink.replies[23].payload.data() + 1), 1285);
   CHECK_EQ(syx::readI32le(r.sink.replies[1].payload.data() + 1), 5);
+  CHECK_EQ(syx::readI32le(r.sink.replies[32].payload.data() + 1), 0);  // linkGroup, the last key
+  // ACK[GET_CONFIG] is the end marker: it follows the last key and nothing else does.
+  CHECK_EQ(r.sink.replies.back().cmd, 0x7E);
+  CHECK_BYTES(r.sink.replies.back().payload, (Bytes{0x02}));
+  CHECK_EQ(r.sink.replies.back().deck, 0);
+
+  // A single-key read is just the CONFIG frame, no end marker.
+  r.clear();
+  r.send(0, 0x02, {32});
+  CHECK_EQ(r.only().cmd, 0x42);
 }
 
 EPDJ_TEST(get_config_errors) {
   Rig r;
-  r.send(0, 0x02, {32});
+  r.send(0, 0x02, {33});
   r.expectNak(0x02, Err::BadKey);
   r.clear();
   r.send(0, 0x02, {0xFE});
@@ -285,7 +296,7 @@ EPDJ_TEST(set_config_negative_value_from_vector_is_out_of_range) {
 
 EPDJ_TEST(set_config_errors) {
   Rig r;
-  r.send(0, 0x03, cat({32}, i32(0)));
+  r.send(0, 0x03, cat({33}, i32(0)));
   r.expectNak(0x03, Err::BadKey);
   r.clear();
   r.send(0, 0x03, cat({255}, i32(0)));
@@ -310,14 +321,10 @@ EPDJ_TEST(set_config_boundaries_for_every_key) {
   for (size_t i = 0; i < proto::kConfigCount; ++i) {
     const auto& d = proto::kConfigTable[i];
     const uint8_t id = static_cast<uint8_t>(i);
+    if (d.key == ConfigKey::DeckId) continue;  // never settable: see set_config_of_deck_id_is_not_supported...
     for (int32_t v : {d.minValue, d.maxValue}) {
       r.clear();
       r.send(0, 0x03, cat({id}, i32(v)));
-      if (id == static_cast<uint8_t>(ConfigKey::DeckId)) {
-        // Switching our own deck mid-test would change who we answer to; just undo it.
-        r.config.set(ConfigKey::DeckId, 0);
-        continue;
-      }
       r.expectAck(0x03);
       CHECK_EQ(r.config.get(d.key), v);
     }
@@ -327,6 +334,31 @@ EPDJ_TEST(set_config_boundaries_for_every_key) {
     r.clear();
     r.send(0, 0x03, cat({id}, i32(d.minValue - 1)));
     r.expectNak(0x03, Err::OutOfRange);
+  }
+  CHECK_EQ(r.config.get(ConfigKey::LinkGroup), 255);  // the key added in contract v1.1 is settable over its whole range
+}
+
+EPDJ_TEST(set_config_of_deck_id_is_not_supported_and_has_no_side_effect) {
+  // The deck changes only through SET_DECK, which persists and restarts. SET_CONFIG must not move the
+  // unit the way it used to (it changed who the unit answers to, with nothing stored and no restart).
+  for (int deck : {0, 1}) {
+    Rig r;
+    r.config.set(ConfigKey::DeckId, deck);
+    const uint32_t rev = r.config.revision();
+    for (int32_t v : {0, 1, 2, -1, INT32_MAX}) {  // in range or not, the answer is the same
+      r.clear();
+      CHECK(r.send(static_cast<uint8_t>(deck), 0x03, cat({0}, i32(v))) == Result::Replied);
+      r.expectNak(0x03, Err::NotSupported);
+      CHECK_EQ(r.only().deck, deck);
+    }
+    CHECK_EQ(r.config.get(ConfigKey::DeckId), deck);
+    CHECK_EQ(r.config.revision(), rev);
+    CHECK_EQ(r.actions.setDecks + r.actions.reboots + r.actions.saves, 0);
+    r.clear();
+    CHECK(r.send(static_cast<uint8_t>(deck), 0x01, {}) == Result::Replied);  // still answering to its own deck
+    r.clear();
+    r.send(static_cast<uint8_t>(deck), 0x03, Bytes{0, 0, 0, 0});
+    r.expectNak(0x03, Err::BadLength);  // the length check still comes first
   }
 }
 
@@ -360,6 +392,32 @@ EPDJ_TEST(load_defaults_resets_live_config_without_saving) {
   r.expectAck(0x05);
   CHECK(r.config == Config());
   CHECK_EQ(r.actions.saves, 0);
+}
+
+EPDJ_TEST(load_defaults_keeps_the_deck_so_the_unit_keeps_answering) {
+  // Deck B: LOAD_DEFAULTS used to reset deckId to 0, after which requests to deck 1 went unanswered
+  // and replies were stamped as deck A.
+  Rig r;
+  r.config.set(ConfigKey::DeckId, 1);
+  r.config.set(ConfigKey::BpmX10, 1285);
+  r.config.set(ConfigKey::FaderRole, 2);
+  r.config.set(ConfigKey::LinkGroup, 7);
+  CHECK(r.send(1, 0x05, {}) == Result::Replied);
+  r.expectAck(0x05);
+  CHECK_EQ(r.only().deck, 1);
+  Config expected;
+  expected.set(ConfigKey::DeckId, 1);
+  CHECK(r.config == expected);  // everything else is back to its default, linkGroup included
+  CHECK_EQ(r.actions.saves + r.actions.setDecks + r.actions.reboots, 0);
+  r.clear();
+  CHECK(r.send(1, 0x01, {}) == Result::Replied);
+  CHECK_EQ(r.only().deck, 1);
+  r.clear();
+  CHECK(r.send(0, 0x01, {}) == Result::NotForUs);
+  r.clear();
+  CHECK(r.send(127, 0x02, {0xFF}) == Result::Replied);
+  CHECK_EQ(r.sink.replies.size(), proto::kConfigCount + 1);
+  for (const Reply& rep : r.sink.replies) CHECK_EQ(rep.deck, 1);
 }
 
 // ---- STREAM ----
@@ -903,15 +961,21 @@ EPDJ_TEST(unpackable_payload_gets_bad_length_for_requests_only) {
   CHECK(r.sink.replies.empty());
 }
 
-EPDJ_TEST(a_full_sink_loses_frames_but_never_breaks_the_server) {
+EPDJ_TEST(a_full_sink_loses_frames_counts_them_and_never_breaks_the_server) {
   Rig r;
   r.sink.accept = false;
   CHECK(r.send(0, 0x02, {0xFF}) == Result::Replied);
-  CHECK_EQ(r.log.count("reply"), proto::kConfigCount);  // it tried each one
+  CHECK_EQ(r.log.count("reply"), 1u);          // the dump stops at the first refused frame
+  CHECK_EQ(r.server.repliesDropped(), 1u);
+  r.send(0, 0x01, {});
+  r.send(0, 0x03, cat({3}, i32(1)));
+  CHECK_EQ(r.server.repliesDropped(), 3u);     // every refused reply is counted, whatever it was
+  CHECK_EQ(r.config.get(ConfigKey::PlatterSource), 1);  // the command itself still took effect
   r.sink.accept = true;
   r.clear();
   r.send(0, 0x01, {});
   CHECK_EQ(r.sink.replies.size(), 1u);
+  CHECK_EQ(r.server.repliesDropped(), 3u);
 }
 
 // ---- ReplyQueue ----
@@ -972,9 +1036,10 @@ EPDJ_TEST(dump_all_through_a_queue_over_usb_midi_reassembles) {
 
   uint8_t sysexBuf[syx::kMaxFrameBytes];
   midi::Parser parser(sysexBuf, sizeof(sysexBuf));
-  size_t keys = 0;
+  size_t keys = 0, acks = 0, bytes = 0;
   uint8_t frame[syx::kMaxFrameBytes];
   while (size_t n = q.pop(frame, sizeof(frame))) {
+    bytes += n;
     midi::UsbPacket pk[(syx::kMaxFrameBytes + 2) / 3];
     const size_t np = midi::encodeSysex(0, frame, n, pk, sizeof(pk) / sizeof(pk[0]));
     CHECK(np != 0);
@@ -985,12 +1050,68 @@ EPDJ_TEST(dump_all_through_a_queue_over_usb_midi_reassembles) {
         CHECK(ev.kind == midi::Parser::Event::Kind::SysEx);
         syx::Frame f;
         CHECK(syx::decodeFrame(ev.sysex, ev.sysexLen, 0, &f) == syx::DecodeStatus::Ok);
-        CHECK_EQ(f.cmd, 0x42);
-        CHECK_EQ(f.payload[0], keys);
-        ++keys;
+        if (f.cmd == 0x42) {
+          CHECK_EQ(acks, 0u);  // the end marker comes last
+          CHECK_EQ(f.payload[0], keys);
+          ++keys;
+        } else {
+          CHECK_EQ(f.cmd, 0x7E);
+          CHECK_EQ(f.payloadLen, 1u);
+          CHECK_EQ(f.payload[0], 0x02);
+          ++acks;
+        }
       });
     }
   }
   CHECK_EQ(keys, proto::kConfigCount);
+  CHECK_EQ(acks, 1u);
   CHECK_EQ(q.dropped(), 0u);
+  CHECK_EQ(server.repliesDropped(), 0u);
+  // What a full dump costs on the wire: every key plus the end marker. ReplyQueue is statically sized for it.
+  CHECK_EQ(bytes, kConfigDumpBytes);
+  CHECK_EQ(kConfigDumpBytes, proto::kConfigCount * 15 + 11);
+  CHECK(ReplyQueue::kDumpRecordBytes <= ReplyQueue::kCapacityBytes);
+}
+
+EPDJ_TEST(a_dump_into_a_full_queue_is_counted_and_has_no_end_marker) {
+  Config config;
+  ReplyQueue q;
+  Actions actions;
+  ConfigServer server(config, actions, q);
+  const uint8_t all = 0xFF;
+  Bytes req(syx::kMaxFrameBytes);
+  req.resize(syx::encodeFrame(0, 0x02, &all, 1, req.data(), req.size()));
+
+  // Leave room for only some of the keys: five 200-byte records fill the queue, one is taken out again.
+  uint8_t filler[200] = {};
+  for (int i = 0; i < 5; ++i) CHECK(q.send(filler, sizeof(filler)));
+  uint8_t out[256];
+  CHECK_EQ(q.pop(out, sizeof(out)), sizeof(filler));
+  CHECK_EQ(q.dropped(), 0u);
+
+  CHECK(server.handle(req.data(), req.size(), 0) == Result::Replied);
+  CHECK_EQ(server.repliesDropped(), 1u);  // the refusal is counted, not silent
+  CHECK_EQ(q.dropped(), 1u);
+  size_t configs = 0, acks = 0;
+  syx::Frame f;
+  while (size_t n = q.pop(out, sizeof(out))) {
+    if (syx::decodeFrame(out, n, 0, &f) != syx::DecodeStatus::Ok) continue;  // a filler record
+    configs += f.cmd == 0x42 ? 1u : 0u;
+    acks += f.cmd == 0x7E ? 1u : 0u;
+  }
+  CHECK(configs >= 10 && configs < proto::kConfigCount);  // some keys fit; the dump stopped at the first refusal
+  CHECK_EQ(acks, 0u);                                     // so an incomplete dump never ends with the marker
+
+  // Drained: the next dump is complete again.
+  q.clear();
+  CHECK(server.handle(req.data(), req.size(), 0) == Result::Replied);
+  CHECK_EQ(server.repliesDropped(), 1u);
+  configs = acks = 0;
+  while (size_t n = q.pop(out, sizeof(out))) {
+    CHECK(syx::decodeFrame(out, n, 0, &f) == syx::DecodeStatus::Ok);
+    configs += f.cmd == 0x42 ? 1u : 0u;
+    acks += f.cmd == 0x7E ? 1u : 0u;
+  }
+  CHECK_EQ(configs, proto::kConfigCount);
+  CHECK_EQ(acks, 1u);
 }

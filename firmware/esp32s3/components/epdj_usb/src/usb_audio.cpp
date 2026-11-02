@@ -1,9 +1,10 @@
-// USB Audio Class 2.0 speaker: control requests (clock, mute, volume), stream start/stop, and the interrupt that
-// moves each 1 ms packet into the audio ring. The descriptor is epdj/usb_desc.cpp's; TinyUSB's audio driver does
-// the transfers.
+// USB Audio Class 1.0 speaker: control requests (mute, volume, sampling frequency), stream start/stop, the feedback
+// value, and the interrupt that moves each 1 ms packet into the audio ring. The descriptor is epdj/usb_desc.cpp's;
+// TinyUSB's audio driver does the transfers and sends the feedback value as three bytes 10.14.
 #include <atomic>
 #include <cstring>
 
+#include "epdj/audio_rate.h"
 #include "epdj/usb_desc.h"
 #include "epdj_usb/usb_device.h"
 #include "sdkconfig.h"
@@ -41,8 +42,14 @@ constexpr int16_t kVolMin = -80 * 256;  // -80 dB
 constexpr int16_t kVolMax = 0;
 constexpr int16_t kVolRes = 256;        // 1 dB
 
-// Interrupt context, once per USB frame while streaming.
-void setFeedback(uint32_t samplesPerFrameQ16) { tud_audio_n_fb_set(0, samplesPerFrameQ16); }
+constexpr uint32_t kNominalQ16 = (usb::kSampleRateHz / 1000u) << 16;  // 48.0 samples per frame
+
+// Once per USB frame while streaming (audio task), and once at stream start (TinyUSB task). TinyUSB's UAC1 path
+// sends (value >> 2) as three bytes, i.e. 10.14; handing it a value that is already a multiple of 4 makes that
+// shift exact, so the bytes on the wire are audio::FeedbackController::encodeUsb(q16) (rounded, saturating).
+void setFeedback(uint32_t samplesPerFrameQ16) {
+  tud_audio_n_fb_set(0, audio::FeedbackController::toUsb10_14(samplesPerFrameQ16) << 2);
+}
 
 }  // namespace
 
@@ -65,11 +72,13 @@ using namespace epdj::usb_dev;
 // ---- stream control (TinyUSB task) ----
 
 extern "C" bool tud_audio_set_itf_cb(uint8_t, tusb_control_request_t const* req) {
-  const uint8_t itf = TU_U16_LOW(req->wIndex);
-  const uint8_t alt = TU_U16_LOW(req->wValue);
-  if (itf == usb::kItfAudioStreaming) {
-    g_streaming.store(alt != 0, std::memory_order_release);
-    audio_out::setStreaming(alt != 0);
+  if (TU_U16_LOW(req->wIndex) == usb::kItfAudioStreaming) {
+    const bool streaming = TU_U16_LOW(req->wValue) != 0;
+    // TinyUSB has already queued the first feedback packet, with value 0; every packet after it carries this
+    // until the audio task has a measurement.
+    if (streaming) setFeedback(kNominalQ16);
+    g_streaming.store(streaming, std::memory_order_release);
+    audio_out::setStreaming(streaming);
   }
   return true;
 }
@@ -106,52 +115,29 @@ extern "C" bool tud_audio_rx_done_isr(uint8_t, uint16_t, uint8_t, uint8_t, uint8
 }
 
 // ---- control requests (TinyUSB task) ----
+// Audio 1.0: wValue = (control selector << 8) | channel (0 = master), wIndex = (unit id << 8) | interface.
 
 extern "C" bool tud_audio_get_req_entity_cb(uint8_t rhport, tusb_control_request_t const* req) {
   const uint8_t entity = TU_U16_HIGH(req->wIndex);
   const uint8_t selector = TU_U16_HIGH(req->wValue);
   const uint8_t channel = TU_U16_LOW(req->wValue);
+  if (entity != usb::kEntityFeatureUnit || channel > 2) return false;
 
-  if (entity == usb::kEntityClockSource) {
-    if (selector == AUDIO20_CS_CTRL_SAM_FREQ) {
-      if (req->bRequest == AUDIO20_CS_REQ_CUR) {
-        audio20_control_cur_4_t cur = {static_cast<int32_t>(tu_htole32(usb::kSampleRateHz))};
-        return tud_audio_buffer_and_schedule_control_xfer(rhport, req, &cur, sizeof cur);
-      }
-      if (req->bRequest == AUDIO20_CS_REQ_RANGE) {
-        audio20_control_range_4_n_t(1) range = {};
-        range.wNumSubRanges = tu_htole16(1);
-        range.subrange[0].bMin = static_cast<int32_t>(usb::kSampleRateHz);
-        range.subrange[0].bMax = static_cast<int32_t>(usb::kSampleRateHz);
-        range.subrange[0].bRes = 0;
-        return tud_audio_buffer_and_schedule_control_xfer(rhport, req, &range, sizeof range);
-      }
-    } else if (selector == AUDIO20_CS_CTRL_CLK_VALID && req->bRequest == AUDIO20_CS_REQ_CUR) {
-      audio20_control_cur_1_t valid = {1};
-      return tud_audio_buffer_and_schedule_control_xfer(rhport, req, &valid, sizeof valid);
-    }
-    return false;
+  if (selector == AUDIO10_FU_CTRL_MUTE && req->bRequest == AUDIO10_CS_REQ_GET_CUR) {
+    uint8_t mute = g_fu.mute[channel] ? 1 : 0;
+    return tud_audio_buffer_and_schedule_control_xfer(rhport, req, &mute, sizeof mute);
   }
-
-  if (entity == usb::kEntityFeatureUnit && channel <= 2) {
-    if (selector == AUDIO20_FU_CTRL_MUTE && req->bRequest == AUDIO20_CS_REQ_CUR) {
-      audio20_control_cur_1_t mute = {static_cast<int8_t>(g_fu.mute[channel] ? 1 : 0)};
-      return tud_audio_buffer_and_schedule_control_xfer(rhport, req, &mute, sizeof mute);
+  if (selector == AUDIO10_FU_CTRL_VOLUME) {
+    int16_t v;
+    switch (req->bRequest) {
+      case AUDIO10_CS_REQ_GET_CUR: v = g_fu.volume[channel]; break;
+      case AUDIO10_CS_REQ_GET_MIN: v = kVolMin; break;
+      case AUDIO10_CS_REQ_GET_MAX: v = kVolMax; break;
+      case AUDIO10_CS_REQ_GET_RES: v = kVolRes; break;
+      default: return false;
     }
-    if (selector == AUDIO20_FU_CTRL_VOLUME) {
-      if (req->bRequest == AUDIO20_CS_REQ_CUR) {
-        audio20_control_cur_2_t cur = {static_cast<int16_t>(tu_htole16(static_cast<uint16_t>(g_fu.volume[channel])))};
-        return tud_audio_buffer_and_schedule_control_xfer(rhport, req, &cur, sizeof cur);
-      }
-      if (req->bRequest == AUDIO20_CS_REQ_RANGE) {
-        audio20_control_range_2_n_t(1) range = {};
-        range.wNumSubRanges = tu_htole16(1);
-        range.subrange[0].bMin = static_cast<int16_t>(tu_htole16(static_cast<uint16_t>(kVolMin)));
-        range.subrange[0].bMax = static_cast<int16_t>(tu_htole16(static_cast<uint16_t>(kVolMax)));
-        range.subrange[0].bRes = static_cast<uint16_t>(tu_htole16(static_cast<uint16_t>(kVolRes)));
-        return tud_audio_buffer_and_schedule_control_xfer(rhport, req, &range, sizeof range);
-      }
-    }
+    int16_t le = static_cast<int16_t>(tu_htole16(static_cast<uint16_t>(v)));
+    return tud_audio_buffer_and_schedule_control_xfer(rhport, req, &le, sizeof le);
   }
   return false;
 }
@@ -160,21 +146,38 @@ extern "C" bool tud_audio_set_req_entity_cb(uint8_t, tusb_control_request_t cons
   const uint8_t entity = TU_U16_HIGH(req->wIndex);
   const uint8_t selector = TU_U16_HIGH(req->wValue);
   const uint8_t channel = TU_U16_LOW(req->wValue);
-  if (entity != usb::kEntityFeatureUnit || channel > 2 || req->bRequest != AUDIO20_CS_REQ_CUR) return false;  // clock is read-only
+  if (entity != usb::kEntityFeatureUnit || channel > 2 || req->bRequest != AUDIO10_CS_REQ_SET_CUR) return false;
 
-  if (selector == AUDIO20_FU_CTRL_MUTE && req->wLength == sizeof(audio20_control_cur_1_t)) {
+  if (selector == AUDIO10_FU_CTRL_MUTE && req->wLength == 1) {
     g_fu.mute[channel] = buf[0] != 0;
     applyFeatureUnit();
     return true;
   }
-  if (selector == AUDIO20_FU_CTRL_VOLUME && req->wLength == sizeof(audio20_control_cur_2_t)) {
-    int16_t v;
-    std::memcpy(&v, buf, sizeof v);
-    g_fu.volume[channel] = v;
+  if (selector == AUDIO10_FU_CTRL_VOLUME && req->wLength == 2) {
+    uint16_t raw;
+    std::memcpy(&raw, buf, sizeof raw);
+    g_fu.volume[channel] = static_cast<int16_t>(tu_le16toh(raw));
     applyFeatureUnit();
     return true;
   }
   return false;
+}
+
+// The data endpoint advertises a sampling frequency control (as TinyUSB's example does, and some hosts send the
+// request whenever it is there). There is one rate, so the only valid value is that one.
+extern "C" bool tud_audio_get_req_ep_cb(uint8_t rhport, tusb_control_request_t const* req) {
+  if (TU_U16_HIGH(req->wValue) != AUDIO10_EP_CTRL_SAMPLING_FREQ || req->bRequest != AUDIO10_CS_REQ_GET_CUR) return false;
+  uint8_t freq[3] = {static_cast<uint8_t>(usb::kSampleRateHz & 0xFFu), static_cast<uint8_t>((usb::kSampleRateHz >> 8) & 0xFFu),
+                     static_cast<uint8_t>((usb::kSampleRateHz >> 16) & 0xFFu)};
+  return tud_audio_buffer_and_schedule_control_xfer(rhport, req, freq, sizeof freq);
+}
+
+extern "C" bool tud_audio_set_req_ep_cb(uint8_t, tusb_control_request_t const* req, uint8_t* buf) {
+  if (TU_U16_HIGH(req->wValue) != AUDIO10_EP_CTRL_SAMPLING_FREQ || req->bRequest != AUDIO10_CS_REQ_SET_CUR || req->wLength != 3) {
+    return false;
+  }
+  const uint32_t rate = static_cast<uint32_t>(buf[0]) | (static_cast<uint32_t>(buf[1]) << 8) | (static_cast<uint32_t>(buf[2]) << 16);
+  return rate == usb::kSampleRateHz;
 }
 
 #else  // !CONFIG_EPDJ_USB_AUDIO

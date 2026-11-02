@@ -2,6 +2,7 @@
 // list of audio outputs. Units are matched by name (EP-DJ3000) and told apart by GET_INFO, not by the name.
 
 import Combine
+import EPDJ3000KitPure
 import EPDJ3000Protocol
 import Foundation
 

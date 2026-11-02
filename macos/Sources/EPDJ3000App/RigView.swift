@@ -2,6 +2,7 @@
 // each one sees (LINK_STATUS), a checklist judged from what the units and macOS report, and per-deck audio tests.
 
 import EPDJ3000Kit
+import EPDJ3000KitPure
 import EPDJ3000Protocol
 import SwiftUI
 
@@ -201,7 +202,7 @@ struct LinkRows: View {
         if f.contains(.usbHost) { parts.append("USB host") }
         if f.contains(.forwarding) { parts.append("forwarding") }
         if f.contains(.isMaster) { parts.append("master") }
-        if peer.status & PeerStatus.conflict.rawValue != 0 { parts.append("DECK ID CONFLICT") }
+        if PeerStatus(rawValue: peer.status).contains(.conflict) { parts.append("DECK ID CONFLICT") }
         return parts.isEmpty ? "-" : parts.joined(separator: ", ")
     }
 }

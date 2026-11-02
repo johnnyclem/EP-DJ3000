@@ -26,11 +26,10 @@ var EPDJ3000Mixxx = {};
 
 // ---- Settings you may want to change ---------------------------------------
 
-// What the slide pot does when the unit sends it as CC 23/55 (the unit's default
-// faderRole = CROSSFADER). "crossfader" -> [Master],crossfader; "volume" -> deck
-// volume; "rate" -> deck tempo slider. A unit reconfigured to faderRole =
-// CHANNEL_VOLUME / PITCH sends CC 7/39 / CC 25/57, which are always deck volume /
-// deck rate regardless of this setting.
+// What CC 23/55 controls, i.e. a unit set to faderRole = CROSSFADER. "crossfader" ->
+// [Master],crossfader; "volume" -> deck volume; "rate" -> deck tempo slider. The
+// unit's default faderRole is CHANNEL_VOLUME (CC 7/39) and PITCH sends CC 25/57:
+// those are always deck volume / deck rate, whatever this is set to.
 EPDJ3000Mixxx.FADER_ROLE = "crossfader";
 
 // REV button: "roll" = [ChannelN],reverseroll while held (momentary reverse that

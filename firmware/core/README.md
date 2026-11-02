@@ -99,10 +99,12 @@ freq, atten)` (the engine refuses without `dacPresent` and calls `testTone(false
 `saveConfig(cfg)`.
 
 **Identity** (fixed per boot): `hwRev`, `serial`, `caps` (hardware capability bits; the engine adds `kDac`
-while a DAC is present), station `mac`, random per-boot `epoch`, `linkGroup` (rig id, 0 until the contract
-gets a config key for it). The platform loads the `Config` from NVS (`loadConfig`) before constructing the engine.
+while a DAC is present), station `mac`, random per-boot `epoch`, `linkGroup` (the build-time rig id: it applies
+only while the `linkGroup` config key is 0, a non-zero config value wins and is applied live, see
+[`docs/LINK.md`](../../docs/LINK.md) section 11). The platform loads the `Config` from NVS (`loadConfig`)
+before constructing the engine.
 
-**What stays outside the engine:** USB descriptors and enumeration, the audio path (I2S, UAC2 feedback, tone
+**What stays outside the engine:** USB descriptors and enumeration, the audio path (I2S, USB Audio 1.0 feedback, tone
 synthesis, volume), NVS, Wi-Fi/ESP-NOW setup and channel, the LED driver, sensor sampling and pad
 normalisation, ADC and I2C access.
 
@@ -130,14 +132,34 @@ normalisation, ADC and I2C access.
 * **Live config:** `SET_CONFIG` re-parameterises only what changed and keeps filter state. A fader role
   change re-sends the position on the new CC pair at once. A platter-source change closes a held touch note.
   The MIDI channel of every held note is remembered, so changing it cannot strand a note.
-* **Deck identity is fixed at boot.** `deckId` only takes effect after a restart (PROTOCOL 3.1), so the MIDI
-  channel in "auto", the LED deck and the radio deck id follow the deck the unit booted as; `LOAD_DEFAULTS` or
-  `SET_CONFIG deckId` cannot move a running Deck B onto channel 1. (`ConfigServer` still addresses by the live
-  `deckId`; see the open issue in the report.) With `knobRole = BPM` the knob position is the tempo from the
-  first sample on (60..180), overriding the saved `bpmX10`.
+* **Deck identity is fixed at boot.** `deckId` changes only through `SET_DECK` (or the CUE+REV deck swap),
+  which store the new deck and restart the unit; `SET_CONFIG` of it is `NAK NOT_SUPPORTED` and `LOAD_DEFAULTS`
+  keeps it, so a unit never stops answering to its deck by accident. In the short window between `SET_DECK` and
+  the restart `ConfigServer` (which addresses by the config's `deckId`) already answers to the new deck, while the
+  engine still acts as the deck it booted as: the MIDI channel in "auto", the LED deck and the radio deck id do
+  not move. A fixed `midiChannel` still applies live.
+* **Knob as tempo (`knobRole = BPM`) has pickup.** The knob does not touch the tempo at boot: it takes over only
+  once it has moved more than ~2% of its travel (328 of 16383 units of the calibrated output) from where it was
+  at boot, then sets `60.0 + 120.0 x position` as before. The same pickup restarts when `knobRole`, the knob
+  calibration or `knobInvert` changes, so switching the role live, or calibrating, never makes the tempo jump.
+  A knob nobody turned never replaces a tempo that the host, a tap or the platter set since (a USB re-plug that
+  re-sends controls does not count as a turn).
+* **Fader role default is `CHANNEL_VOLUME`** (CC 7 / 39; contract v1.1), so two units do not fight over one
+  crossfader. A unit that saved its config under v1.0 keeps the `faderRole` it stored.
+* **Radio group** = the `linkGroup` config key, applied live (`Link::setGroup`): the unit leaves its old rig at
+  once (peers forgotten, a held bridged note released) and announces itself in the new one without a reboot.
+  The config value 0 means "use `Identity::linkGroup`", the platform's build-time default.
 * **Host feedback** is accepted on the unit's own channel only (cable 0, or relayed over the radio from the
-  bridging deck's cable 2). `play` note velocity > 0 starts a SYNC_MASTER transport; velocity 0 changes nothing,
-  so a pulse echoed back by a mapping cannot pause it.
+  bridging deck's cable 2). The `play` note (velocity > 0) is LED feedback in DJ and SYNC_FOLLOW and never starts or
+  stops a SYNC_MASTER clock: only the `transport` CC (and the local gestures) command a master. A velocity-0 release
+  changes nothing in a master, so a pulse echoed back by a mapping cannot pause it either. **Known deviation from
+  `PROTOCOL.md` (E2E-3, open):** in SYNC_MASTER the note is dropped, so it does not light the play LED, which shows the
+  unit's own transport (`Engine::handleHostMessage`; `docs/E2E.md`).
+* **SysEx answers are bounded and counted.** A `GET_CONFIG` dump (`0xFF`) is one `CONFIG` per key followed by
+  `ACK[GET_CONFIG]` as the end marker (34 frames, 506 bytes on the wire). If the output queue refuses a frame the
+  dump stops there with no ACK, so a dump that ends with the ACK is complete; the loss is counted in
+  `stats().outDropped` (and in `ConfigServer::repliesDropped()` for a standalone server). `ReplyQueue` is sized
+  for a full dump and a `static_assert` fails the build when a contract with more keys no longer fits.
 * **Motion with no listener is dropped**, not queued: nothing is sent while no host is mounted and no peer
   bridges, and a host that appears later gets the current fader/knob/tempo state, not old jog movement.
 * **Calibration** (CAL_BEGIN/END) takes a 3-sample median to reject ADC spikes, so a sweep must dwell for a
@@ -148,7 +170,7 @@ normalisation, ADC and I2C access.
 
 ```sh
 ./run_tests.sh              # configure, build, run everything (Debug)
-./run_tests.sh --sanitize   # the same under AddressSanitizer + UBSan (what CI should run)
+./run_tests.sh --sanitize   # the same under AddressSanitizer + UBSan (builds in build-san; what a CI job should run: none is configured yet)
 # or by hand:
 cmake -S . -B build -DEPDJ_SANITIZE=ON && cmake --build build -j2 && ctest --test-dir build --output-on-failure
 ```
@@ -162,14 +184,14 @@ touch ring, a fake platform, a lossy two-unit radio, queries over the recorded o
 
 | File | Covers |
 |---|---|
-| `test_engine_core.cpp` | Ring sweep -> jog CCs on the right channel with exact conservation (both decks, both directions); AS5600 spin exactness and `jogInvert`; touch/tap notes and the play pulse; fader sweeps per role (MSB first), no chatter, 1-step latency; knob roles; button notes, bounce, chords (mode cycle, deck swap); DJ mode emits no clock; Deck B on channel 2; channel change mid-hold; host feedback; USB unplug/replug; TRS pass-through. |
+| `test_engine_core.cpp` | Ring sweep -> jog CCs on the right channel with exact conservation (both decks, both directions); AS5600 spin exactness and `jogInvert`; touch/tap notes and the play pulse; fader sweeps per role (MSB first) and the CHANNEL_VOLUME default, no chatter, 1-step latency; knob roles and the BPM-knob pickup (saved tempo survives boot, 2% threshold both ways, re-arm on role/calibration change, re-plug does not override); button notes, bounce, chords (mode cycle, deck swap); DJ mode emits no clock; Deck B on channel 2; channel change mid-hold; host feedback; USB unplug/replug; TRS pass-through. |
 | `test_engine_sync.cpp` | Master clock over 10 s at 1 kHz and at 40 kHz stepping, 25 random tempo changes against the generator's schedule, scheduled tick not moved by a tempo change, `clockOutMask` port gating, the 32-bit wrap; start/pause/continue/stop/rewind byte sequences; platter tap; CUE tap tempo to 128 BPM; platter nudge (exact with AS5600, approximate with the ring); MTC quarter frames and full frames; leaving master; SYNC_FOLLOW locking to a jittered 24 PPQN input on USB and TRS. |
-| `test_engine_sysex.cpp` | Input before the first step, GET_INFO, config round trip, deck identity,  live application to fader and platter, STREAM telemetry (rate, fields, expiry, clamp), calibration (apply, no apply, failures), SET_DECK/REBOOT/LINK_STATUS/TEST_TONE/IDENTIFY, SysEx split across USB packets with real-time bytes, corrupt and hostile input, `encodeUsb` round trip, queue bounds. |
-| `test_engine_link.cpp` | Two engines over a radio with 20% loss, 10% duplication and reordering: Deck B's jog, fader, knob, buttons and touch arrive on Deck A's cable 2 on channel 2 with exact jog conservation; 5 ms bridge latency on a clean air; feedback relayed back; master transport/tempo/beat reaching a follower; peer loss releasing held notes; route changes with USB host changes; link disable and deck-id conflict; determinism. |
+| `test_engine_sysex.cpp` | Input before the first step, GET_INFO, config round trip (the dump and its ACK end marker), deck identity (LOAD_DEFAULTS keeps it, SET_CONFIG of it is refused, SET_DECK is the only way), live application to fader and platter, STREAM telemetry (rate, fields, expiry, clamp), calibration (apply, no apply, failures), SET_DECK/REBOOT/LINK_STATUS/TEST_TONE/IDENTIFY, SysEx split across USB packets with real-time bytes, corrupt and hostile input, `encodeUsb` round trip, queue bounds. |
+| `test_engine_link.cpp` | Two engines over a radio with 20% loss, 10% duplication and reordering: Deck B's jog, fader, knob, buttons and touch arrive on Deck A's cable 2 on channel 2 with exact jog conservation; 5 ms bridge latency on a clean simulated air (a model, never measured on a radio); feedback relayed back; master transport/tempo/beat reaching a follower; peer loss releasing held notes; route changes with USB host changes; link disable and deck-id conflict; `linkGroup` changed live over SysEx (leave, find each other again, bridge resumes) and its precedence over the build-time default; determinism. |
 | `test_engine_stability.cpp` | One hour of simulated time on two linked engines (both clocks cross the 2^32 us wrap): random sensors with garbage readings, random host MIDI, random SysEx of every command, random config changes, hostile radio packets, a lossy air, stalls. Every output event well formed, work per step bounded, queue within capacity, all losses counted, engine alive afterwards. |
 
-Run time on the host: the five engine test binaries take about 14 s (Debug) and about 45 s under ASan/UBSan, of
-which the one-hour stability test is 12 s and 37 s. A bare `step()` costs about 0.3 us on a desktop CPU
+Run time on the host (4 cores): the five engine test binaries take about 38 s under ASan/UBSan, of which the one-hour
+stability test is 31 s, and about 6 s in Release. A bare `step()` costs about 0.3 us on a desktop CPU
 (Release). `engine.cpp` also compiles clean (same warning flags, `-Werror`) with the ESP-IDF Xtensa
 ESP32-S3 GCC and with clang; its only external references are `memcpy`, `memset` and the 64-bit division helpers.
 Nothing has been run on the chip: step time and stack use there are unmeasured.

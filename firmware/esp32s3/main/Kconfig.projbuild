@@ -30,15 +30,30 @@ menu "EP-DJ3000"
                 Pads are GPIO4.. in order, sector 0 first (board_pins.h). With an AS5600 platter wire
                 only pad 0 (GPIO4) as the hold pad and set this to 1.
 
+        config EPDJ_TOUCH_SCAN_TARGET_US
+            int "Touch: target duration of one scan of all pads (us, 0 = no auto-range)"
+            range 0 20000
+            default 800
+            help
+                The S3 measures its pads one after another, and the engine reads them every millisecond.
+                A scan longer than that leaves every pad's value stale for several reads and samples the
+                pads at different instants, which smears the finger angle. At boot the firmware times the
+                scan at two settings and picks the number of charge/discharge cycles that makes it take
+                about this long (a finger on a pad lengthens its measurement, hence the headroom below
+                1000 us). The price is coarser counts: check the finger rise against the idle noise
+                (hardware/PLATTER.md). 0 turns this off and uses the cycle count below as is.
+                Needs two or more pads.
+
         config EPDJ_TOUCH_CHARGE_DISCHARGE_TIMES
-            int "Touch measurement: charge/discharge cycles per pad"
+            int "Touch measurement: charge/discharge cycles per pad (the most auto-range may use)"
             range 1 65535
             default 500
             help
                 The raw count is the RTC_FAST clock cycles those cycles take, so it grows with pad
-                capacitance. Fewer cycles scan faster but quantise coarser. The firmware logs the
-                share of 1 ms reads that carried a new value (touch fresh%); if it is below ~90 reduce
-                this. docs/BRINGUP.md has the procedure.
+                capacitance and with this value, and so does the time one scan of all pads takes. With
+                EPDJ_TOUCH_SCAN_TARGET_US set this is the upper limit and the setting the scan is first
+                timed at; with the target at 0 it is used as it is. At 500 a typical pad takes over a
+                millisecond, so eight pads scan in about ten.
 
         config EPDJ_TOUCH_INTERVAL_CYCLES
             int "Touch measurement: sleep between scans (RTC_SLOW cycles)"
@@ -50,8 +65,10 @@ menu "EP-DJ3000"
             range 1 32
             default 8
             help
-                About 20 us each, twice per millisecond. 8 trades ~0.3 ms of the engine task for roughly
-                3x less ADC noise.
+                The upper limit: at boot the firmware times one conversion and lowers the count so that
+                fader and knob together take at most 400 us of each millisecond. Each conversion runs
+                with interrupts off on the core that also serves USB. 8 trades part of that budget for
+                roughly 3x less ADC noise than a single read.
 
         config EPDJ_AS5600_ENABLE
             bool "Probe for an AS5600 encoder on I2C at boot"
@@ -62,7 +79,7 @@ menu "EP-DJ3000"
     menu "USB"
 
         config EPDJ_USB_AUDIO
-            bool "Add a UAC2 audio output function when a DAC is present"
+            bool "Add a USB Audio 1.0 output function when a DAC is present"
             default y
             help
                 Without it the unit is MIDI-only whatever the DAC strap says. The function exists only if
@@ -115,10 +132,15 @@ menu "EP-DJ3000"
             default 1
 
         config EPDJ_LINK_GROUP
-            int "Rig id: units with different ids ignore each other"
+            int "Build-time rig id (default for the linkGroup config key)"
             depends on EPDJ_LINK
             range 0 255
             default 0
+            help
+                Units with different rig ids ignore each other. This is only the fallback: the linkGroup
+                config key (SysEx, live, saved with SAVE_CONFIG) wins whenever it is non-zero, so a value set
+                from the app overrides this one. Because 0 means "no override", a unit built with a non-zero
+                value here cannot be put back on group 0 over SysEx (docs/LINK.md section 11).
 
     endmenu
 

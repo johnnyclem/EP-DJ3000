@@ -15,7 +15,8 @@ class As5600 {
   bool begin(I2cBus& bus);
   bool present() const { return dev_ != nullptr; }
   // Raw angle 0..4095. Returns false on a NACK/timeout (the caller reports angleValid = false for that
-  // sample). After a run of failures it stops trying for 100 ms so a dead bus cannot eat the 1 kHz loop.
+  // sample). After two failures in a row it stops trying for 100 ms: a dead bus costs the 1 kHz loop one
+  // 2 ms timeout per failed read, so at most 4 ms in every 100.
   bool readAngle(uint16_t* angle12, uint64_t nowUs);
   uint32_t failures() const { return failures_; }
 

@@ -9,9 +9,9 @@ CommonJS, so the same file loads in Node, in Mixxx's script engine and in a brow
 `.mjs` use `createRequire(import.meta.url)` (the tests do). Wire format and semantics are in
 [`docs/PROTOCOL.md`](../../docs/PROTOCOL.md); this file only says how to use the constants.
 
-**Copies.** Mixxx resolves script files relative to the mapping folder, so `drivers/mixxx/` holds a
-byte-identical copy. After regenerating: `cp drivers/common/epdj3000-protocol.js drivers/mixxx/`. The Mixxx
-test fails if the two differ.
+**Two copies, both generated.** Mixxx resolves script files relative to the mapping folder, so
+`drivers/mixxx/` holds its own byte-identical copy. `tools/gen_protocol.py` writes both; the Mixxx test fails if
+they differ.
 
 ## What is in it
 
@@ -25,11 +25,13 @@ test fails if the two differ.
 | `note.<name>` | note numbers: `cue`, `rev`, `touch`, `play`, `tap` |
 | `clockPpqn`, `bpmMinX10`, `bpmMaxX10` | 24 clocks per quarter note; tempo limits as BPM x 10 (200 and 3000) |
 | `cable.<name>` | USB-MIDI cable numbers: `deck` 0, `trsMidi` 1, `linkedDeck` 2 |
+| `usb.*` | USB identity: `vendorId`, `productId` (numbers; the contract's development placeholder for now), `product` (`"EP-DJ3000"`), `deckNames` (`["Deck A", "Deck B"]`), `cableNames` (`["Deck", "TRS MIDI", "Linked deck"]`) |
 | `sysex.*` | manufacturer header, version, `deckAny`, reply/ACK/NAK bytes, `cmd.<name>` ids |
 | `enums.<Name>.<value>` | `Deck`, `Mode`, `PlatterSource`, `FaderRole`, `FaderCurve`, `KnobRole`, `DacMode`, `LinkBridge`, `CalKind`, `TransportState`, `RebootMode` |
 
-Config key ids, payload structs and the USB vendor/product id are **not** in the JS. They are in
-`protocol/epdj3000.json` (and the generated C++ and Swift). A DJ-software mapping normally needs none of them.
+Config key ids, config defaults and payload structs are **not** in the JS. They are in
+`protocol/epdj3000.json` (and the generated C++ and Swift). A DJ-software mapping normally needs none of them;
+the factory defaults a mapping author cares about are tabulated in [`drivers/README.md`](../README.md).
 
 ## Rules every mapping must follow
 
@@ -50,13 +52,15 @@ These are the places the protocol is easy to get subtly wrong. Each links to the
    skipped when it did not change. Keep both halves, combine as `(msb << 7) | lsb` (0..16383), and
    apply nothing until both have been seen once. `bpm` carries BPM x 10.
 5. **The slide pot is one of three CC pairs** (2.4), chosen by the unit's `faderRole`: `crossfader*`,
-   `channelVolume*` or `pitch*`. Bind whichever the app can use; only one pair ever carries data.
+   `channelVolume*` or `pitch*`. The default is `CHANNEL_VOLUME`, so a mapping that binds only one pair should
+   bind `channelVolume*`. Bind all three if the app can use them; only one pair ever carries data.
 6. **`bpm`, `bpmNudge`, `tap` and `transport` come out of the unit only in `SYNC_MASTER`** (2.6), plus `bpm`
    when `knobRole = BPM`. A DJ-software mapping can leave them unbound (VirtualDJ, djay and rekordbox do;
    Mixxx binds them).
-7. **LED feedback** (2): Note On on `note.cue` or `note.play`, on the deck's own channel, velocity 127 for
-   lit and 0 for off. Do not rely on a unit ignoring other channels' feedback unless the firmware says so:
-   PROTOCOL.md does not state it (open item in `drivers/README.md`).
+7. **LED feedback** (2, 2.6): Note On on `note.cue` or `note.play`, on the deck's own channel, velocity 127 for
+   lit and 0 for off. A unit ignores channel-voice messages on any other channel, so a mapping may send both
+   decks' LEDs to every port. The `play` note is feedback only, in every mode: it never starts the unit's clock
+   (only the `transport` CC commands a SYNC_MASTER unit).
 8. **A tap-to-play arrives as touch down, touch up and a `play` pulse** (2.3). The unit cannot know it is a
    tap when the touch begins, so a scratch-capable mapping briefly enters scratch mode on every tap.
 

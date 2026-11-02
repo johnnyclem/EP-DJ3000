@@ -521,6 +521,47 @@ EPDJ_TEST(node_groups_isolate_rigs_and_non_deck_peers_are_listed_not_used) {
   (void)mixer;
 }
 
+EPDJ_TEST(node_set_group_leaves_the_old_rig_and_joins_the_new_one_without_a_reboot) {
+  Sim sim(13);
+  Node& b = sim.add(0x0B, 1, false);
+  Node& a = sim.add(0x0A, 0, true);
+  Node& other = sim.add(0x1A, 0, true, 5e6, 0, /*group=*/4);  // another rig in the room
+  sim.run(2000);
+  CHECK(a.link->routeIn() && b.link->routeOut());
+  CHECK_EQ(other.link->peers().count(), 0);
+  CHECK(b.link->forwardMidi(midi::noteOn(1, proto::note::kTouch, 127)));
+  sim.run(60);
+  CHECK_EQ(count(a.bridged, midi::noteOn(1, proto::note::kTouch, 127)), 1);
+
+  b.link->setGroup(0, sim.nowUs > 0 ? b.clock(sim.nowUs) : 0);  // same group: nothing happens
+  CHECK(b.link->linkUp() && b.link->routeOut());
+
+  // B moves to the other rig. It lets go of A at once ...
+  b.link->setGroup(4, b.clock(sim.nowUs));
+  CHECK(!b.link->linkUp() && !b.link->routeOut() && !b.link->bridging());
+  CHECK_EQ(b.link->peers().count(), 0);
+  CHECK(!b.link->forwardMidi(midi::noteOn(1, 36, 127)));  // no route any more
+  // ... and announces itself in the new group without waiting for the next HELLO period.
+  sim.run(20);
+  CHECK_EQ(other.link->peers().count(), 1);
+  CHECK(other.link->linkUp() && b.link->linkUp());
+  CHECK(b.link->routeOut() && other.link->routeIn());  // the new rig's host now carries B
+  // A hears nothing it understands from B any more and times it out, releasing B's held note.
+  sim.run(2000);
+  CHECK(!a.link->linkUp());
+  CHECK_EQ(count(a.bridged, midi::noteOff(1, proto::note::kTouch, 0)), 1);
+  CHECK(!a.link->routeIn());
+
+  // Back to rig 0: the old partner is found again and the bridge carries B's MIDI.
+  b.link->setGroup(0, b.clock(sim.nowUs));
+  sim.run(2500);
+  CHECK(a.link->linkUp() && b.link->linkUp());
+  CHECK(a.link->routeIn() && b.link->routeOut());
+  CHECK(b.link->forwardMidi(midi::controlChange(1, proto::cc::kCrossfaderMsb, 77)));
+  sim.run(60);
+  CHECK(has(a.bridged, midi::controlChange(1, proto::cc::kCrossfaderMsb, 77)));
+}
+
 EPDJ_TEST(node_hostile_input_is_counted_and_ignored) {
   Sim sim(12);
   Node& b = sim.add(0x0B, 1, false);

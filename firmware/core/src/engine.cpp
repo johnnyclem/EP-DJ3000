@@ -20,8 +20,13 @@ constexpr uint32_t kTransportRefreshUs = 10000000;  // keeps a follower's phase 
 constexpr uint32_t kToneMaxUs = 10000000;
 constexpr uint32_t kIdentifyHalfPeriodUs = 250000;
 constexpr int32_t kNudgeTicksPerStep = 32;  // PROTOCOL 2.5: +0.1 BPM per 32 ticks
+constexpr int32_t kKnobPickup14 = AnalogControl::kMaxOut * 2 / 100;  // ~2% of the knob's travel
 constexpr uint8_t kNoNote = 0xFF;
 constexpr uint8_t kMaxTouch = 8;
+
+// A GET_CONFIG dump (every key and the closing ACK) must fit the output queue in one go.
+static_assert(Engine::kOutQueueBytes >= kConfigDumpBytes + (proto::kConfigCount + 1) * kRecordHeader,
+              "the output queue cannot hold a full GET_CONFIG dump");
 
 bool sameRing(const TouchRing::Config& a, const TouchRing::Config& b) {
   return a.sectors == b.sectors && a.onPermille == b.onPermille && a.offPermille == b.offPermille &&
@@ -158,6 +163,12 @@ uint8_t Engine::channel() const {
   return bootDeck_ == proto::Deck::B ? proto::kDefaultChannelDeckB : proto::kDefaultChannelDeckA;
 }
 
+// A non-zero config value wins over the build-time default; applied live by applyConfig.
+uint8_t Engine::linkGroup() const {
+  const int32_t g = cfg_.get(ConfigKey::LinkGroup);
+  return static_cast<uint8_t>(g != 0 ? g : id_.linkGroup);
+}
+
 proto::TransportState Engine::transport() const { return isMaster() ? fsm_.state() : mirror_; }
 
 bool Engine::followingLink() const {
@@ -264,7 +275,7 @@ void Engine::ensureStarted() {
   link::Link::Config lc;
   lc.mac = id_.mac;
   lc.deck = static_cast<uint8_t>(bootDeck_);
-  lc.group = id_.linkGroup;
+  lc.group = linkGroup();
   lc.epoch = id_.epoch;
   link_.configure(lc);
   applyConfig(true);
@@ -320,10 +331,15 @@ void Engine::applyConfig(bool force) {
     knobSent_ = -1;
     knobForce_ = true;
   }
+  // The same physical position now reads differently (or means something else): pick up again.
+  if (changed(K::KnobRole) || changed(K::KnobRawMin) || changed(K::KnobRawMax) || changed(K::KnobInvert)) {
+    knobPickup_ = KnobPickup::Arm;
+  }
 
   if (changed(K::ButtonDebounceMs)) deb_.setDebounceMs(static_cast<uint8_t>(v(K::ButtonDebounceMs)));
   if (changed(K::MtcFps)) mtc_.setFps(static_cast<uint8_t>(v(K::MtcFps)), now_);
   if (changed(K::LinkBridge)) link_.setBridgeMode(static_cast<proto::LinkBridge>(v(K::LinkBridge)));
+  if (!force && changed(K::LinkGroup)) link_.setGroup(linkGroup(), now_);  // boot reads it in ensureStarted
   if (changed(K::LinkEnable)) {
     linkEnabled_ = v(K::LinkEnable) != 0;
     linkUsbHostSent_ = -1;  // the link missed host changes while disabled: tell it again next step
@@ -604,18 +620,34 @@ void Engine::runFader() {
   }
 }
 
+// Pickup for knobRole = BPM. The first sample after arming is "home"; the knob takes over the tempo
+// once it is more than ~2% of its travel away from there.
+bool Engine::knobTakesOver(uint16_t v14) {
+  if (knobPickup_ == KnobPickup::Arm) {
+    knobHome_ = v14;
+    knobPickup_ = KnobPickup::Waiting;
+  }
+  if (knobPickup_ == KnobPickup::Waiting) {
+    const int32_t away = static_cast<int32_t>(v14) - static_cast<int32_t>(knobHome_);
+    if ((away < 0 ? -away : away) > kKnobPickup14) knobPickup_ = KnobPickup::Active;
+  }
+  return knobPickup_ == KnobPickup::Active;
+}
+
 void Engine::runKnob() {
   const AnalogControl::Result r = knob_.update(in_.knobRaw, now_);
   knobOut_ = r.value;
-  if (!r.changed && !knobForce_) return;
-  knobForce_ = false;
   if (cfg_.get(ConfigKey::KnobRole) == static_cast<int32_t>(proto::KnobRole::Bpm)) {
+    knobForce_ = false;  // a resend must not replace a tempo that the host or a tap set since
+    if (!knobTakesOver(r.value) || !r.changed) return;
     // 60.0 + 120.0 x position BPM, in tenths, rounded.
     const uint32_t x10 = 600u + (static_cast<uint32_t>(r.value) * 1200u + 8191u) / 16383u;
     setTempo(static_cast<uint16_t>(x10), TempoSource::Knob);
-  } else {
-    sendKnob(r.value);
+    return;
   }
+  if (!r.changed && !knobForce_) return;
+  knobForce_ = false;
+  sendKnob(r.value);
 }
 
 // ---- tempo, transport, clock ------------------------------------------------------------------
@@ -784,11 +816,10 @@ void Engine::handleHostMessage(const midi::Message& m) {
         cueLit_ = on;
         break;
       case proto::note::kPlay:
-        // "vel > 0 = deck is playing". As clock master that starts the transport; a velocity-0 release
-        // changes nothing, so the pulse we just sent cannot be echoed back into a pause.
-        if (isMaster()) {
-          if (on) goTransport(TransportState::Playing);
-        } else {
+        // "vel > 0 = deck is playing": feedback for the LED, in every mode. Only the transport CC commands
+        // a master, so a host can mirror its play state to the unit without starting its clock. A
+        // velocity-0 release pauses only the mirror, so the pulse we sent cannot be echoed into a state change.
+        if (!isMaster()) {
           mirror_ = on ? TransportState::Playing : (mirror_ == TransportState::Playing ? TransportState::Paused : mirror_);
         }
         break;

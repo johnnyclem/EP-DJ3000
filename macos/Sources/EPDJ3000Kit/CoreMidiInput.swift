@@ -2,6 +2,7 @@
 // serially for a given port.
 
 import CoreMIDI
+import EPDJ3000KitPure
 import Foundation
 
 /// A chunk of MIDI bytes as it arrived: one CoreMIDI packet. A packet may hold several messages, or just part of a SysEx.

@@ -57,7 +57,7 @@ LAYOUT = [
     ]),
     ("Mixer", [
         ("crossfader", "CrossFader", "KnobSliderHiRes", LIVE, "global", False, "Fast", "Crossfader - faderRole CROSSFADER - no use with an external mixer"),
-        ("channelVolume", "ChannelFader", "KnobSliderHiRes", TRY, "deck", False, "Fast", "UNVERIFIED command name - faderRole CHANNEL_VOLUME"),
+        ("channelVolume", "ChannelFader", "KnobSliderHiRes", TRY, "deck", False, "Fast", "UNVERIFIED command name - faderRole CHANNEL_VOLUME (the default)"),
         ("knob", "Gain", "KnobSliderHiRes", LIVE, "deck", False, "Fast", "Orange knob as trim - an arbitrary choice - re-learn to taste"),
     ]),
     ("Jog - EXPERIMENTAL - disabled - see README", [

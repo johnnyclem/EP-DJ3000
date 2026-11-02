@@ -2,6 +2,7 @@
 // (SET_CONFIG, live); Save to unit makes them permanent (SAVE_CONFIG).
 
 import EPDJ3000Kit
+import EPDJ3000KitPure
 import EPDJ3000Protocol
 import SwiftUI
 
@@ -42,7 +43,7 @@ private enum UnitAction: Identifiable {
 
     var title: String {
         switch self {
-        case .loadDefaults: return "Load factory defaults?"
+        case .loadDefaults: return "Load defaults? (the deck id stays)"
         case let .swapDeck(deck): return "Make this unit Deck \(deck == .a ? "A" : "B")?"
         case .reboot: return "Restart the unit?"
         case .bootloader: return "Enter the bootloader?"
@@ -52,7 +53,7 @@ private enum UnitAction: Identifiable {
     var message: String {
         switch self {
         case .loadDefaults:
-            return "Replaces the live settings with the defaults. Nothing is permanent until you press Save to unit."
+            return "Replaces the live settings with the factory defaults, except the deck id: this unit keeps the deck it is. Nothing is permanent until you press Save to unit."
         case .swapDeck:
             return "The deck id is saved right away and the unit restarts, so it disappears for a moment. Its MIDI channel and USB name change with it."
         case .reboot:
@@ -120,7 +121,7 @@ struct SettingsPane: View {
                 saved = false
                 Task { await session.reloadConfig() }
             }
-            Button("Load defaults...") { pending = .loadDefaults }
+            Button("Load defaults (keeps deck id)...") { pending = .loadDefaults }
             Spacer()
             Button(session.deck == .a ? "Make Deck B..." : "Make Deck A...") {
                 pending = .swapDeck(to: session.deck == .a ? .b : .a)
@@ -165,13 +166,14 @@ struct ConfigRow: View {
     }
 
     @ViewBuilder private var control: some View {
-        if key == .deckId {
-            // The deck id changes through SET_DECK, which restarts the unit; the action bar has the button.
+        if ConfigPresentation.isReadOnly(key) {
+            // The unit refuses SET_CONFIG for these (the deck id changes through SET_DECK, which restarts the unit);
+            // the action bar has that button.
             HStack {
                 Text(desc.name)
                 Spacer()
                 Text(ConfigPresentation.label(for: key, value: value ?? desc.defaultValue))
-                Text("(change with Make Deck ... above)").font(.caption).foregroundStyle(.secondary)
+                Text("(change it with Make Deck ... above)").font(.caption).foregroundStyle(.secondary)
             }
         } else {
             editor

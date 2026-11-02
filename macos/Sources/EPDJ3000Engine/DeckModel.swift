@@ -9,9 +9,9 @@
 //   jog (CC 22)            platter velocity, via JogVelocityEstimator
 //   cue (note 36)          CUE: playing -> back to cue and pause; paused -> set cue, preview while held
 //   rev (note 37)          reverse while held
-//   play (note 39)         platter-tap pulse: toggle play/pause
-//   fader                  by faderRole: CROSSFADER -> gain through `cutCurve`; CHANNEL_VOLUME -> linear gain;
-//                          PITCH -> tempo +-`pitchRange`
+//   play (note 39)         platter-tap pulse: toggle play/pause (unless a transport message just said the same thing)
+//   fader                  by faderRole: CHANNEL_VOLUME (the unit's default) -> linear gain; CROSSFADER -> gain
+//                          through `cutCurve`; PITCH -> tempo +-`pitchRange`
 //   knob (CC 24)           output volume (with knobRole = BPM the device sends `bpm` instead and the knob is a tempo)
 //   bpm (CC 20/52, 21)     requested tempo; with `trackBpm` known it sets the tempo ratio
 //   transport CC 29, MIDI Start/Continue/Stop, SPP 0   follow a unit that is the transport master (SYNC_MASTER)
@@ -22,7 +22,8 @@ public final class DeckModel {
     public let player: ScratchPlayerCore
     public private(set) var controller: ControllerState
 
-    /// Curve for the CROSSFADER fader role. The firmware has its own `faderCurve`: leave one of the two LINEAR.
+    /// Curve for the CROSSFADER fader role only (CHANNEL_VOLUME is always linear). The firmware has its own
+    /// `faderCurve`: leave one of the two LINEAR.
     public var cutCurve: FaderCurve = .sharpCut {
         didSet { applyFaderRole() }
     }
@@ -41,9 +42,15 @@ public final class DeckModel {
     /// Tempo the unit last asked for (`bpm` / `bpmNudge`), in BPM.
     public private(set) var requestedBpm: Double?
 
+    /// A tap on a unit in SYNC_MASTER arrives twice: as Start/Stop (its transport moved) and as the play pulse
+    /// (docs/PROTOCOL.md section 2.3). The transport message already moved the player, so a pulse this soon after one
+    /// is the same tap. Two real taps are never this close.
+    static let pulseAfterTransportWindow = 0.05
+
     private var jog: JogVelocityEstimator
     private var lastPlayLed: Bool?
     private var lastCueLed: Bool?
+    private var lastTransportMessage = -Double.infinity
 
     public init(player: ScratchPlayerCore, channel: UInt8) {
         self.player = player
@@ -92,18 +99,22 @@ public final class DeckModel {
                 jog.addTicks(MidiEncoding.decodeRelative(value), at: time)
                 if controller.touched { player.setJog(ticksPerSecond: jog.velocity(at: time)) }
             } else if cc == Proto.CC.transport, let state = TransportState(rawValue: value) {
+                lastTransportMessage = time
                 follow(state)
             }
         case .start:
-            // Start means "from the top". Ignored while already playing so our own LED feedback cannot make a
-            // unit in SYNC_MASTER restart a track we were happy to be playing.
+            // Start means "from the top". Ignored while already playing: the track is already where the user
+            // wants it (they pressed play on screen, or the transport CC just started it).
+            lastTransportMessage = time
             if player.status.transport != .playing {
                 player.send(.stop)
                 player.send(.play)
             }
         case .continue:
+            lastTransportMessage = time
             player.send(.play)
         case .stop:
+            lastTransportMessage = time
             player.send(.pause)
         case let .songPosition(beats):
             // Stop + rewind is Stop then SPP 0. We have no beat grid, so any other position is not followed.
@@ -122,7 +133,7 @@ public final class DeckModel {
             let revDown = controller.buttons.contains(.rev)
             if revDown != before.buttons.contains(.rev) { player.update { $0.reverseHeld = revDown } }
         }
-        if controller.playPulseCount != before.playPulses {
+        if controller.playPulseCount != before.playPulses && time - lastTransportMessage > Self.pulseAfterTransportWindow {
             player.send(.togglePlay)
         }
         if controller.fader != before.fader || controller.faderRole != before.faderRole {
@@ -149,6 +160,10 @@ public final class DeckModel {
     /// The note-ons/offs that bring the unit's CUE and PLAY LEDs in line with the player (docs/PROTOCOL.md: `cue` and
     /// `play` are "in" as well as "out"). Returns only what changed since the last call; call it after handling
     /// events and whenever the player's status may have changed (a UI timer is fine). The first call returns both.
+    ///
+    /// Safe in every unit mode: the unit takes the inbound `play` note as LED feedback only and never lets it start
+    /// its transport (section 2.6); only the `transport` CC commands a SYNC_MASTER unit. So there is no mode in which
+    /// this must be held back.
     public func feedback() -> [MidiEvent] {
         let s = player.status
         let play = s.transport == .playing

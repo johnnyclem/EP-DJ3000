@@ -128,6 +128,121 @@ final class DeviceClientTests: XCTestCase {
         XCTAssertEqual(dev.read { $0.config[Int(ConfigKey.tapPlay.rawValue)] }, 1, "never reached")
     }
 
+    func testLoadDefaultsKeepsTheDeckId() async throws {
+        let dev = FakeDevice(deck: .b)
+        let client = make(dev, deck: 1)
+        try await client.setConfig(.tapMaxMs, 300)
+        try await client.setConfig(.linkGroup, 7)
+        try await client.loadDefaults()
+        let all = try await client.dumpConfig()
+        XCTAssertEqual(all[.deckId], 1, "still Deck B")
+        XCTAssertEqual(all[.tapMaxMs], 180)
+        XCTAssertEqual(all[.linkGroup], 0)
+        for d in ConfigTable.all where d.key != .deckId { XCTAssertEqual(all[d.key], d.defaultValue, d.name) }
+        XCTAssertEqual(dev.read { $0.deck }, 1)
+    }
+
+    func testTestToneRangesAreCheckedByTheUnit() async throws {
+        let dev = FakeDevice()
+        let client = make(dev)
+        try await client.testTone(on: true, freqHz: 20, attenDb: 0)
+        try await client.testTone(on: true, freqHz: 20000, attenDb: 96)
+        XCTAssertEqual(dev.read { $0.lastTone }, [1, 0x20, 0x4E, 96])
+        for (freq, atten) in [(19, 12), (20001, 12), (0, 12), (65535, 12), (440, 97), (440, 255)] as [(UInt16, UInt8)] {
+            await XCTAssertThrowsDeviceError(.nak(.testTone, .outOfRange), { try await client.testTone(on: true, freqHz: freq, attenDb: atten) })
+        }
+        XCTAssertEqual(dev.read { $0.lastTone }, [1, 0x20, 0x4E, 96], "a refused request changes nothing")
+        try await client.testTone(on: false, freqHz: 0, attenDb: 200)  // off ignores the tone parameters
+        XCTAssertEqual(dev.read { $0.lastTone?.first }, 0)
+
+        dev.mutate { $0.hasDac = false }
+        await XCTAssertThrowsDeviceError(.nak(.testTone, .notSupported)) { try await client.testTone(on: true) }
+    }
+
+    // MARK: config dump
+
+    private func configFrame(_ id: UInt8, _ value: UInt8, deck: UInt8 = 0) -> SysExFrame {
+        SysExFrame(deck: deck, reply: .config, payload: [id, value, 0, 0, 0])
+    }
+
+    private func dumpAck(deck: UInt8 = 0) -> SysExFrame { .ack(deck: deck, command: SysExCmd.getConfig.rawValue) }
+
+    func testDumpEndsOnTheAckWhateverNumberOfKeysTheUnitHas() async throws {
+        let dev = FakeDevice()
+        let clock = ManualClock()
+        let client = make(dev, clock: clock, timeout: 1)
+
+        let known = ConfigTable.all.count
+        for count in [known, 20, 1, known + 3] {
+            dev.mutate { $0.keyCount = count }
+            let all = try await client.dumpConfig()   // the clock never advances: the ACK ends it, not a timeout
+            XCTAssertEqual(all.count, min(count, known), "\(count) keys on the unit")
+            for d in ConfigTable.all {
+                if Int(d.key.rawValue) < count {
+                    XCTAssertEqual(all[d.key], d.defaultValue, d.name)
+                } else {
+                    XCTAssertNil(all[d.key], "\(d.name) is not on this unit")
+                }
+            }
+            XCTAssertEqual(clock.sleeperCount, 0, "the finished request's timeout was cancelled")
+        }
+    }
+
+    func testDumpOfADeckBUnitCarriesItsDeckId() async throws {
+        let all = try await make(FakeDevice(deck: .b), deck: 1).dumpConfig()
+        XCTAssertEqual(all[.deckId], 1)
+        XCTAssertEqual(all.count, ConfigTable.all.count)
+    }
+
+    func testDumpSkipsUnknownKeysAndStopsOnlyOnTheAckOfItsOwnCommand() async throws {
+        let dev = FakeDevice()
+        dev.mutate { $0.silent = true }
+        let client = make(dev)
+        let t = Task { try await client.dumpConfig() }
+        await waitUntil("sent") { dev.read { $0.requests.count } == 1 }
+
+        dev.inject(configFrame(ConfigKey.mode.rawValue, 2))
+        dev.inject(.ack(deck: 0, command: SysExCmd.saveConfig.rawValue))   // someone else's ACK: not the end
+        dev.inject(configFrame(99, 5))                                      // a key only a newer firmware has
+        dev.inject(configFrame(ConfigKey.tapMaxMs.rawValue, 77))
+        dev.inject(SysExFrame(deck: 0, reply: .info, payload: Info().serialized()))  // not a CONFIG: not part of it
+        dev.inject(dumpAck())
+        let all = try await t.value
+        XCTAssertEqual(all, [.mode: 2, .tapMaxMs: 77])
+    }
+
+    func testDumpWithoutTheAckTimesOut() async {
+        let dev = FakeDevice()
+        dev.mutate { $0.silent = true }
+        let clock = ManualClock()
+        let client = make(dev, clock: clock, timeout: 1)
+        let t = await inFlight(dev, clock) { try await client.dumpConfig() }
+        for key in ConfigKey.allCases { dev.inject(configFrame(key.rawValue, 1)) }  // every key, but no end marker
+        try? await Task.sleep(nanoseconds: 30_000_000)
+        XCTAssertEqual(clock.sleeperCount, 1, "still waiting")
+        clock.advance(by: 1)
+        await XCTAssertThrowsDeviceError(.timeout(.getConfig)) { try await t.value }
+    }
+
+    func testDumpWithATruncatedConfigFrameIsMalformed() async {
+        let dev = FakeDevice()
+        dev.mutate { $0.silent = true }
+        let client = make(dev)
+        let t = Task { try await client.dumpConfig() }
+        await waitUntil("sent") { dev.read { $0.requests.count } == 1 }
+        dev.inject(configFrame(ConfigKey.mode.rawValue, 2))
+        dev.inject(SysExFrame(deck: 0, reply: .config, payload: [ConfigKey.tapMaxMs.rawValue, 77]))
+        dev.inject(dumpAck())
+        await XCTAssertThrowsDeviceError(.malformedReply(.getConfig)) { try await t.value }
+    }
+
+    func testDumpRefusedByTheUnitFailsAtOnce() async {
+        let dev = FakeDevice()
+        dev.mutate { $0.forcedNak = (command: SysExCmd.getConfig.rawValue, code: SysExError.busy.rawValue) }
+        let client = make(dev)
+        await XCTAssertThrowsDeviceError(.nak(.getConfig, .busy)) { try await client.dumpConfig() }
+    }
+
     // MARK: NAK mapping
 
     func testNakCodesMapToTypedErrors() async {
@@ -304,12 +419,16 @@ final class DeviceClientTests: XCTestCase {
     func testSetDeckReAddressesTheClientToTheNewId() async throws {
         let dev = FakeDevice(deck: .a)
         let client = make(dev, deck: 0)
-        try await client.setDeck(.b)  // the ACK still carries deck 0
+        try await client.setDeck(.b)
+        XCTAssertEqual(dev.read { $0.replies.last }, .ack(deck: 0, command: SysExCmd.setDeck.rawValue),
+                       "the ACK carries the deck the unit had when it was asked (docs/PROTOCOL.md section 3)")
         var target = await client.target
         XCTAssertEqual(target, 1)
         XCTAssertEqual(dev.read { $0.deck }, 1)
         let info = try await client.getInfo()
         XCTAssertEqual(info.deck, 1)
+        let deckId = try await client.getConfig(.deckId)
+        XCTAssertEqual(deckId, 1)
 
         let anyDev = FakeDevice(deck: .a)
         let anyClient = make(anyDev)
@@ -318,13 +437,16 @@ final class DeviceClientTests: XCTestCase {
         XCTAssertEqual(target, Proto.SysEx.deckAny, "an any-deck client stays any-deck")
     }
 
-    func testSetDeckSucceedsWhicheverIdTheAckCarries() async throws {
+    func testTheDeckIdChangesOnlyThroughSetDeck() async throws {
         let dev = FakeDevice(deck: .a)
-        dev.mutate { $0.setDeckAcksWithNewId = true }
         let client = make(dev, deck: 0)
-        try await client.setDeck(.b)
+        await XCTAssertThrowsDeviceError(.nak(.setConfig, .notSupported)) { try await client.setConfig(.deckId, 1) }
+        await XCTAssertThrowsDeviceError(.nak(.setConfig, .notSupported)) { try await client.setConfig(.deckId, 0) }
+        XCTAssertEqual(dev.read { $0.deck }, 0)
+        let deckId = try await client.getConfig(.deckId)
+        XCTAssertEqual(deckId, 0)
         let target = await client.target
-        XCTAssertEqual(target, 1)
+        XCTAssertEqual(target, 0, "a refused SET_CONFIG must not re-address the client")
     }
 
     func testAnAckFromAnotherDeckDoesNotCompleteAnOrdinaryRequest() async throws {
@@ -379,17 +501,6 @@ final class DeviceClientTests: XCTestCase {
         XCTAssertEqual(clock.sleeperCount, 1)
         clock.advance(by: 0.1)
         await XCTAssertThrowsDeviceError(.timeout(.saveConfig)) { try await t.value }
-    }
-
-    func testDumpFromAnOlderFirmwareWithFewerKeysTimesOut() async {
-        let dev = FakeDevice()
-        dev.mutate { $0.keyCount = 20 }
-        let clock = ManualClock()
-        let client = make(dev, clock: clock, timeout: 1)
-        let t = Task { try await client.dumpConfig() }
-        await waitUntil("20 frames in, still waiting") { dev.read { $0.requests.count } == 1 && clock.sleeperCount == 1 }
-        clock.advance(by: 1)
-        await XCTAssertThrowsDeviceError(.timeout(.getConfig)) { try await t.value }
     }
 
     func testRequestsRunOneAtATimeAndEachGetsItsOwnAnswer() async throws {
@@ -502,7 +613,7 @@ final class DeviceClientTests: XCTestCase {
         let info = try await client.getInfo()
         XCTAssertEqual(info.serial, 0xDEADBEEF)
         let all = try await client.dumpConfig()
-        XCTAssertEqual(all.count, 32)
+        XCTAssertEqual(all.count, ConfigTable.all.count)
 
         let seen = await collect(events, count: 1)
         XCTAssertEqual(seen, [.clock], "the interleaved real-time bytes surface as events, in addition")

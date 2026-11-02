@@ -73,7 +73,7 @@ Numbers are from `protocol/epdj3000.json`. Deck A unit shown (channel 1); the De
 | `crossfader` | CC 23 / 55 | `CrossFader` / KnobSliderHiRes | active | DDJ-FLX4 row on [skills.lc][skills]; [Numark thread][numark] |
 | `knob` | CC 24 / 56 | `Gain` / KnobSliderHiRes | active | DDJ-FLX4 row on [skills.lc][skills] only |
 | `rev` | Note 37 | `Reverse` / Button | disabled, UNVERIFIED name | a command list on [skills.lc][skills], no row |
-| `channelVolume` | CC 7 / 39 | `ChannelFader` / KnobSliderHiRes | disabled, UNVERIFIED name | a command list on [skills.lc][skills], no row |
+| `channelVolume` | CC 7 / 39 (default role) | `ChannelFader` / KnobSliderHiRes | disabled, UNVERIFIED name | a command list on [skills.lc][skills], no row |
 | `touch` | Note 38 | `JogTouch` / JogTouch | disabled, experimental | named by [DJ TechTools 2017][jog2017]; type name from the [67-file census](https://github.com/guillain/DJ-MIDI-Studio/pull/354) |
 | `jog` | CC 22 relative | `JogScratch` / JogRotate | disabled, experimental | the [spec][spec] quotes a `JogScratch,...,JogRotate,B022,...,RO` row from a shipped file |
 
@@ -81,7 +81,9 @@ Not mapped: `bpm`, `bpmNudge`, `tap`, `transport`. The unit only sends them in i
 modes, which have nothing to do with rekordbox. `knob` is `Gain` only because it is a command name I
 could verify; it is an arbitrary choice for an orange knob, re-learn it to whatever you like. The
 slide pot sends exactly one of the three fader pairs, chosen by the unit's `faderRole`; all three rows
-exist, only one ever receives data.
+exist, only one ever receives data. The unit's default `faderRole` is `CHANNEL_VOLUME`, whose `ChannelFader` row is
+disabled (unverified command name), so a default unit's pot does nothing in rekordbox until you set it to `PITCH`
+or `CROSSFADER` (active rows) or enable that row after confirming the name in the ADD menu.
 
 How the rows address a single-deck unit, in case you edit them: `input` is the code on channel 0, the
 unit's channel goes into that deck's column, other deck columns are empty (`9027,0,,,` = Deck 1;
@@ -93,8 +95,10 @@ carries the channel in the code (`B017` / `B117`) and no deck columns, like the 
 Same idea as `docs/ARCHITECTURE.md` section 1: each unit is a controller plus its own USB sound
 card, and the EP-136 mixes in hardware.
 
-1. **Slide pot as tempo fader.** Set `faderRole` to `PITCH` (config key 11, value 2) and save. With an
-   external mixer, rekordbox's crossfader and channel faders do nothing audible.
+1. **Slide pot as tempo fader.** The unit's default `faderRole` is `CHANNEL_VOLUME` (CC 7 / 39), whose
+   `ChannelFader` row is disabled (see [What is mapped](#what-is-mapped)). With an external mixer, rekordbox's
+   crossfader and channel faders do nothing audible anyway. Set `faderRole` to `PITCH` (config key 11, value 2) and
+   save to get a tempo fader.
 2. **Mixer mode.** Preferences > Audio > **Mixer Mode: External** ("use an external DJ mixer/DJ
    controller"). The [rekordbox manual][manual] (pp. 235-236) says this gives *six outputs: track
    decks 1 through 4, sampler deck and preview*, assigned under **Output channels**.
@@ -157,7 +161,9 @@ need a different app (Mixxx, VirtualDJ) until someone proves otherwise on hardwa
   move may send only the LSB. Sweep the fader fully and learn again.
 * **LEDs.** `PlayPause` and `Cue` rows have `output` = `input`, and the guide says rekordbox sends the
   same code to MIDI OUT for functions with an indicator. The unit lights its buttons from Note 39 and
-  Note 36 with velocity > 0, which is what Pioneer-style feedback sends. Untested.
+  Note 36 with velocity > 0, which is what Pioneer-style feedback sends. The output deck columns mirror the input
+  ones, so the feedback should go out on the unit's own channel, the only one it listens to (PROTOCOL.md section 2).
+  Untested.
 * **One code, one function** (official). The three fader pairs use different CCs so this never bites.
 * **Fader direction** is whatever the pot is; `faderInvert` flips it on the unit.
 * **No timecode / clock to rekordbox.** The unit's MIDI clock, MTC and transport output (SYNC_MASTER)
@@ -178,7 +184,7 @@ from third-party documentation. Codes are Deck A / Deck B (channel 1 / 2).
 | `cue` | DECK, `Cue` | Button | press CUE | `9024` / `9124` |
 | `pitch` | DECK, `TempoSlider` | Knob/Slider (0h-3FFFh) | sweep the pot (needs `faderRole` = PITCH) | `B019` / `B119` |
 | `crossfader` | MIXER, `CrossFader` | Knob/Slider (0h-3FFFh) | sweep the pot (needs `faderRole` = CROSSFADER) | `B017` / `B117` |
-| `channelVolume` | MIXER, channel fader | Knob/Slider (0h-3FFFh) | sweep the pot (needs `faderRole` = CHANNEL_VOLUME) | `B007` / `B107` |
+| `channelVolume` | MIXER, channel fader | Knob/Slider (0h-3FFFh) | sweep the pot (default `faderRole` = CHANNEL_VOLUME) | `B007` / `B107` |
 | `knob` | MIXER, any knob function | Knob/Slider (0h-3FFFh) | turn the orange knob | `B018` / `B118` |
 | `rev` | DECK, any reverse function | Button | press REV | `9025` / `9125` |
 | `touch` | not in the UI | - | - | `9026` / `9126` |
@@ -193,8 +199,8 @@ rekordbox proposes if it is unclear, and compare with the exported CSV.)
 
 1. Import (above), open PERFORMANCE mode, load a track on deck 1.
 2. Tap the platter: deck 1 plays/pauses. Does the unit's LED feedback follow the deck state?
-3. CUE: set and return. REV: nothing yet (disabled row). Tempo pot: moves deck 1's tempo, in the
-   direction you expect (flip with `faderInvert`).
+3. CUE: set and return. REV: nothing yet (disabled row). Tempo pot (set `faderRole` to `PITCH` first): moves deck
+   1's tempo, in the direction you expect (flip with `faderInvert`).
 4. Export again: did rekordbox keep your disabled and RO rows, change any, or reorder? That tells you what
    it parsed.
 5. Second unit on deck 2, then the audio routing above.

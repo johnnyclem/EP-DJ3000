@@ -38,6 +38,11 @@ const STEPS = [
     args: ["drivers/test/djay-rekordbox/check.mjs"],
   },
   {
+    name: "drivers/README.md defaults table and the per-app READMEs' default fader role against the contract",
+    cmd: process.execPath,
+    args: ["drivers/test/defaults/check.mjs"],
+  },
+  {
     name: "XML files parse with xmllint",
     cmd: "xmllint",
     args: [

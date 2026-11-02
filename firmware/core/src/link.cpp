@@ -813,6 +813,15 @@ void Link::configure(const Config& c) {
   peers_.setSelf(c.mac, c.deck);
 }
 
+void Link::setGroup(uint8_t group, uint64_t nowUs) {
+  if (group == cfg_.group) return;
+  nowUs_ = nowUs;
+  cfg_.group = group;
+  peers_.clear();
+  updatePartner(nowUs, nullptr);
+  nextHelloUs_ = nowUs;
+}
+
 void Link::setUsbHost(bool mounted) {
   usbHost_ = mounted;
   refreshRoutes();

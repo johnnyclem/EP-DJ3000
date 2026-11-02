@@ -233,6 +233,7 @@ EPDJ_TEST(engine_fader_sweep_14bit_pairs_msb_first_for_every_role) {
 
 EPDJ_TEST(engine_fader_does_not_chatter_and_reacts_within_a_step) {
   Deck d(0);
+  d.set(ConfigKey::FaderRole, 0);  // CROSSFADER; the default role is CHANNEL_VOLUME
   d.in.faderRaw = 2000;
   d.run(200);
   d.clearLog();
@@ -258,10 +259,29 @@ EPDJ_TEST(engine_fader_does_not_chatter_and_reacts_within_a_step) {
   CHECK(seen);
 }
 
+EPDJ_TEST(engine_fader_defaults_to_channel_volume) {
+  // Contract v1.1: each deck cuts its own channel, so two units never fight over one crossfader.
+  Deck d(0);
+  CHECK_EQ(d.cfg.get(ConfigKey::FaderRole), static_cast<int>(proto::FaderRole::ChannelVolume));
+  d.in.faderRaw = 3000;
+  d.run(100);
+  const std::vector<Bytes> m = usbMsgs(d.log, 0);
+  CHECK(ccPresent(m, proto::cc::kChannelVolumeMsb) && ccPresent(m, proto::cc::kChannelVolumeLsb));  // CC 7 / 39
+  CHECK(!ccPresent(m, proto::cc::kCrossfaderMsb) && !ccPresent(m, proto::cc::kCrossfaderLsb));
+  CHECK(!ccPresent(m, proto::cc::kPitchMsb) && !ccPresent(m, proto::cc::kPitchLsb));
+  CHECK_EQ(proto::cc::kChannelVolumeMsb, 7);
+  CHECK_EQ(proto::cc::kChannelVolumeLsb, 39);
+  const std::vector<int> v = pairValues(m, 0, 7, 39);
+  CHECK(!v.empty());
+  CHECK_NEAR(lastOr(v), 12195, 15);  // raw 3000 of 40..4055 through the 1.5% dead zones
+}
+
 EPDJ_TEST(engine_fader_role_change_resends_on_the_new_pair) {
   Deck d(0);
+  d.set(ConfigKey::FaderRole, 0);  // CROSSFADER
   d.in.faderRaw = 3000;
   d.run(200);
+  CHECK(ccPresent(usbMsgs(d.log, 0), proto::cc::kCrossfaderMsb));
   d.clearLog();
   d.set(ConfigKey::FaderRole, 1);  // CHANNEL_VOLUME, pot untouched
   d.run(5);
@@ -286,7 +306,9 @@ EPDJ_TEST(engine_knob_generic_and_bpm_roles) {
   CHECK_EQ(lastOr(v), 16383);
   CHECK_EQ(d.engine.tempoX10(), 1200);  // a generic knob leaves the tempo alone
 
-  d.set(ConfigKey::KnobRole, 1);  // BPM: 60.0 + 120.0 x position
+  d.set(ConfigKey::KnobRole, 1);  // BPM: 60.0 + 120.0 x position, once the knob is turned
+  d.run(5);
+  CHECK_EQ(d.engine.tempoX10(), 1200);  // the knob sits at 4095 (180 BPM) but nothing is overridden yet
   d.in.knobRaw = 0;
   d.run(100);
   CHECK_EQ(d.engine.tempoX10(), 600);
@@ -321,6 +343,118 @@ EPDJ_TEST(engine_knob_generic_and_bpm_roles) {
   }
   CHECK(times.size() >= 4);
   for (size_t i = 1; i < times.size(); ++i) CHECK(times[i] - times[i - 1] >= 50000);
+}
+
+// A saved tempo of 128.5 BPM and a knob parked at mid travel (which would mean 120.0 BPM).
+Deck* bootWithBpmKnob(std::unique_ptr<Deck>& holder, int mode = 0) {
+  holder.reset(new Deck(0));
+  holder->set(ConfigKey::BpmX10, 1285);
+  holder->set(ConfigKey::KnobRole, 1);
+  holder->set(ConfigKey::Mode, mode);
+  holder->in.knobRaw = 2048;
+  return holder.get();
+}
+
+EPDJ_TEST(engine_bpm_knob_does_not_override_the_saved_tempo_at_boot) {
+  std::unique_ptr<Deck> hold;
+  Deck& d = *bootWithBpmKnob(hold);
+  d.run(500);
+  CHECK_EQ(d.engine.tempoX10(), 1285);  // used to jump to 120.0 on the first sample
+  CHECK_EQ(d.cfg.get(ConfigKey::BpmX10), 1285);
+  CHECK(!ccPresent(usbMsgs(d.log, 0), proto::cc::kBpmMsb));  // and the host was told nothing
+  CHECK(!ccPresent(usbMsgs(d.log, 0), proto::cc::kKnobMsb));  // BPM role: no generic knob CC either
+
+  // ADC noise and a fraction of a percent of drift are not a turn.
+  Rng rng(9);
+  for (int i = 0; i < 3000; ++i) {
+    d.in.knobRaw = static_cast<uint16_t>(2048 + rng.range(-3, 3));
+    d.step();
+  }
+  CHECK_EQ(d.engine.tempoX10(), 1285);
+
+  // Just under 2% of the travel (80 of 4095 counts = 1.95%), in either direction: still parked.
+  d.in.knobRaw = 2048 + 80;
+  d.run(300);
+  d.in.knobRaw = 2048 - 80;
+  d.run(300);
+  CHECK_EQ(d.engine.tempoX10(), 1285);
+  CHECK(!ccPresent(usbMsgs(d.log, 0), proto::cc::kBpmMsb));
+
+  // Past it, the knob takes over, as it always did: 60.0 + 120.0 x position.
+  d.in.knobRaw = 2048 + 90;
+  d.run(300);
+  CHECK_NEAR(d.engine.tempoX10(), 600 + 1200.0 * (2048 + 90) / 4095, 3);
+  CHECK_EQ(d.cfg.get(ConfigKey::BpmX10), d.engine.tempoX10());
+  const std::vector<int> bpm = pairValues(usbMsgs(d.log, 0), 0, proto::cc::kBpmMsb, proto::cc::kBpmLsb);
+  CHECK(!bpm.empty());
+  CHECK_EQ(lastOr(bpm), d.engine.tempoX10());
+
+  // From then on every move counts, however small.
+  d.in.knobRaw = 2048 + 95;
+  d.run(300);
+  CHECK_NEAR(d.engine.tempoX10(), 600 + 1200.0 * (2048 + 95) / 4095, 3);
+}
+
+EPDJ_TEST(engine_bpm_knob_pickup_works_downwards_and_for_a_clock_master) {
+  std::unique_ptr<Deck> hold;
+  Deck& d = *bootWithBpmKnob(hold, /*SYNC_MASTER*/ 1);
+  d.run(2000);
+  CHECK_EQ(d.engine.tempoX10(), 1285);
+  // The clock runs at the saved tempo, not at the 120.0 BPM that the knob position alone would give.
+  size_t clocks = 0;
+  for (const Rec& r : d.log) clocks += (r.kind == OutEvent::Kind::Message && r.bytes.size() == 1 && r.bytes[0] == 0xF8) ? 1u : 0u;
+  CHECK_NEAR(clocks, 2.0 * 1285 / 600.0 * 24.0, 3);  // 24 PPQN for 2 s at 128.5 BPM (about 102.8)
+
+  d.in.knobRaw = 2048 - 100;
+  d.run(300);
+  CHECK_NEAR(d.engine.tempoX10(), 600 + 1200.0 * (2048 - 100) / 4095, 3);
+}
+
+EPDJ_TEST(engine_bpm_knob_pickup_rearms_when_the_role_or_calibration_changes) {
+  Deck d(0);
+  d.set(ConfigKey::BpmX10, 1285);
+  d.in.knobRaw = 3000;
+  d.run(300);  // generic knob: it sends CC 24 and leaves the tempo alone
+  CHECK(ccPresent(usbMsgs(d.log, 0), proto::cc::kKnobMsb));
+  CHECK_EQ(d.engine.tempoX10(), 1285);
+
+  d.set(ConfigKey::KnobRole, 1);  // the knob is at 3000 (about 149 BPM) right now
+  d.run(300);
+  CHECK_EQ(d.engine.tempoX10(), 1285);  // switching the role does not make the tempo jump
+  d.in.knobRaw = 2000;
+  d.run(300);
+  CHECK_NEAR(d.engine.tempoX10(), 600 + 1200.0 * 2000 / 4095, 3);
+
+  // A calibration change moves the same physical position to a new reading: park again.
+  d.set(ConfigKey::BpmX10, 1000);
+  d.run(5);
+  CHECK_EQ(d.engine.tempoX10(), 1000);
+  d.set(ConfigKey::KnobRawMax, 3000);
+  d.run(300);
+  CHECK_EQ(d.engine.tempoX10(), 1000);
+  d.in.knobRaw = 1500;  // half of the new travel
+  d.run(300);
+  CHECK_NEAR(d.engine.tempoX10(), 1200, 3);
+}
+
+EPDJ_TEST(engine_bpm_knob_resend_does_not_replace_a_tempo_set_since) {
+  Deck d(0);
+  d.set(ConfigKey::KnobRole, 1);
+  d.in.knobRaw = 0;
+  d.run(100);
+  d.in.knobRaw = 4095;
+  d.run(300);
+  CHECK_EQ(d.engine.tempoX10(), 1800);  // picked up
+  d.hostMsg(b({0xB0, 20, 7, 0xB0, 52, 104}));  // the DJ software sets 100.0 BPM (7 x 128 + 104)
+  d.run(50);
+  CHECK_EQ(d.engine.tempoX10(), 1000);
+
+  // Re-plugging the cable re-sends controls; a knob nobody touched must not undo the host's tempo.
+  d.in.usbMounted = false;
+  d.run(50);
+  d.in.usbMounted = true;
+  d.run(300);
+  CHECK_EQ(d.engine.tempoX10(), 1000);
 }
 
 // ---- buttons -----------------------------------------------------------------------------------
@@ -463,12 +597,13 @@ EPDJ_TEST(engine_deck_b_uses_channel_two_for_everything) {
   d->click(true, 20);
   d->click(false, 20);
   d->set(ConfigKey::KnobRole, 1);
-  d->in.knobRaw = 100;
+  d->run(5);
+  d->in.knobRaw = 3000;  // well away from where it was when the role changed: the knob takes over the tempo
   d->run(200);
   const std::vector<Bytes> msgs = usbMsgs(d->log, 0);
   CHECK(msgs.size() > 100);
   CHECK(allOnChannel(msgs, 1));
-  CHECK(ccPresent(msgs, proto::cc::kJog) && ccPresent(msgs, proto::cc::kCrossfaderMsb) &&
+  CHECK(ccPresent(msgs, proto::cc::kJog) && ccPresent(msgs, proto::cc::kChannelVolumeMsb) &&
         ccPresent(msgs, proto::cc::kKnobMsb) && ccPresent(msgs, proto::cc::kBpmMsb));
   CHECK_EQ(countEq(msgs, b({0x91, 36, 127})), 1);
 }
@@ -618,10 +753,10 @@ EPDJ_TEST(engine_unmounted_usb_is_silent_and_mount_resends_state) {
   d.in.usbMounted = true;
   d.run(300);
   const std::vector<Bytes> m = usbMsgs(d.log, 0);
-  CHECK(ccPresent(m, proto::cc::kCrossfaderMsb) && ccPresent(m, proto::cc::kCrossfaderLsb));  // current state, both halves
+  CHECK(ccPresent(m, proto::cc::kChannelVolumeMsb) && ccPresent(m, proto::cc::kChannelVolumeLsb));  // current state, both halves
   CHECK(ccPresent(m, proto::cc::kKnobMsb) && ccPresent(m, proto::cc::kKnobLsb));
   CHECK_EQ(ccSum(m, 0, proto::cc::kJog), 0);  // motion made while nobody listened is not replayed
-  const std::vector<int> f = pairValues(m, 0, proto::cc::kCrossfaderMsb, proto::cc::kCrossfaderLsb);
+  const std::vector<int> f = pairValues(m, 0, proto::cc::kChannelVolumeMsb, proto::cc::kChannelVolumeLsb);
   CHECK(!f.empty());
   CHECK_NEAR(lastOr(f), 12195, 150);  // where the pot is now (raw 2999)
 }

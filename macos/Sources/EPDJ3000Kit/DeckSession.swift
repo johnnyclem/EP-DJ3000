@@ -11,6 +11,7 @@
 
 import Combine
 import EPDJ3000Engine
+import EPDJ3000KitPure
 import EPDJ3000Protocol
 import Foundation
 
@@ -299,7 +300,7 @@ public final class DeckSession: ObservableObject, Identifiable {
 
     private func readAllConfig(_ client: DeviceClient) async -> [ConfigKey: Int32] {
         if let all = try? await client.dumpConfig() { return all }
-        // A firmware with fewer keys than this app knows answers the dump short; ask one by one.
+        // The dump ends with an ACK, so a failure here is a unit that never sent it (older firmware) or a lost frame; ask key by key.
         var out = [ConfigKey: Int32]()
         var failures = 0
         for key in ConfigKey.allCases where failures < 3 {
@@ -333,7 +334,7 @@ public final class DeckSession: ObservableObject, Identifiable {
         do {
             try await client.setConfig(key, value)
             config[key] = value
-            if key == .midiChannel || key == .deckId { rebuildModelIfNeeded() }
+            if key == .midiChannel { rebuildModelIfNeeded() }
             return true
         } catch {
             notice = "\(ConfigTable.desc(key).name): \(ErrorText.describe(error))"

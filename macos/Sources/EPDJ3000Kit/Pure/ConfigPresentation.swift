@@ -25,7 +25,11 @@ public enum ConfigPresentation {
         case .midiChannel: return .choice([ConfigChoice(value: 16, label: "Auto (follow deck)")]
                                           + (0..<16).map { ConfigChoice(value: Int32($0), label: "Channel \($0 + 1)") })
         case .mode: return .choice(choices(Mode.self))
-        case .platterSource: return .choice(choices(PlatterSource.self))
+        case .platterSource:
+            // Hand-written labels: the generated names do not say which one is the factory default or the experiment.
+            return .choice([ConfigChoice(value: Int32(PlatterSource.as5600.rawValue), label: "AS5600 encoder (default)"),
+                            ConfigChoice(value: Int32(PlatterSource.touchRing.rawValue), label: "Touch ring (experimental)"),
+                            ConfigChoice(value: Int32(PlatterSource.touchHoldOnly.rawValue), label: "Hold only")])
         case .faderRole: return .choice(choices(FaderRole.self))
         case .faderCurve: return .choice(choices(FaderCurve.self))
         case .knobRole: return .choice(choices(KnobRole.self))
@@ -72,6 +76,17 @@ public enum ConfigPresentation {
     /// restarts the unit. An editor shows these but offers a different action to change them.
     public static func isReadOnly(_ key: ConfigKey) -> Bool {
         key == .deckId
+    }
+
+    /// Whether the unit looks at this key with the given platter source. The editor greys out what is not used so a
+    /// setting that does nothing is not mistaken for one that does.
+    public static func isApplicable(_ key: ConfigKey, platterSource: PlatterSource) -> Bool {
+        key != .touchSectors || platterSource == .touchRing
+    }
+
+    /// Why `isApplicable` said no, for the line under the row.
+    public static func inapplicableNote(for key: ConfigKey) -> String? {
+        key == .touchSectors ? "Only used with the touch ring." : nil
     }
 
     public static func unit(for key: ConfigKey) -> String? {

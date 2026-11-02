@@ -2,6 +2,7 @@
 #pragma once
 #include <cstdint>
 
+#include "epdj_hal/sensor_budget.h"
 #include "esp_adc/adc_oneshot.h"
 
 namespace epdj {
@@ -9,11 +10,12 @@ namespace hal {
 
 class AdcInputs {
  public:
-  // Times a few conversions and sets the oversampling: EPDJ_ADC_OVERSAMPLE, or fewer if that would take
-  // more than kBudgetUs of every millisecond for the two channels together (each conversion runs with
-  // interrupts off, on the core that also serves USB).
-  bool begin();
-  static constexpr unsigned kBudgetUs = 400;
+  // Times a few conversions and sets the oversampling: EPDJ_ADC_OVERSAMPLE, or fewer if the two channels together
+  // plus the AS5600 read (`i2cReadUs`, 0 without an encoder) would take more than kBudgetUs of every millisecond.
+  // Each conversion runs with interrupts off, on the core that also serves USB; the I2C read does not, but it is the
+  // same engine task's time (sensor_budget.h).
+  bool begin(unsigned i2cReadUs = 0);
+  static constexpr unsigned kBudgetUs = sensor_budget::kTotalUs;
 
   // 12-bit, mean of oversample() conversions. A failed conversion keeps the last value.
   uint16_t fader();

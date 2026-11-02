@@ -629,8 +629,8 @@
         "enum": "PlatterSource",
         "min": 0,
         "max": 2,
-        "default": 1,
-        "desc": "How platter rotation is sensed: AS5600 magnetic encoder, segmented capacitive touch ring (conductive PLA), or touch/hold only (no rotation)."
+        "default": 0,
+        "desc": "How platter rotation is sensed. AS5600 (default): a free-spinning platter on a bearing with a diametric magnet over an AS5600 magnetic encoder; touch/hold comes from one touch pad. TOUCH_RING: a segmented conductive-PLA ring on touch pads, finger-slide scratching (experimental, kept for later). TOUCH_HOLD_ONLY: touch detect only, no rotation."
       },
       {
         "id": 4,

@@ -11,13 +11,60 @@ final class ControllerStateE2ETests: E2ETestCase {
 
     // MARK: platter
 
-    func testOneRevolutionFoldsIntoTheTicksTheFirmwareCountedAndAboutOneThousandAndTwentyFour() async throws {
-        for (deck, startRev, revs) in [(Deck.a, 0.25, 1.0), (.a, 0.6, -1.0), (.b, 0.1, 1.0), (.b, 0.9, -1.0)] {
+    /// The default build: a free-spinning platter on an AS5600, one hold pad. Nothing in the init line selects it.
+    func testOneRevolutionOfTheAS5600PlatterFoldsIntoExactlyOneThousandAndTwentyFourTicks() async throws {
+        for (deck, revs) in [(Deck.a, 1.0), (.a, -1.0), (.b, 1.0), (.b, -1.0)] {
             try await withWorld("units=1 deck0=\(deck.rawValue)") { world in
                 let c = world.client()
                 var state = ControllerState(deck: deck)
                 var wrongChannel = ControllerState(channel: deck == .a ? 1 : 0)
                 var sawTouched = false
+                let info = try await c.client.getInfo()
+                XCTAssertEqual(info.platterSource, PlatterSource.as5600.rawValue, "the factory platter")
+
+                try await world.gesture(revs: revs, ms: 1800, afterMs: 400)
+                for e in c.events.take() {
+                    state.apply(e)
+                    wrongChannel.apply(e)
+                    sawTouched = sawTouched || state.touched
+                }
+                let sim = try await world.status()
+                XCTAssertEqual(state.jogTicks, sim.jogTotal, "\(deck) \(revs): the fold lost or invented ticks")
+                XCTAssertEqual(state.jogTicks, Int(1024 * revs), "one revolution of the encoder is 1024 ticks, \(revs > 0 ? "clockwise" : "counter-clockwise") sign")
+                XCTAssertEqual(state.jogRevolutions, revs, accuracy: 1e-9)
+                XCTAssertEqual(wrongChannel.jogTicks, 0, "a state on the other channel ignores this unit")
+                XCTAssertTrue(sawTouched, "the hold pad said touched while the hand was on it")
+                XCTAssertFalse(state.touched, "released")
+            }
+        }
+    }
+
+    /// The same spin with the hand off: the platter coasts, the host still gets every tick, and nothing says "touched".
+    func testAFreeSpinWithoutTouchReachesTheHostAsMotionAndNeverAsATouch() async throws {
+        try await withWorld { world in
+            let c = world.client()
+            var state = ControllerState(deck: .a)
+            try await world.spin(revs: 1, ms: 1000)
+            try await world.run(ms: 200)
+            state.apply(c.events.take())
+            XCTAssertEqual(state.jogTicks, 1024)
+            try await expectEqual(try await world.status().jogTotal, 1024)
+            XCTAssertFalse(state.touched)
+            XCTAssertEqual(state.playPulseCount, 0)
+            XCTAssertEqual(world.touchNotes().downs, 0, "no touch note without a finger on the hold pad")
+        }
+    }
+
+    /// The experimental touch ring (selected explicitly, it is not the default): a finger slides, the angle is the ring's.
+    func testRingOneRevolutionFoldsIntoTheTicksTheFirmwareCountedAndAboutOneThousandAndTwentyFour() async throws {
+        for (deck, startRev, revs) in [(Deck.a, 0.25, 1.0), (.a, 0.6, -1.0), (.b, 0.1, 1.0), (.b, 0.9, -1.0)] {
+            try await withWorld("units=1 deck0=\(deck.rawValue) platter=ring") { world in
+                let c = world.client()
+                var state = ControllerState(deck: deck)
+                var wrongChannel = ControllerState(channel: deck == .a ? 1 : 0)
+                var sawTouched = false
+                let info = try await c.client.getInfo()
+                XCTAssertEqual(info.platterSource, PlatterSource.touchRing.rawValue)
 
                 try await world.gesture(startRev: startRev, revs: revs, ms: 1800, afterMs: 400)
                 let events = c.events.take()
@@ -33,7 +80,7 @@ final class ControllerStateE2ETests: E2ETestCase {
                 XCTAssertFalse(state.touched, "released")
                 XCTAssertEqual(Double(state.jogTicks), 1024 * revs, accuracy: 24, "one revolution = 1024 ticks, \(revs > 0 ? "clockwise" : "counter-clockwise") sign")
                 XCTAssertEqual(state.jogRevolutions, revs, accuracy: 0.025)
-                observe("\(deck) one \(revs > 0 ? "CW" : "CCW") revolution: \(state.jogTicks) ticks (expected \(Int(1024 * revs)))")
+                observe("ring: \(deck) one \(revs > 0 ? "CW" : "CCW") revolution: \(state.jogTicks) ticks (expected \(Int(1024 * revs)))")
             }
         }
     }
@@ -240,11 +287,10 @@ final class ControllerStateE2ETests: E2ETestCase {
 
     func testFreeSpinningAS5600PlatterIsCountedExactlyAcrossTheWrapAndWithEncoderNoise() async throws {
         for (start, revs, noise) in [(0.0, 1.0, 0.0), (0.9, 0.3, 0.0), (0.05, -1.0, 0.0), (0.0, 3.0, 1.5), (0.7, -2.0, 1.5)] {
-            try await withWorld("units=1 as5600=1") { world in
+            try await withWorld { world in  // the factory unit: nothing is configured, the AS5600 is the platter
                 let c = world.client()
                 var state = ControllerState(deck: .a)
-                try await c.client.setConfig(.platterSource, Int32(PlatterSource.as5600.rawValue))
-                _ = try await world.command("as5600 u=0 rev=\(start) noise=\(noise)")
+                try await world.setEncoder(rev: start, noise: noise)
                 try await world.run(ms: 100)
                 _ = c.events.take()
                 let before = try await world.status().jogTotal
@@ -256,6 +302,73 @@ final class ControllerStateE2ETests: E2ETestCase {
                 XCTAssertEqual(Double(state.jogTicks), 1024 * revs, accuracy: 1.5, "the encoder's net travel, whatever the noise and wrap")
                 XCTAssertFalse(state.touched, "free-spinning: nobody is touching it")
             }
+        }
+    }
+
+    /// The chip is there but its reads fail (a loose SDA wire) while the platter keeps turning: no ticks, and the first good
+    /// read afterwards is a new reference, not a jump.
+    func testReadsThatFailWhileThePlatterTurnsProduceNoTicksAndNoJumpAfterwards() async throws {
+        try await withWorld { world in
+            let c = world.client()
+            var state = ControllerState(deck: .a)
+            try await c.client.startStream(rateHz: 100)
+            try await world.setEncoder(rev: 0, valid: false)
+            try await world.spin(revs: 0.37, ms: 400)
+            try await world.run(ms: 100)
+            state.apply(c.events.take())
+            XCTAssertEqual(state.jogTicks, 0)
+            XCTAssertFalse(c.telemetry.take().suffix(5).contains { StateFlags(rawValue: $0.flags).contains(.angleValid) }, "ANGLE_VALID is down while the reads fail")
+            try await world.setEncoder(rev: world.encoderRev[0] ?? 0, valid: true)
+            try await world.run(ms: 100)
+            state.apply(c.events.take())
+            XCTAssertEqual(state.jogTicks, 0, "the displacement made while blind is not a jump")
+            XCTAssertTrue(c.telemetry.take().suffix(5).allSatisfy { StateFlags(rawValue: $0.flags).contains(.angleValid) })
+            try await world.spin(revs: 0.25, ms: 500)
+            try await world.run(ms: 100)
+            state.apply(c.events.take())
+            XCTAssertEqual(state.jogTicks, 256, "and counting is exact again")
+        }
+    }
+
+    /// No AS5600 answers (a wrong wire, a dead breakout): the unit is silent on jog instead of making something up, and
+    /// its telemetry says the angle is not valid. The hold pad, the buttons and the slide pot still work.
+    func testAUnitWhoseEncoderNeverAnswersIsSilentOnJogAndSaysSo() async throws {
+        try await withWorld("units=1 as5600=0") { world in
+            let c = world.client()
+            var state = ControllerState(deck: .a)
+            try await c.client.startStream(rateHz: 100)
+            let info = try await c.client.getInfo()
+            XCTAssertEqual(info.platterSource, PlatterSource.as5600.rawValue, "still configured for the encoder")
+            XCTAssertEqual(Caps(rawValue: info.caps), [.trsMidi, .link, .statusLed], "the host can see that no AS5600 answered")
+            let mark = world.process.log.count
+            try await world.gesture(revs: 2, ms: 1500)  // somebody turns the (absent) platter and touches the pad
+            _ = try await world.command("buttons u=0 cue=1")
+            try await world.run(ms: 50)
+            state.apply(c.events.take())
+            XCTAssertEqual(state.jogTicks, 0)
+            try await expectEqual(try await world.status().jogTotal, 0)
+            XCTAssertFalse(world.midiEvents(from: mark).contains { if case let .controlChange(_, cc, _) = $0.event { return cc == Proto.CC.jog } else { return false } },
+                           "not one jog message")
+            XCTAssertEqual(state.buttons, [.cue], "the rest of the unit is alive")
+            XCTAssertEqual(world.touchNotes(from: mark).downs, 1, "and the hold pad still says touched")
+            let frames = c.telemetry.take()
+            XCTAssertFalse(frames.isEmpty)
+            for t in frames { XCTAssertFalse(StateFlags(rawValue: t.flags).contains(.angleValid), "ANGLE_VALID is down when nothing answers") }
+        }
+    }
+
+    /// The hold pad is optional hardware: without it jog works, but a DJ app never hears "touched".
+    func testWithoutAHoldPadTheUnitStillSendsMotionButNeverATouch() async throws {
+        try await withWorld("units=1 touch=0") { world in
+            let c = world.client()
+            var state = ControllerState(deck: .a)
+            let mark = world.process.log.count
+            try await world.gesture(revs: 1, ms: 1000)
+            state.apply(c.events.take())
+            XCTAssertEqual(state.jogTicks, 1024)
+            XCTAssertEqual(world.touchNotes(from: mark).downs, 0, "no touch note ever")
+            XCTAssertFalse(state.touched)
+            XCTAssertEqual(state.playPulseCount, 0, "and no tap-play either")
         }
     }
 
@@ -415,11 +528,10 @@ final class ControllerStateE2ETests: E2ETestCase {
     }
 
     func testAFlickFasterThanTheWireCanCarryIsDeliveredLateButNeverLost() async throws {
-        try await withWorld("units=1 as5600=1") { world in
+        try await withWorld { world in
             let c = world.client()
             var state = ControllerState(deck: .a)
-            try await c.client.setConfig(.platterSource, Int32(PlatterSource.as5600.rawValue))
-            _ = try await world.command("as5600 u=0 rev=0 noise=0")
+            try await world.setEncoder(rev: 0, noise: 0)
             try await world.run(ms: 100)
             _ = c.events.take()
             let before = try await world.status().jogTotal

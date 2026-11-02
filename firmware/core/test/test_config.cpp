@@ -71,7 +71,8 @@ EPDJ_TEST(defaults_come_from_the_contract_table) {
   for (size_t i = 0; i < Config::kCount; ++i) CHECK_EQ(c.get(key(i)), proto::kConfigTable[i].defaultValue);
   // Spot checks against PROTOCOL.md 3.1 (guards against the table and the spec drifting apart).
   CHECK_EQ(c.get(ConfigKey::MidiChannel), 16);
-  CHECK_EQ(c.get(ConfigKey::PlatterSource), 1);
+  CHECK_EQ(c.get(ConfigKey::PlatterSource), static_cast<int>(proto::PlatterSource::As5600));  // contract v1.3: the free-spinning platter
+  CHECK_EQ(proto::kConfigTable[static_cast<size_t>(ConfigKey::PlatterSource)].defaultValue, 0);
   CHECK_EQ(c.get(ConfigKey::FaderRawMax), 4055);
   CHECK_EQ(c.get(ConfigKey::BpmX10), 1200);
   CHECK_EQ(c.get(ConfigKey::ClockOutMask), 3);

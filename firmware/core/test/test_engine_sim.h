@@ -1,6 +1,10 @@
 // Shared simulation helpers for the engine tests: a deck (Engine + Config + fake platform + recorded
-// output), a synthetic touch ring, a lossy two-unit radio, and queries over the recorded output.
+// output), synthetic platter sensors, a lossy two-unit radio, and queries over the recorded output.
 // Header-only, host tests only. Time is always simulated: nothing here reads a clock.
+//
+// A Deck is the unit the firmware ships by default: contract defaults (platterSource = AS5600), the AS5600 on
+// the bus and ONE touch pad wired as the hold pad. A test about the experimental touch ring says so with
+// Deck::useRing(); nothing else in here assumes a ring.
 #pragma once
 #include <cmath>
 #include <cstdint>
@@ -71,14 +75,16 @@ struct Deck {
   uint64_t t = 1000000;  // true time of the NEXT step
   std::vector<Rec> log;
   std::vector<Bytes> radioOut;  // Link packets popped since the last takeRadio()
-  RingSim ring;
+  RingSim ring;  // the hold pad (n = 1) until useRing()
   Rng rng;
+  double angle = 0.0;      // AS5600 platter, absolute, in 1/4096 rev (may exceed a lap); in.angle12 is its 12-bit floor
+  bool ringWired = false;  // useRing() was called: eight pads, platterSource = TOUCH_RING
 
   static Engine::Identity ident(uint8_t macLast, uint16_t epoch) {
     Engine::Identity id;
     id.hwRev = 2;
     id.serial = 0xA0B0C000u + macLast;
-    id.caps = proto::caps::kTouchRing | proto::caps::kTrsMidi | proto::caps::kLink | proto::caps::kStatusLed;
+    id.caps = proto::caps::kAs5600 | proto::caps::kTrsMidi | proto::caps::kLink | proto::caps::kStatusLed;
     id.mac.b[0] = 2;
     id.mac.b[5] = macLast;
     id.epoch = epoch;
@@ -91,12 +97,13 @@ struct Deck {
         clockOffsetUs(offsetUs),
         rng(seed) {
     in.usbMounted = true;
-    in.touchCount = 8;
+    in.touchCount = 1;  // the hold pad
     in.faderRaw = 2048;
     in.knobRaw = 2048;
     in.angleValid = true;
-    // Idle ring readings, so a step before anything is set up reads a sane baseline.
-    ring.read(0.0, 0.0, rng, in.touchRaw);
+    ring.n = 1;
+    // An idle pad, so a step before anything is set up reads a sane baseline.
+    padRead(false);
   }
 
   uint64_t local(uint64_t trueUs) const { return static_cast<uint64_t>(static_cast<int64_t>(trueUs) + clockOffsetUs); }
@@ -127,8 +134,47 @@ struct Deck {
     for (int i = 0; i < ms; ++i) step();
   }
 
+  // ---- the AS5600 build: one hold pad, motion from the encoder ----------------------------------------------
+
+  // The hold pad (touchCount = 1): idle noise, or a finger on it (a clean 40 per-mille rise).
+  void padRead(bool finger) { ring.read(0.0, finger ? 1.0 : 0.0, rng, in.touchRaw); }
+  void padStep(bool finger) {
+    CHECK(!ringWired);
+    padRead(finger);
+    step();
+  }
+  void padIdle(int ms) {
+    for (int i = 0; i < ms; ++i) padStep(false);
+  }
+  // One tick in which the platter turns by `units` (1/4096 rev, clockwise positive), finger on the hold pad or not.
+  void turn(double units, bool finger = false) {
+    angle += units;
+    in.angle12 = static_cast<uint16_t>(static_cast<int64_t>(std::floor(angle)) & 4095);
+    padStep(finger);
+  }
+  void spin(double unitsPerMs, int ms, bool finger = false) {
+    for (int i = 0; i < ms; ++i) turn(unitsPerMs, finger);
+  }
+  // The same, to an absolute angle (exact at the end of a gesture: no rounding error accumulates).
+  void turnTo(double absUnits, bool finger = false) {
+    angle = absUnits;
+    in.angle12 = static_cast<uint16_t>(static_cast<int64_t>(std::floor(angle)) & 4095);
+    padStep(finger);
+  }
+
+  // ---- the experimental touch ring ---------------------------------------------------------------------------
+
+  // Wires eight pads and selects platterSource = TOUCH_RING explicitly: the ring is not the default platter.
+  void useRing() {
+    set(ConfigKey::PlatterSource, static_cast<int32_t>(proto::PlatterSource::TouchRing));
+    ringWired = true;
+    in.touchCount = 8;
+    ring.n = 8;
+    ring.read(0.0, 0.0, rng, in.touchRaw);
+  }
   // Ring tick: the finger at `rev` with `amplitude` (0 = no finger).
   void ringStep(double rev, double amplitude) {
+    CHECK(ringWired);
     ring.read(rev, amplitude, rng, in.touchRaw);
     step();
   }
@@ -143,6 +189,30 @@ struct Deck {
     for (int i = 1; i <= ms; ++i) ringStep(startRev + dir * std::fabs(revPerSec) * i * 1e-3, 1.0);
     for (int i = 0; i < tailMs; ++i) ringStep(startRev + dir * revs, 1.0);
     ringIdle(150);
+  }
+
+  // ---- whichever platter this deck has ------------------------------------------------------------------------
+
+  // A finger on the platter that does not move (ring: where the last gesture left it; AS5600: the hold pad).
+  void touchStep(bool finger) {
+    if (ringWired) ringStep(0.4, finger ? 1.0 : 0.0);
+    else padStep(finger);
+  }
+  void touchIdle(int ms) {
+    for (int i = 0; i < ms; ++i) touchStep(false);
+  }
+  // Land, dwell, scratch `revs` at revPerSec (negative = counter-clockwise), dwell, lift. On the ring the finger lands at
+  // startRev; the AS5600 build has no such place (the hold pad is one pad) and the platter simply starts turning from
+  // wherever it is, which is also what a real one does.
+  void gesture(double startRev, double revPerSec, double revs, int dwellMs, int tailMs = 150) {
+    if (ringWired) return ringGesture(startRev, revPerSec, revs, dwellMs, tailMs);
+    const double dir = revPerSec < 0 ? -1.0 : 1.0;
+    const int ms = static_cast<int>(std::lround(revs / std::fabs(revPerSec) * 1000.0));
+    const double from = angle;
+    for (int i = 0; i < dwellMs; ++i) padStep(true);
+    for (int i = 1; i <= ms; ++i) turnTo(from + dir * revs * 4096.0 * i / ms, true);
+    for (int i = 0; i < tailMs; ++i) padStep(true);
+    padIdle(150);
   }
 
   void pressCue(bool down) { in.cue = down; }

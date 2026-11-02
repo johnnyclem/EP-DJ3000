@@ -28,6 +28,13 @@ void sensorLine(const Runtime& rt) {
            static_cast<unsigned>(s.fader.load()), static_cast<unsigned>(s.knob.load()), static_cast<unsigned>(s.angle.load()),
            rt.as5600->present() ? (s.angleValid.load() ? "" : "(bad)") : "(none)", rt.buttons->cue() ? 1 : 0,
            rt.buttons->rev() ? 1 : 0, touch);
+  static uint32_t reportedFailures = 0;  // this task only
+  const uint32_t failures = rt.as5600->failures();
+  if (failures != reportedFailures) {
+    reportedFailures = failures;
+    ESP_LOGW(TAG, "as5600: %lu failed I2C reads since boot (loose wire or a bus fault: each costs the 1 kHz loop up to 2 ms)",
+             static_cast<unsigned long>(failures));
+  }
 }
 
 void statsLines(const Runtime& rt) {

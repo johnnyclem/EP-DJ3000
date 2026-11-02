@@ -1,17 +1,20 @@
 #include "epdj_hal/as5600.h"
 
-#include "esp_log.h"
+#include "epdj_hal/time.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 
 namespace epdj {
 namespace hal {
 namespace {
-const char* TAG = "as5600";
-constexpr uint8_t kRegStatus = 0x0B;  // bit 5 MD magnet detected, bit 4 ML too weak, bit 3 MH too strong
+constexpr uint8_t kRegStatus = 0x0B;
 constexpr uint8_t kRegRawAngle = 0x0C;
 // Each failed read can block for its 2 ms timeout (not less: the driver counts ticks, so 1 ms may expire early),
 // so a stuck bus costs this many milliseconds of the 1 kHz loop once per backoff.
 constexpr unsigned kFailuresBeforeBackoff = 2;
 constexpr uint64_t kBackoffUs = 100000;
+constexpr unsigned kMagnetPolls = 6;       // status reads at boot, 5 ms apart, until the magnet reads Ok
+constexpr unsigned kTimingReads = 16;      // angle reads timed at boot
 }  // namespace
 
 bool As5600::begin(I2cBus& bus) {
@@ -24,11 +27,32 @@ bool As5600::begin(I2cBus& bus) {
     dev_ = nullptr;
     return false;
   }
-  uint8_t reg = kRegStatus, status = 0;
-  if (i2c_master_transmit_receive(dev_, &reg, 1, &status, 1, 5) == ESP_OK) {
-    ESP_LOGI(TAG, "found at 0x%02X, status 0x%02X (%s)", kAddress, status,
-             (status & 0x20) ? "magnet detected" : ((status & 0x10) ? "magnet too weak" : ((status & 0x08) ? "magnet too strong" : "no magnet")));
+
+  magnet_ = sensor_budget::Magnet::Unknown;
+  for (unsigned i = 0; i < kMagnetPolls; ++i) {
+    const uint8_t reg = kRegStatus;
+    uint8_t status = 0;
+    if (i2c_master_transmit_receive(dev_, &reg, 1, &status, 1, 5) == ESP_OK) {
+      status_ = status;
+      magnet_ = sensor_budget::classifyMagnet(status);
+      if (magnet_ == sensor_budget::Magnet::Ok) break;
+    }
+    vTaskDelay(pdMS_TO_TICKS(5));
   }
+
+  // The cost of one angle read, as the engine task will make it. A failed read is not counted.
+  uint64_t total = 0;
+  unsigned good = 0;
+  for (unsigned i = 0; i < kTimingReads; ++i) {
+    const uint8_t reg = kRegRawAngle;
+    uint8_t b[2];
+    const uint64_t t0 = nowUs();
+    if (i2c_master_transmit_receive(dev_, &reg, 1, b, 2, 5) == ESP_OK) {
+      total += nowUs() - t0;
+      ++good;
+    }
+  }
+  readUs_ = good > 0 ? static_cast<unsigned>((total + good / 2) / good) : 0;
   return true;
 }
 

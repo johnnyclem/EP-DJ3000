@@ -11,11 +11,14 @@ namespace {
 
 constexpr int kSettleMs = 3600;
 
-std::unique_ptr<Deck> makeMaster(int mask = 3) {
+// A clock master as the firmware ships it (AS5600 platter, one hold pad), or with the experimental touch ring
+// (selected explicitly) when `ring` is set.
+std::unique_ptr<Deck> makeMaster(int mask = 3, bool ring = false) {
   std::unique_ptr<Deck> d(new Deck(0));
+  if (ring) d->useRing();
   d->set(ConfigKey::Mode, 1);
   d->set(ConfigKey::ClockOutMask, mask);
-  d->ringIdle(kSettleMs);
+  d->touchIdle(kSettleMs);
   d->clearLog();
   return d;
 }
@@ -350,11 +353,12 @@ EPDJ_TEST(engine_master_transport_byte_sequences) {
   CHECK(d->engine.transport() == proto::TransportState::Stopped);
 }
 
-EPDJ_TEST(engine_master_platter_tap_plays_and_pauses) {
-  std::unique_ptr<Deck> d = makeMaster();
+// A tap on the platter, whichever platter it is: the hold pad of the AS5600 build, or the touch ring.
+static void masterTapPlaysAndPauses(bool ring) {
+  std::unique_ptr<Deck> d = makeMaster(3, ring);
   auto tap = [&]() {
-    for (int i = 0; i < 100; ++i) d->ringStep(0.4, 1.0);
-    d->ringIdle(150);
+    for (int i = 0; i < 100; ++i) d->touchStep(true);
+    d->touchIdle(150);
   };
   size_t mark = d->log.size();
   tap();
@@ -393,6 +397,14 @@ EPDJ_TEST(engine_master_platter_tap_plays_and_pauses) {
   CHECK(d->engine.transport() == proto::TransportState::Playing);
   CHECK(d->engine.led().transport == proto::TransportState::Playing);
   CHECK_BYTES(transportBytes(d->log, mark), Bytes());
+}
+
+EPDJ_TEST(engine_master_platter_tap_plays_and_pauses) {
+  masterTapPlaysAndPauses(/*ring=*/false);  // the default build: AS5600 platter, one hold pad
+}
+
+EPDJ_TEST(engine_master_ring_tap_plays_and_pauses) {
+  masterTapPlaysAndPauses(/*ring=*/true);
 }
 
 // PROTOCOL 2.6 (E2E-3): the inbound play note is feedback for the LED in every mode.
@@ -521,20 +533,15 @@ EPDJ_TEST(engine_master_cue_taps_set_tempo_to_128_bpm) {
 }
 
 EPDJ_TEST(engine_master_platter_spin_nudges_tempo_exactly_with_as5600) {
-  Deck d(0);
+  Deck d(0);  // contract defaults: the AS5600 turns, the hold pad says when a finger is on the platter
   d.set(ConfigKey::Mode, 1);
-  d.set(ConfigKey::PlatterSource, 0);
+  d.angle = 100;
   d.in.angle12 = 100;
-  d.ringIdle(kSettleMs);
+  d.touchIdle(kSettleMs);
   d.clearLog();
 
-  int angle = 100;
   auto spin = [&](int unitsPerMs, int ms, double finger) {
-    for (int i = 0; i < ms; ++i) {
-      angle = (angle + unitsPerMs + 4096) & 4095;
-      d.in.angle12 = static_cast<uint16_t>(angle);
-      d.ringStep(0.5, finger);
-    }
+    for (int i = 0; i < ms; ++i) d.turn(unitsPerMs, finger > 0.0);
   };
   spin(0, 100, 1.0);   // finger down, still
   spin(4, 320, 1.0);   // 320 ticks clockwise (4 units = 1 tick): +10 steps
@@ -564,7 +571,7 @@ EPDJ_TEST(engine_master_platter_spin_nudges_tempo_exactly_with_as5600) {
 }
 
 EPDJ_TEST(engine_master_ring_spin_nudges_tempo) {
-  std::unique_ptr<Deck> d = makeMaster();
+  std::unique_ptr<Deck> d = makeMaster(3, /*ring=*/true);
   d->ringGesture(0.25, 0.5, 1.0, 100);  // one revolution clockwise = 1024 ticks = 32 steps of 0.1 BPM
   CHECK_NEAR(d->engine.tempoX10(), 1232, 3);
   const int up = d->engine.tempoX10();

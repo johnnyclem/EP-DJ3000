@@ -264,7 +264,7 @@ public enum ConfigTable {
         ConfigDesc(key: .deckId, name: "deckId", minValue: 0, maxValue: 1, defaultValue: 0, summary: "Which deck this unit is (A/B). Sets default MIDI channel and USB name."),
         ConfigDesc(key: .midiChannel, name: "midiChannel", minValue: 0, maxValue: 16, defaultValue: 16, summary: "Zero-based MIDI channel 0..15, or 16 = auto (follow deckId)."),
         ConfigDesc(key: .mode, name: "mode", minValue: 0, maxValue: 2, defaultValue: 0, summary: "DJ controller, standalone clock master, or clock follower."),
-        ConfigDesc(key: .platterSource, name: "platterSource", minValue: 0, maxValue: 2, defaultValue: 1, summary: "How platter rotation is sensed: AS5600 magnetic encoder, segmented capacitive touch ring (conductive PLA), or touch/hold only (no rotation)."),
+        ConfigDesc(key: .platterSource, name: "platterSource", minValue: 0, maxValue: 2, defaultValue: 0, summary: "How platter rotation is sensed. AS5600 (default): a free-spinning platter on a bearing with a diametric magnet over an AS5600 magnetic encoder; touch/hold comes from one touch pad. TOUCH_RING: a segmented conductive-PLA ring on touch pads, finger-slide scratching (experimental, kept for later). TOUCH_HOLD_ONLY: touch detect only, no rotation."),
         ConfigDesc(key: .jogInvert, name: "jogInvert", minValue: 0, maxValue: 1, defaultValue: 0, summary: "Flip jog direction."),
         ConfigDesc(key: .touchSectors, name: "touchSectors", minValue: 3, maxValue: 8, defaultValue: 8, summary: "Number of capacitive sectors in the platter ring."),
         ConfigDesc(key: .touchOnPermille, name: "touchOnPermille", minValue: 1, maxValue: 1000, defaultValue: 12, summary: "Finger-down threshold, per-mille rise over baseline."),

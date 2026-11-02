@@ -100,7 +100,7 @@ export function renderTable(contract) {
     ["Slide pot", `\`faderRole\` = \`${fader.role}\`: ${cc14(control(camel(fader.role)))}. Other roles: ${others.join(", ")}`],
     ["Orange knob", `\`knobRole\` = \`GENERIC\`: ${cc14(knob)}`],
     ["Platter", `\`platterSource\` = \`${platter}\`, \`jogInvert\` = ${config("jogInvert").default}: CC ${jog.number}, relative \`${midi.relativeCenter} + delta\`, ` +
-      `**${midi.jogTicksPerRev} ticks per revolution**, clockwise positive; touch is Note ${control("touch").number}`],
+      `**${midi.jogTicksPerRev} ticks per revolution**, clockwise positive; touch is Note ${control("touch").number} (a hand on the platter, from the hold pad when the platter is the AS5600)`],
     ["Buttons", `${note("cue")}, ${note("rev")}; a platter tap (\`tapPlay\` = ${config("tapPlay").default}) pulses ${note("play")}`],
     ["Mode", `\`mode\` = \`DJ\`: no clock, transport or timecode out, so \`bpm\`, \`bpmNudge\`, \`tap\` and \`transport\` stay silent`],
   ];

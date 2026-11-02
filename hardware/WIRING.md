@@ -18,15 +18,16 @@ with a multimeter), and set `self_powered` / `vbus_monitor_io` in `usb_device.cp
 |---|---|---|
 | 1 | Fader wiper | ADC1_CH0. 12-bit, ~3.1 V full scale at 12 dB attenuation. |
 | 2 | Knob wiper | ADC1_CH1. |
-| 4 .. 11 | Platter touch pads, sectors 0 .. 7 | Touch pad N is GPIO N on the S3. Sector 0 = GPIO4 = 12 o'clock, increasing clockwise seen from above. In AS5600 mode only GPIO4 is wired (hold pad). |
+| 4 | **Hold pad** (default build) | The ONE touch pad of the AS5600 build: touch/hold and tap detection. How it reaches a spinning platter is undecided: `PLATTER.md`. Also sector 0 of the experimental ring. |
+| 5 .. 11 | Experimental touch ring only: sectors 1 .. 7 | Touch pad N is GPIO N on the S3. Sector 0 = GPIO4 = 12 o'clock, increasing clockwise seen from above. Leave unconnected in the default build. |
 | 12 | CUE button | to GND, internal pull-up, pressed = low |
 | 13 | REV button | same |
 | 14 | DAC-present strap | internal pull-up; a jumper to GND on the DAC board means "a DAC is attached" |
 | 15 | I2S BCK | to PCM5102A BCK |
 | 16 | I2S WS (LRCK) | to PCM5102A LCK |
 | 17 | I2S DOUT | to PCM5102A DIN |
-| 21 | I2C SDA | AS5600 (and the optional codec probe) |
-| 47 | I2C SCL | same |
+| 21 | I2C SDA | **AS5600** (the default platter's encoder; also the optional codec probe) |
+| 47 | I2C SCL | same. In the VDD_SPI power domain: see the note below. |
 | 40 | TRS MIDI TX | UART1, 31250 baud, through the output stage below |
 | 41 | TRS MIDI RX | UART1, from the optocoupler |
 | 38 (v1.1) or 48 (v1.0) | Status LED | the DevKitC-1's on-board WS2812. **v1.1 boards, the current ones, have it on GPIO38; v1.0 on GPIO48.** Pick the revision in `menuconfig` (EP-DJ3000 > board revision, `EPDJ_BOARD_REV`); the default is v1.1. A wrong choice leaves the LED dark and nothing else changes. |
@@ -51,7 +52,8 @@ Unused pins you could take for something later: GPIO18, 39, 42, and whichever of
 * Bus powered over the native USB port. Rough budget from datasheet ballparks, **not measured**: ESP32-S3 with the
   radio always on about 120 mA average with peaks above 300 mA, plus the DAC (~25 mA), LED and sensors. The
   descriptor requests 250 mA. A host port that only gives 100 mA until configured is fine: the unit enumerates first.
-* Everything is 3.3 V logic. Feed the PCM5102A board and the AS5600 from the DevKit's **3V3** pin, not 5 V.
+* Everything is 3.3 V logic. Feed the PCM5102A board and the AS5600 from the DevKit's **3V3** pin, not 5 V, **and check the
+  AS5600 breakout's 3.3 V / 5 V strap (below): many are strapped for 5 V.**
   The pots (fader, knob) are wired **between 3V3 and GND** with the wiper to the ADC pin; a 100 nF capacitor from
   each wiper to GND removes most of the ADC noise (and keep that wiring away from the touch traces).
 * One ground. Star it at the DevKit: touch-pad shielding, DAC, jacks and the TRS MIDI sleeve all return there.
@@ -143,34 +145,78 @@ jack is not connected to the receiver; ground it only through the transmitter sh
 Not built, not scope-checked: before the first connection to the EP-133 verify the idle level on GPIO41 (high),
 the loop current (~5 mA, measured across the 33 Ω resistor), and the 31250 baud timing on a logic analyser.
 
-## AS5600 option (free-spinning platter)
+## AS5600 (the default platter: free-spinning on a bearing)
 
-Per `field-jog/README.md`: AS5600 breakout under the platter, diametric 6 x 2.5 mm magnet on the axle, 1-3 mm gap.
+Mechanics are `field-jog/README.md` and `field-jog/field-jog.scad`: 683ZZ bearing, M3 x 12 axle, a 6 x 2.5 mm **diametric**
+magnet on the shank's end, the AS5600 breakout on the pad under the platter, chip up, **1 to 3 mm** from the magnet
+(`PLATTER.md`, `README.md`).
 
-| AS5600 | Connect to |
-|---|---|
-| VCC | 3V3 |
-| GND | GND |
-| SDA | GPIO21 |
-| SCL | GPIO47 |
-| DIR | GND (the firmware has `jogInvert`) |
-| OUT, PGO | not connected |
+| AS5600 breakout | Connect to | Note |
+|---|---|---|
+| VCC / 3V3 | DevKit 3V3 | **Not 5 V, and check the strap below.** |
+| GND | GND | |
+| SDA | GPIO21 | |
+| SCL | GPIO47 | |
+| DIR | GND | Do not leave it floating. With DIR low the angle rises with clockwise rotation (datasheet, from memory). If clockwise reads backwards, set `jogInvert = 1` (the software twin of this pin) instead of moving the wire. |
+| OUT | not connected | analog/PWM output, not used |
+| PGO | not connected | programming option, not used (leave it as the breakout ships it) |
 
-Most breakouts carry 4.7 kΩ pull-ups; the firmware also enables the S3's weak internal ones, which is enough to
-keep an unpopulated bus quiet but not for 400 kHz on its own. At boot the firmware probes address 0x36; if it
-answers, `Info.caps` reports AS5600 and the macOS app can suggest it. The first-boot platter source comes from
-`idf.py menuconfig` (under PlatformIO: `pio run -d firmware/esp32s3 -t menuconfig`) -> EP-DJ3000 -> Platter and sensors
-(`EPDJ_PLATTER_*`); it is a normal config key afterwards.
+**The 3.3 V / 5 V strap (a trap).** From memory of the datasheet, the AS5600 has two supply pins, VDD5V (pin 1) and VDD3V3
+(pin 2), and an internal regulator. At 5 V you feed VDD5V and the regulator produces 3.3 V on the VDD3V3 pin; at 3.3 V you
+tie the two pins together and feed 3.3 V, bypassing the regulator. **Many breakouts are strapped (a solder bridge or a
+zero-ohm link) for 5 V.** Feed 3.3 V into one of those and the regulator, which wants roughly 4.5 V or more in that mode,
+has no headroom: the chip then runs below spec. It may still answer on the bus and give plausible angles, so **the
+firmware cannot tell**: the boot line says `answered at 0x36` either way.
 
-In AS5600 mode wire **only pad GPIO4** (sector 0) to the platter as the hold pad (set `EPDJ_TOUCH_PAD_COUNT = 1`):
-the engine repeats a single pad to get touch/hold and tap detection, and takes rotation from the encoder. **A platter
-that rotates cannot be wired to that pad with a plain wire**: it needs a slip contact, spring pin or brush, which is not
-designed (`PLATTER.md`, "If the platter should spin").
+* Before powering: read the silkscreen or the seller's schematic for the 3V3 / 5V jumper and set it for 3.3 V.
+* After powering from 3V3: measure the chip's VDD3V3 pin (pin 2) with a multimeter; it must read 3.3 V.
+* The other half of the same trap: on most breakouts the SDA/SCL pull-ups go to the board's VCC rail. Powering a board at 5 V
+  would pull SDA/SCL up to 5 V, and **the ESP32-S3's pins are not 5 V tolerant**. 3.3 V supply, 3.3 V strap, pull-ups to 3.3 V.
+
+**I2C.**
+
+* Address **0x36** (7-bit). The firmware probes only that address. The AS5600L is a different part that answers 0x40 by
+  default (from memory) and is not supported.
+* The bus runs at 400 kHz. **Pull-ups:** the firmware enables the S3's internal ones (about 45 k, from memory), which keep an
+  unpopulated bus quiet but are far too weak for 400 kHz. Breakouts usually carry 4.7 k (some 10 k) to VCC; if yours has
+  none, add 4.7 k from SDA and from SCL to 3V3. One set of pull-ups is enough; do not add more in parallel.
+* Keep the two wires short (well under 20 cm), together, and away from the hold-pad wire and from the DAC and MIDI wiring.
+* GPIO47 (SCL) is in the module's VDD_SPI power domain: see the note under the pin table.
+
+**Hold pad (GPIO4).** One thin wire, as short as you can make it (target under 10 cm), from the hold pad to GPIO4, optionally
+with 330 ohm to 1 k in series at the chip end, away from the I2C, DAC and MIDI wiring. What the other end of that wire
+touches is the unsolved part: `PLATTER.md` ("The conductive-PLA platter has two jobs"). `EPDJ_TOUCH_PAD_COUNT = 1` (the
+default) is this pad. Without it jog still works, but the unit never sends a touch note (`PLATTER.md`).
+
+**Bring-up: what the boot log should say** (`pio device monitor`, UART port; the format the firmware prints, not output from a
+chip, which this firmware has never run on):
+
+```
+platter: source AS5600 | AS5600 answered at 0x36, magnet detected, read <N> us | touch pads wired: 1 (GPIO4 = hold pad)
+```
+
+| It says | It means | Do |
+|---|---|---|
+| `magnet detected` | the chip's AGC has the magnet in range | turn the platter: the `sens:` line's `angle=` changes |
+| `magnet too weak` (WARN) | too far, too small, off-centre, or axially magnetised | closer (1 to 3 mm), centre it on the chip, check it is diametric |
+| `magnet too strong` (WARN) | too close | further away |
+| `magnet not detected` (WARN) | nothing in range | as for too weak; check the magnet is there at all |
+| `AS5600 NOT answering at 0x36` and `!!! platterSource is AS5600 but no encoder answered ... JOG WILL BE SILENT !!!` (WARN) | nothing ACKed on the bus | SDA GPIO21, SCL GPIO47, 3V3, GND, the strap, pull-ups, the breakout's soldering; then **reboot** (it is not retried while running) |
+| `sens: ... angle=NNNN(bad)` | the last read failed | a loose wire; the diagnostics also warn when the count of failed reads grows |
+| `an AS5600 answered but platterSource is ...` (WARN) | a config saved before contract v1.3 kept TOUCH_RING | `LOAD_DEFAULTS` then `SAVE_CONFIG`, or set `platterSource` 0 |
+
+The unit reports the same thing to the host: `Info.caps` has the AS5600 bit only if the chip answered, and the telemetry flag
+`ANGLE_VALID` follows each read. With no chip the unit sends no jog at all, rather than something made up.
+
+**I2C transaction cost** (what the 1 kHz loop assumes; measured at boot and printed in the `adc:` line, never on a chip yet):
+a register read at 400 kHz is about 45 clocks, 112 us on the wire plus driver overhead, so about 150 to 200 us of every
+millisecond. It comes out of the same 400 us sensor budget as the ADC conversions (`firmware/esp32s3/README.md`).
 
 ## Touch pads
 
-See [`PLATTER.md`](PLATTER.md) for the conductive-PLA ring: sector layout, how each sector is wired to GPIO4..11,
-shielding, and what counts to expect.
+The default build has ONE: the hold pad on GPIO4 (above). See [`PLATTER.md`](PLATTER.md) for how it may reach the spinning
+platter (both ways are unvalidated) and, further down that file, for the **experimental** conductive-PLA ring: sector layout,
+how each sector is wired to GPIO4..11, shielding, and what counts to expect.
 
 ## Status LED
 

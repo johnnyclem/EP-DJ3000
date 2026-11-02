@@ -3,7 +3,7 @@
 A 3D-printed, ESP32-based scratch deck that sits in the same row as a Teenage
 Engineering EP-133 K.O. II and an EP-136 K.O.-SIDEKICK mixer. This document
 records **what we are building, what we decided, and what is and is not
-verified**. The wire contract (v1.2) is in [`PROTOCOL.md`](PROTOCOL.md); start at the
+verified**. The wire contract (v1.3) is in [`PROTOCOL.md`](PROTOCOL.md); start at the
 [root README](../README.md) for the status summary and quick-starts.
 
 ## 1. The system
@@ -62,27 +62,39 @@ used (section 3).
 | `firmware/esp32s3/` | ESP-IDF project: HAL, TinyUSB (MIDI + USB Audio 1.0), I2S, ESP-NOW, NVS, tasks; host checks in `tools/` |
 | `macos/` | SwiftPM: pure-Swift libraries (build/test on Linux too) + CoreMIDI/AVAudio/SwiftUI app |
 | `drivers/` | DJ-software mappings (Mixxx, VirtualDJ, djay Pro, rekordbox) |
-| `hardware/` | Wiring, BOM, conductive-PLA platter guidance, what is not drawn yet |
+| `hardware/` | Wiring, BOM, platter guidance (the AS5600 platter and the experimental conductive-PLA ring), what is not drawn yet |
 | `docs/` | This file, `PROTOCOL.md`, `LINK.md`, `BRINGUP.md`, `E2E.md` |
-| `field-jog/` | The earlier Pro Micro/AS5600 design: SCAD, STLs, sketch. Kept for reference. **Its shell does not fit this design** (below). |
+| `field-jog/` | The Pro Micro/AS5600 design: SCAD, STLs, sketch. Its platter mechanics (bearing, axle, magnet, AS5600 pad) are the AS5600 platter this design defaults to; **the rest of its shell does not fit** (below). |
 | `src/`, `server/`, ... | The Field Jog 3D web viewer. **Untouched, unrelated to the firmware.** |
 
-**Mechanics: there is no enclosure for this design yet.** The Field Jog shell was drawn for a Pico, a hall-sensor
-loose fader and a bearing platter. Against what this firmware needs: its controller bay (21 x 51 mm) is too small
-for an ESP32-S3-DevKitC-1 (about 70 x 25 mm); its USB window (12.5 x 7.5 mm) fits one micro-USB plug, not the
-DevKit's two USB-C ports; it has one 6.3 mm jack hole labelled MIDI and none for the line out; the 8 x 64 mm
-fader slot is for the magnet stem, with hall posts and no slide-pot mount; and its platter is a plain disc, with no
-sectors, gaps, contacts or wire passages. The conductive-PLA sector platter, the headline feature, has no
-printable file. [`hardware/README.md`](../hardware/README.md) lists what has to be drawn.
+**Mechanics: there is no complete enclosure for this design yet.** The Field Jog shell was drawn for a Pico, a hall-sensor
+loose fader and a bearing platter, and the bearing platter is the one part that matches: the default `AS5600` platter is a
+76 mm disc in a well over a 683ZZ bearing, on an M3 axle that carries a 6 x 2.5 mm diametric magnet, with an AS5600 pad
+under it (`field-jog/README.md`, `field-jog/field-jog.scad`). Against what this firmware needs, the rest does not fit: the
+controller bay (21 x 51 mm) is too small for an ESP32-S3-DevKitC-1 (about 70 x 25 mm); the USB window (12.5 x 7.5 mm)
+fits one micro-USB plug, not the DevKit's two USB-C ports; there is one 6.3 mm jack hole labelled MIDI and none for the
+line out; and the 8 x 64 mm fader slot is for the magnet stem, with hall posts and no slide-pot mount. Nothing in the
+SCAD carries a touch from the spinning platter to the hold pad either (a rotating contact, below). The experimental
+conductive-PLA ring has no printable file at all. [`hardware/README.md`](../hardware/README.md) lists what has to be drawn.
 
 ## 2. Decisions (made so we could start; each is cheap to reverse)
 
 1. **ESP32-S3**, not classic ESP32. USB device mode (MIDI + audio) needs native USB OTG, which only the S2/S3 have; the S3 also has 14 capacitive touch pads, BLE 5, and ESP-NOW. This is the single biggest hardware assumption, and the pin plan (`board_pins.h`) is written for the ESP32-S3-DevKitC-1.
-2. **Platter sensing is a build-time/config choice** (`platterSource`), because "conductive-PLA platter" can mean two things:
-   * `TOUCH_RING` *(default)* - the platter is printed in 3-8 conductive sectors, each wired to a touch pad. Finger angle = phasor sum of sector activations; motion between samples = jog. No bearing, no magnet, no encoder. Finger-slide scratching on a **fixed** disc.
-   * `AS5600` - the earlier mechanical design: free-spinning platter on a 683ZZ bearing with a diametric magnet over an AS5600. The platter (or one pad) still provides touch/hold sensing. How a *rotating* conductive platter reaches that pad (a slip contact, spring pin or brush) is not designed: see `hardware/PLATTER.md`.
+2. **Platter sensing: the AS5600 for now.** `platterSource` is a config key (a first-boot default at build time), and since
+   contract v1.3 its default is `AS5600`. The owner's decision was "let's use the AS5600 platter for now", so the other
+   two options stay, tested and documented, in case the decision is reversed (the abstraction is about one class):
+   * `AS5600` *(default)* - a free-spinning platter on a 683ZZ bearing with a diametric magnet over an AS5600 12-bit
+     magnetic encoder on I2C: the Field Jog mechanics. Rotation is read directly and is reported whether or not a hand is
+     on the platter. **Touch, hold and tap come from one touch pad**, whose reading the engine repeats across its ring
+     detector; the touch note it produces is what DJ software uses to enter scratch mode (Mixxx's mapping scratches only
+     while it is on; VirtualDJ's `touchwheel_touch` and djay's Scratching Mode are bound to it). **The risk is that pad:** the hand's capacitance has to reach a fixed pad
+     from a platter that turns, by capacitive coupling to a stationary pad or through a spring or brush contact on the
+     axle, neither of which anyone has built or measured (`hardware/PLATTER.md`, options a and b). If it does not work, the deck cannot scratch in those apps, whatever the encoder does.
+   * `TOUCH_RING` *(experimental, kept for later)* - the platter is printed in 3-8 conductive sectors, each wired to a touch
+     pad. Finger angle = phasor sum of sector activations; motion between samples = jog. No bearing, no magnet, no encoder.
+     Finger-slide scratching on a **fixed** disc. It has never produced a real signal; the firmware, its tests, the app's
+     ring wizard and the docs stay, and `docs/BRINGUP.md` appendix A is its bring-up.
    * `TOUCH_HOLD_ONLY` - touch detect only, no rotation.
-   If you intended only one of these, delete the other later; the abstraction is ~one class.
 3. **Slide pot** -> 12-bit ADC (ADC1 only; ADC2 is unusable while the radio is on). 14-bit MIDI out. The role is configurable and **defaults to PITCH** (CC 25/57; contract v1.2): the CDJ-style tempo slider. With an external mixer, which is the headline rig (two decks into the EP-136), VirtualDJ, djay Pro and rekordbox do not make their own channel faders audible, so v1.1's CHANNEL_VOLUME default left the pot dead in three of the four apps; a tempo slider works in all four, and two units never fight over one control. `CHANNEL_VOLUME` (CC 7/39) stays selectable as a per-deck scratch cut, which is audible in Mixxx only because its deck outputs are post-fader; `CROSSFADER` (CC 23/55) is for one unit into a single software mixer. One SysEx frame switches it (`BRINGUP.md` section 2b; the macOS app's Settings does the same); `drivers/README.md` has the per-app detail.
 4. **DAC**: I2S, PCM5102A-class (no I2C, no MCLK) as the reference part. `dacMode` AUTO means **a DAC-present strap is fitted**: a jumper from GPIO14 to GND, sampled at boot. A scan of known I2C codec addresses exists but is compiled out by default (`EPDJ_DAC_PROBE_I2C`, off); with no strap the unit is MIDI-only. Descriptors can't change after enumeration, so a mode change reboots.
 5. **USB audio = USB Audio Class 1.0** (stereo, 48 kHz, 16-bit, asynchronous, with a feedback endpoint and a mute + volume feature unit). The ESP32-S3 is a full-speed-only device, and at full speed UAC1 is the class TinyUSB itself uses: its full-speed speaker-with-feedback example is UAC1 (UAC2 only on high-speed devices), and its UAC2 driver sends the feedback value as four bytes 16.16 whatever the bus speed, whereas a full-speed host expects three bytes 10.14, which is what its UAC1 driver sends. It is intended to be class-compliant, so a host should bind its in-box UAC1 driver and nothing needs installing; **it has not been tried on any host** (`BRINGUP.md`). Async + feedback endpoint: drift between the USB 1 kHz clock and the I2S clock is the classic failure mode of DIY USB DACs, so the device measures its ring fill, tells the host its real consumption rate, and slips single samples in software for hosts that ignore the feedback.
@@ -117,27 +129,29 @@ Mechanically, the Field Jog shell has Technic-pin holes at positions the author 
 | Component | How verified here | NOT verified here |
 |---|---|---|
 | Wire contract | generator `--check`, C++/Swift/JS compile, hand-checked vectors | - |
-| Firmware core logic | host unit tests incl. shared vectors, simulation of sensors, sanitizers | real sensor behavior on printed conductive PLA |
+| Firmware core logic | host unit tests incl. shared vectors, simulation of sensors (a simulated AS5600 angle and one simulated hold pad for the default platter, a simulated ring for the experimental one), sanitizers | real sensors: an AS5600 on I2C and its magnet gap, **a hold pad on a spinning platter**, printed conductive PLA (ring) |
 | End to end ([`E2E.md`](E2E.md)) | the real firmware `Engine` behind a text pipe with simulated sensors and a lossy radio, driven by the real Swift client libraries and the real Mixxx script on a mock engine | hardware, CoreMIDI, the real DJ apps. The three disagreements it found (E2E-1..3) are fixed; their history is tabulated there |
 | ESP-IDF layer | **compiles and links** for ESP32-S3 via PlatformIO and `idf.py` (ESP-IDF 6.1.0, esp_tinyusb 3.0.0 = TinyUSB 0.21.0; real headers); host checks of its pure logic (`firmware/esp32s3/tools/host_checks`) and of the USB descriptors against TinyUSB (`tools/crosscheck_usb_desc`) | running on a chip; USB enumeration; I2S audio quality; ESP-NOW latency |
 | USB audio | descriptor unit-tested; bytes identical to TinyUSB's own `TUD_*` macros; TinyUSB's real audio driver run on the host against the descriptors and the firmware's callbacks (feedback bytes, endpoints, mute/volume); feedback-controller logic unit-tested | enumeration on macOS, Windows, Linux, iPadOS; glitch-free playback; how each host treats the feedback endpoint |
 | Radio link | `LINK.md` section 12: simulated air, simulated clocks | any real radio: latency, jitter, loss, airtime, coexistence |
 | Swift libraries | `swift test` on Linux | - |
-| macOS app (CoreMIDI/AVAudio/SwiftUI) | pure logic tested; the Foundation-only part of the Kit compiled and tested; the rest **type-checked against hand-written stand-ins for the Apple frameworks, written from memory** | **never compiled against the Apple SDKs, never run** |
+| macOS app (CoreMIDI/AVAudio/SwiftUI) | pure logic tested, including the AS5600 calibration flow (encoder check, direction, hold pad) against an in-memory unit; the Foundation-only part of the Kit compiled and tested; the rest **type-checked against hand-written stand-ins for the Apple frameworks, written from memory** | **never compiled against the Apple SDKs, never run**; the wizards' thresholds on a real encoder and a real pad |
 | DJ mappings | Mixxx script run against a mock engine; XML well-formedness; numbers cross-checked to the contract | import into the real apps (Mixxx included) |
-| Enclosure | nothing: none exists for this design (section 1) | everything |
+| Enclosure | nothing: none exists for this design (section 1) | everything, starting with the hold pad's rotating contact |
 
 The "not verified" column is the first thing to do when hardware is in hand. `docs/BRINGUP.md` is the ordered
 checklist.
 
 ## 6. Order of bring-up (recommended)
 
-1. Flash firmware, watch `pio device monitor` (or `idf.py monitor`) logs: sensors alive, raw touch values per sector.
-2. macOS app -> Test tab: telemetry view. Calibrate fader, knob, touch ring; spin direction. (No Mac, or the app does not compile: the same steps with ready-made SysEx frames are in `BRINGUP.md`, "Without the macOS app".)
+1. Flash firmware, watch `pio device monitor` (or `idf.py monitor`) logs: the platter line (source, whether the AS5600 answered, its magnet status, how many touch pads are wired), then sensors alive. The AS5600 must answer with its magnet detected before anything else is worth testing.
+2. macOS app -> Calibrate: *Encoder check* (spin the platter), *Platter direction*, *Hold pad* (hands off, then a hand on the platter), slide pot, knob. Then, with the platter spinning under a hand, check that the touch light stays on: the hold pad on a spinning platter is the biggest unknown. (No Mac, or the app does not compile: the same steps with ready-made SysEx frames are in `BRINGUP.md`, "Without the macOS app".)
 3. MIDI monitor: confirm jog/touch/buttons; load a track in the app's built-in player, scratch.
 4. Add the DAC; confirm "EP-DJ3000 Audio" appears; play the app's test tone.
 5. Second unit: confirm link, then try one-cable bridging.
 6. Load the Mixxx/VirtualDJ mapping.
+
+If the decision is reversed to the touch ring, `BRINGUP.md` appendix A replaces steps 1 and 2.
 
 ## 7. Using a unit as a MIDI clock / transport master
 

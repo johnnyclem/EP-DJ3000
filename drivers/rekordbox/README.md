@@ -137,7 +137,8 @@ What the sources say, and what that means for this unit:
   poster in the [Numark thread][numark] says the same hack made a DJ2GO2 work ("everything works",
   no detail about scratching). A December 2024 poster on rekordbox 7 could not get it going: the
   jog was "not learnable" and the virtual Pioneer device would not learn buttons.
-* None of that is this unit. It shows the route is fragile and version dependent, not that it fails.
+* None of that is this unit. It shows the route is fragile and version dependent, not that it fails. (This unit's `touch`
+  note is the hold pad's: a hand on the spinning platter, not its motion.)
 * If you want to try anyway: delete the leading `#` on the `JogTouch` and `JogScratch` rows, import,
   and see whether the rows survive (EXPORT again and look). One MIDI code cannot drive two functions,
   so the unit's single jog CC cannot be both `JogScratch` and `JogPitchBend`; swap the command name if

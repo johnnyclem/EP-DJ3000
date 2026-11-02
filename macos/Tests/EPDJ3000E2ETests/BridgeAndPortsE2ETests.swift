@@ -28,7 +28,7 @@ final class BridgeAndPortsE2ETests: E2ETestCase {
             onCable0.apply(a.events.take())
             let sim1 = try await world.status(unit: 1)
             XCTAssertEqual(deckB.jogTicks, sim1.jogTotal, "the cumulative jog counter over a lossy radio loses and doubles nothing")
-            XCTAssertEqual(Double(deckB.jogTicks), 1536, accuracy: 60)
+            XCTAssertEqual(deckB.jogTicks, 1536, "1.5 revolutions of Deck B's encoder, every tick, once")
             XCTAssertEqual(misrouted.jogTicks, 0, "the bridge keeps Deck B's channel")
             XCTAssertEqual(onCable0.jogTicks, 0, "nothing of Deck B appears on Deck A's own cable")
             XCTAssertFalse(deckB.touched)
@@ -44,7 +44,7 @@ final class BridgeAndPortsE2ETests: E2ETestCase {
             var deckB = ControllerState(deck: .b)
             _ = try await world.command("buttons u=1 cue=1")
             _ = try await world.command("fader u=1 raw=3000 noise=0")
-            try await world.finger(rev: 0.3, pressure: 1, unit: 1)
+            try await world.finger(pressure: 1, unit: 1)  // the hold pad
             try await world.run(ms: 300)
             deckB.apply(linked.events.take())
             XCTAssertEqual(deckB.buttons, [.cue])

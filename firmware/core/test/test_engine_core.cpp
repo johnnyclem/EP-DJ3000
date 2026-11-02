@@ -9,14 +9,28 @@ using namespace esim;
 
 namespace {
 
-constexpr int kSettleMs = 3600;  // the touch ring learns its baseline for 250 ms and settles for 3 s
+constexpr int kSettleMs = 3600;  // the touch detector learns its baseline for 250 ms and settles for 3 s
 
+// A unit as the firmware ships it: AS5600 platter, one hold pad, nothing configured.
 std::unique_ptr<Deck> makeDeck(int deckId = 0) {
   std::unique_ptr<Deck> d(new Deck(deckId));
-  d->ringIdle(kSettleMs);
+  d->touchIdle(kSettleMs);
   d->clearLog();
   return d;
 }
+
+// The experimental touch ring, selected explicitly: it is not the default platter.
+std::unique_ptr<Deck> makeRingDeck(int deckId = 0) {
+  std::unique_ptr<Deck> d(new Deck(deckId));
+  d->useRing();
+  d->touchIdle(kSettleMs);
+  d->clearLog();
+  return d;
+}
+
+// Runs a test body on the default platter (AS5600 + hold pad) and on the touch ring: touch, tap and scratch
+// semantics are the same on both, the sensors in front of them are not.
+std::unique_ptr<Deck> makeDeckFor(bool ring, int deckId = 0) { return ring ? makeRingDeck(deckId) : makeDeck(deckId); }
 
 bool allOnChannel(const std::vector<Bytes>& v, uint8_t ch) {
   for (const Bytes& m : v) {
@@ -61,7 +75,7 @@ bool ccPresent(const std::vector<Bytes>& v, uint8_t cc) {
 EPDJ_TEST(engine_ring_sweep_jog_on_channel_with_conservation) {
   for (int deckId = 0; deckId < 2; ++deckId) {
     for (int dir = -1; dir <= 1; dir += 2) {
-      std::unique_ptr<Deck> d = makeDeck(deckId);
+      std::unique_ptr<Deck> d = makeRingDeck(deckId);
       d->ringGesture(0.25, 0.5 * dir, 2.0, 100);
       d->run(300);  // let the 500 Hz emitter flush
 
@@ -91,8 +105,8 @@ EPDJ_TEST(engine_ring_sweep_jog_on_channel_with_conservation) {
 
 EPDJ_TEST(engine_as5600_spin_is_exact_and_respects_invert) {
   for (int invert = 0; invert <= 1; ++invert) {
-    Deck d(0);
-    d.set(ConfigKey::PlatterSource, 0);
+    Deck d(0);  // contract defaults: the AS5600 is the platter
+    CHECK_EQ(d.cfg.get(ConfigKey::PlatterSource), static_cast<int>(proto::PlatterSource::As5600));
     d.set(ConfigKey::JogInvert, invert);
     d.in.angle12 = 1234;
     d.run(50);
@@ -119,48 +133,52 @@ EPDJ_TEST(engine_as5600_spin_is_exact_and_respects_invert) {
 }
 
 EPDJ_TEST(engine_touch_and_tap_notes_and_play_pulse) {
-  std::unique_ptr<Deck> d = makeDeck();
-  for (int i = 0; i < 100; ++i) d->ringStep(0.4, 1.0);  // a quick, motionless touch
-  d->ringIdle(100);
-  const std::vector<Bytes> notes = notesOnly(usbMsgs(d->log, 0));
-  CHECK_EQ(notes.size(), 4);
-  if (notes.size() == 4) {
-    CHECK_BYTES(notes[0], b({0x90, 38, 127}));
-    CHECK_BYTES(notes[1], b({0x80, 38, 0}));
-    CHECK_BYTES(notes[2], b({0x90, 39, 127}));  // play pulse: 127 ...
-    CHECK_BYTES(notes[3], b({0x80, 39, 0}));    // ... then 0
-  }
-  uint64_t on = 0, off = 0;
-  for (const Rec& r : d->log) {
-    if (r.bytes.size() == 3 && r.bytes[1] == 39) (r.bytes[0] == 0x90 ? on : off) = r.t;
-  }
-  CHECK(off - on >= 10000 && off - on <= 12000);
+  for (int ring = 0; ring <= 1; ++ring) {
+    std::unique_ptr<Deck> d = makeDeckFor(ring != 0);
+    for (int i = 0; i < 100; ++i) d->touchStep(true);  // a quick, motionless touch
+    d->touchIdle(100);
+    const std::vector<Bytes> notes = notesOnly(usbMsgs(d->log, 0));
+    CHECK_EQ(notes.size(), 4);
+    if (notes.size() == 4) {
+      CHECK_BYTES(notes[0], b({0x90, 38, 127}));
+      CHECK_BYTES(notes[1], b({0x80, 38, 0}));
+      CHECK_BYTES(notes[2], b({0x90, 39, 127}));  // play pulse: 127 ...
+      CHECK_BYTES(notes[3], b({0x80, 39, 0}));    // ... then 0
+    }
+    uint64_t on = 0, off = 0;
+    for (const Rec& r : d->log) {
+      if (r.bytes.size() == 3 && r.bytes[1] == 39) (r.bytes[0] == 0x90 ? on : off) = r.t;
+    }
+    CHECK(off - on >= 10000 && off - on <= 12000);
 
-  // tapPlay = 0: the touch notes only.
-  d->clearLog();
-  d->set(ConfigKey::TapPlay, 0);
-  for (int i = 0; i < 100; ++i) d->ringStep(0.4, 1.0);
-  d->ringIdle(100);
-  CHECK_EQ(notesOnly(usbMsgs(d->log, 0)).size(), 2);
+    // tapPlay = 0: the touch notes only.
+    d->clearLog();
+    d->set(ConfigKey::TapPlay, 0);
+    for (int i = 0; i < 100; ++i) d->touchStep(true);
+    d->touchIdle(100);
+    CHECK_EQ(notesOnly(usbMsgs(d->log, 0)).size(), 2);
+  }
 }
 
 EPDJ_TEST(engine_long_or_moving_touch_is_not_a_tap) {
-  std::unique_ptr<Deck> d = makeDeck();
-  for (int i = 0; i < 400; ++i) d->ringStep(0.4, 1.0);  // held longer than tapMaxMs (180 ms)
-  d->ringIdle(100);
-  CHECK_EQ(countEq(notesOnly(usbMsgs(d->log, 0)), b({0x90, 39, 127})), 0);
+  for (int ring = 0; ring <= 1; ++ring) {
+    std::unique_ptr<Deck> d = makeDeckFor(ring != 0);
+    for (int i = 0; i < 400; ++i) d->touchStep(true);  // held longer than tapMaxMs (180 ms)
+    d->touchIdle(100);
+    CHECK_EQ(countEq(notesOnly(usbMsgs(d->log, 0)), b({0x90, 39, 127})), 0);
 
-  d->clearLog();
-  d->ringGesture(0.2, 0.5, 0.2, 20, 0);  // short but travels far more than tapMoveTicks
-  CHECK_EQ(countEq(notesOnly(usbMsgs(d->log, 0)), b({0x90, 39, 127})), 0);
-  CHECK(ccSum(usbMsgs(d->log, 0), 0, proto::cc::kJog) > 100);
+    d->clearLog();
+    d->gesture(0.2, 0.5, 0.2, 20, 0);  // short but travels far more than tapMoveTicks
+    CHECK_EQ(countEq(notesOnly(usbMsgs(d->log, 0)), b({0x90, 39, 127})), 0);
+    CHECK(ccSum(usbMsgs(d->log, 0), 0, proto::cc::kJog) > 100);
+  }
 }
 
 EPDJ_TEST(engine_platter_source_change_does_not_strand_the_touch_note) {
-  std::unique_ptr<Deck> d = makeDeck();
+  std::unique_ptr<Deck> d = makeRingDeck();
   for (int i = 0; i < 200; ++i) d->ringStep(0.4, 1.0);  // finger resting
   CHECK_EQ(countEq(notesOnly(usbMsgs(d->log, 0)), b({0x90, 38, 127})), 1);
-  d->set(ConfigKey::PlatterSource, 0);  // live switch to the AS5600 while touched
+  d->set(ConfigKey::PlatterSource, static_cast<int>(proto::PlatterSource::As5600));  // live switch to the AS5600 while touched
   for (int i = 0; i < 50; ++i) d->ringStep(0.4, 1.0);
   d->ringIdle(100);
   // Every touch-down has its touch-up before the next one: the host never sees a doubled note-on.
@@ -579,7 +597,7 @@ EPDJ_TEST(engine_dj_mode_emits_no_clock_transport_or_mtc) {
   std::unique_ptr<Deck> d = makeDeck();
   d->set(ConfigKey::MtcEnable, 1);
   d->set(ConfigKey::ClockOutMask, 7);
-  d->ringGesture(0.2, 0.5, 1.0, 100);
+  d->gesture(0.2, 0.5, 1.0, 100);
   d->hostMsg(b({0xB0, 29, 1}));  // even a host asking for transport changes only the mirror
   d->hostMsg(b({0x90, 39, 127}));
   for (int i = 0; i < 20; ++i) d->click(i % 2 == 0, 40);
@@ -590,7 +608,7 @@ EPDJ_TEST(engine_dj_mode_emits_no_clock_transport_or_mtc) {
 
 EPDJ_TEST(engine_deck_b_uses_channel_two_for_everything) {
   std::unique_ptr<Deck> d = makeDeck(1);
-  d->ringGesture(0.3, 0.5, 1.0, 100);
+  d->gesture(0.3, 0.5, 1.0, 100);
   for (int raw = 100; raw < 4000; raw += 10) {
     d->in.faderRaw = static_cast<uint16_t>(raw);
     d->in.knobRaw = static_cast<uint16_t>(4095 - raw);
@@ -734,7 +752,6 @@ EPDJ_TEST(engine_time_never_runs_backwards) {
 
 EPDJ_TEST(engine_unmounted_usb_is_silent_and_mount_resends_state) {
   Deck d(0);
-  d.set(ConfigKey::PlatterSource, 0);
   d.in.usbMounted = false;
   d.in.faderRaw = 1000;
   d.in.knobRaw = 3000;

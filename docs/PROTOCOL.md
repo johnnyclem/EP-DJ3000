@@ -1,4 +1,4 @@
-# EP-DJ3000 wire protocol (contract v1.1)
+# EP-DJ3000 wire protocol (contract v1.3)
 
 The contract between the **firmware**, the **macOS app** and the **DJ-software
 mappings**. The machine-readable source of truth is
@@ -11,10 +11,16 @@ reproduce those vectors.
 
 Normative words: **MUST**, **SHOULD**, **MAY** as in RFC 2119.
 
-**Revision.** This is contract revision 1.1; the wire version byte (`Info.protocolVersion`, SysEx `ver`) is still 1. 1.1
-renamed `Peer.reserved` to `Peer.status` (a `PeerStatus` bit field), added the `linkGroup` config key, made
-`CHANNEL_VOLUME` the default `faderRole`, put the USB identity in the contract, and settled the `deckId`, `LOAD_DEFAULTS`,
-`GET_CONFIG`-dump and play-note rules below. The revision label exists only in these documents, not in the JSON.
+**Revision.** This is contract revision 1.3; the wire version byte (`Info.protocolVersion`, SysEx `ver`) is still 1, and no
+message layout changed after 1.1. The revision label exists only in these documents, not in the JSON.
+
+* **1.1** renamed `Peer.reserved` to `Peer.status` (a `PeerStatus` bit field), added the `linkGroup` config key, put the USB
+  identity in the contract, and settled the `deckId`, `LOAD_DEFAULTS`, `GET_CONFIG`-dump and play-note rules below.
+* **1.2** changed the default `faderRole` from `CHANNEL_VOLUME` to `PITCH` (the CDJ-style tempo slider: audible in every DJ app
+  even with an external mixer).
+* **1.3** changed the default `platterSource` from `TOUCH_RING` to `AS5600` (a free-spinning platter over a magnetic encoder; the
+  touch ring is kept as an experimental option). A unit that saved its config under an older revision keeps its old values
+  until `LOAD_DEFAULTS` + `SAVE_CONFIG`.
 
 
 ## 1. USB topology
@@ -86,13 +92,17 @@ one deck's LEDs following the other's.
 * Positive delta = **clockwise as seen from above** when `jogInvert = 0`.
 * The device accumulates motion and emits **at most one jog message every 2 ms (500 Hz)**.
   Each message carries `clamp(accum, -63, 63)`; the unsent remainder carries to the next message, so no motion is lost.
-* While the platter is untouched (`platterSource = AS5600`, free-spinning) motion is still reported.
+* While the platter is untouched (`platterSource = AS5600`, the default: a free-spinning platter) motion is still reported;
+  with `TOUCH_RING` it is reported only while a finger is down.
 * On touch-down the engine MUST re-anchor its angle reference so the first sample after touching never produces a jump.
 
 ### 2.3 Touch and tap-play
 
 * `touch` note on when a finger is confirmed down, off when confirmed up.
   Thresholds are `touchOnPermille` / `touchOffPermille` (per-mille rise over a slowly-tracking baseline, with hysteresis).
+  With `AS5600` and `TOUCH_HOLD_ONLY` the touch comes from the one hold pad (`touchRaw[0]`; the other seven entries are 0), whose
+  reading the engine repeats across its ring detector; with `TOUCH_RING` it is the strongest of the 3-8 sectors. DJ software
+  enters scratch mode on this note, so on the default platter it is as important as the jog.
 * **Tap**: touch down -> up within `tapMaxMs` with total movement <= `tapMoveTicks`, and `tapPlay = 1`:
   emit a `play` note pulse (127, then 0 after >= 10 ms). In SYNC_MASTER this also toggles the local transport
   (SYNC_FOLLOW only mirrors a transport, and DJ mode has none).
@@ -272,7 +282,7 @@ Exceptions that need a reboot to take effect: `dacMode`, `deckId` (via `SET_DECK
 | 0 | `deckId` | enum `Deck` | 0..1 | 0 | Which deck this unit is (A/B). Sets default MIDI channel and USB name. |
 | 1 | `midiChannel` | u8 | 0..16 | 16 | Zero-based MIDI channel 0..15, or 16 = auto (follow deckId). |
 | 2 | `mode` | enum `Mode` | 0..2 | 0 | DJ controller, standalone clock master, or clock follower. |
-| 3 | `platterSource` | enum `PlatterSource` | 0..2 | 1 | How platter rotation is sensed: AS5600 magnetic encoder, segmented capacitive touch ring (conductive PLA), or touch/hold only (no rotation). |
+| 3 | `platterSource` | enum `PlatterSource` | 0..2 | 0 | How platter rotation is sensed. AS5600 (default): a free-spinning platter on a bearing with a diametric magnet over an AS5600 magnetic encoder; touch/hold comes from one touch pad. TOUCH_RING: a segmented conductive-PLA ring on touch pads, finger-slide scratching (experimental, kept for later). TOUCH_HOLD_ONLY: touch detect only, no rotation. |
 | 4 | `jogInvert` | bool | 0..1 | 0 | Flip jog direction. |
 | 5 | `touchSectors` | u8 | 3..8 | 8 | Number of capacitive sectors in the platter ring. |
 | 6 | `touchOnPermille` | u16 | 1..1000 | 12 | Finger-down threshold, per-mille rise over baseline. |
@@ -312,9 +322,11 @@ Calibration is **host-driven** over the telemetry stream (`STREAM`), with on-dev
 |---|---|
 | Fader | `CAL_BEGIN(FADER)`, user sweeps the pot end to end, `CAL_END(FADER, apply=1)`. The device keeps min/max of the raw reading, rejects a span < 1500 counts with `CAL_FAILED`, and writes `faderRawMin/Max` (with a 1% inset). |
 | Knob | Same with `KNOB`. |
-| Touch ring | Host: stream telemetry, collect `touchRaw` idle for 1 s (noise), then a finger on each sector. Compute per-mille rise, set `touchOnPermille` = 50% of the weakest sector's rise and `touchOffPermille` = 60% of that (never below 3x idle noise); `SET_CONFIG`; `SAVE_CONFIG`. |
-| Platter direction | Host: ask the user to spin the platter clockwise while streaming. `jogTotal` is measured after `jogInvert`, so if it decreases the current setting is backwards: write `jogInvert = 1 - current`. |
-| Platter source | Host reads `Info.caps`; AS5600 present -> suggest AS5600, else TOUCH_RING. |
+| Encoder check (`AS5600`) | Host: stream telemetry while the user spins the platter by hand. `Info.caps` AS5600 clear: no chip answered at boot (I2C wiring, 3.3 V). `StateFlags.ANGLE_VALID` never set: it answered at boot but reads fail now. Valid but `Telemetry.angle` moves less than one full turn (4096 counts) in about 10 s: no magnet, too far, or not on the axle. Angle jumping implausibly far between samples: magnet off-centre, too weak or too strong, or a noisy bus. A smooth full turn: OK. Nothing is written to the unit. |
+| Platter direction | Host: ask the user to spin the platter clockwise while streaming (by hand on the AS5600 platter, a finger on the ring). `jogTotal` is measured after `jogInvert`, so if it decreases the current setting is backwards: write `jogInvert = 1 - current`. |
+| Hold pad (`AS5600`, `TOUCH_HOLD_ONLY`) | Same rules as the touch ring with one sector: stream telemetry, collect `touchRaw[0]` idle for 1 s (noise), then a hand on the platter. Compute the per-mille rise, set `touchOnPermille` = 50% of it and `touchOffPermille` = 60% of that (never below 3x idle noise); `SET_CONFIG`; `SAVE_CONFIG`. This does not show the pad keeps seeing the hand while the platter turns. |
+| Touch ring (`TOUCH_RING`, experimental) | Host: stream telemetry, collect `touchRaw` idle for 1 s (noise), then a finger on each sector. Compute per-mille rise, set `touchOnPermille` = 50% of the weakest sector's rise and `touchOffPermille` = 60% of that (never below 3x idle noise); `SET_CONFIG`; `SAVE_CONFIG`. |
+| Platter source | Host reads `Info.caps`: AS5600 present -> `AS5600` (the default); else TOUCH_RING present (3 or more pads wired) -> `TOUCH_RING` (experimental); else `TOUCH_HOLD_ONLY`. |
 
 ## 4. Radio link (unit-to-unit)
 

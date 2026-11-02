@@ -85,7 +85,7 @@ cp drivers/mixxx/EP-DJ3000.midi.xml drivers/mixxx/EP-DJ3000-scripts.js \
 |---|---|---|
 | Platter touched / released | note 38 | `engine.scratchEnable` / `scratchDisable` for the deck: 1024 intervals per rev, 33 1/3 rpm, alpha 1/8, beta alpha/32, ramp on both |
 | Platter moved, touched | CC 22 (relative, 64 = none) | `engine.scratchTick(deck, ticks)`; positive = clockwise |
-| Platter moved, untouched (AS5600 build) | CC 22 | pitch bend: ticks x `BEND_SCALE` is added to `[ChannelN],jog`, clamped to Mixxx's documented -3..3. `jog` is an accumulator that Mixxx zeroes after each audio callback (`RateControl::getJogFactor`), and the unit can send several messages per callback, so the script adds rather than overwrites |
+| Platter moved, untouched (the default AS5600 platter) | CC 22 | pitch bend: ticks x `BEND_SCALE` is added to `[ChannelN],jog`, clamped to Mixxx's documented -3..3. `jog` is an accumulator that Mixxx zeroes after each audio callback (`RateControl::getJogFactor`), and the unit can send several messages per callback, so the script adds rather than overwrites |
 | Platter tap | note 39 | toggles `[ChannelN],play`. The touch down/up of the tap scratches for a moment and releases |
 | CUE | note 36 | `cue_default` follows the button (honours Mixxx's cue mode setting). LED follows `cue_indicator` |
 | REV | note 37 | `reverseroll` while held. See `REV_BEHAVIOR` |
@@ -125,6 +125,9 @@ Switch to `"toggle"` if you want a latching reverse.
 
 ## Known limits
 
+- **Scratching needs the touch note.** `scratchEnable` is only called on note 38, and on the default AS5600 platter
+  that note comes from the one hold pad. Until that pad reliably sees a hand on the spinning platter
+  (`docs/BRINGUP.md`, first bring-up step 3), every platter movement is a pitch bend and nothing scratches.
 - **Not run in real Mixxx.** Scratch feel, pitch-bend strength, soft-takeover behaviour with
   a real pot, LED timing and the pitch fader's direction (it follows Mixxx's *rate slider
   direction* preference; flip `faderInvert` on the unit if it is backwards) are unknown

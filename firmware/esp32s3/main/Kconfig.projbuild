@@ -24,26 +24,30 @@ menu "EP-DJ3000"
 
         choice EPDJ_PLATTER_DEFAULT
             prompt "Platter source on a unit with no saved configuration"
-            default EPDJ_PLATTER_TOUCH_RING
+            default EPDJ_PLATTER_AS5600
             help
                 Only the first-boot default: the setting is a live config key (platterSource) the
-                macOS app can change and save.
+                macOS app can change and save. A unit that already saved its configuration keeps what it
+                saved, including TOUCH_RING from before contract v1.3 (LOAD_DEFAULTS, then SAVE_CONFIG).
 
-            config EPDJ_PLATTER_TOUCH_RING
-                bool "Segmented conductive-PLA ring on touch pads (finger-slide scratching)"
             config EPDJ_PLATTER_AS5600
-                bool "AS5600 magnetic encoder under a free-spinning platter"
+                bool "AS5600 magnetic encoder under a free-spinning platter (the default build)"
+            config EPDJ_PLATTER_TOUCH_RING
+                bool "EXPERIMENTAL: segmented conductive-PLA ring on touch pads (finger-slide scratching)"
             config EPDJ_PLATTER_HOLD_ONLY
                 bool "Touch/hold detection only, no rotation"
         endchoice
 
         config EPDJ_TOUCH_PAD_COUNT
-            int "Number of touch pads wired (platter sectors; 0 = none)"
+            int "Number of touch pads wired (0 = none)"
             range 0 8
-            default 8
+            default 1
             help
-                Pads are GPIO4.. in order, sector 0 first (board_pins.h). With an AS5600 platter wire
-                only pad 0 (GPIO4) as the hold pad and set this to 1.
+                Pads are GPIO4.. in order, sector 0 first (board_pins.h). With the AS5600 platter (the
+                default) wire ONE pad: GPIO4 is the hold pad, which supplies the touch note and tap
+                detection while the encoder supplies the motion. 0 means no hold pad: jog still works
+                but the unit never sends a touch note, so DJ apps never enter scratch mode. For the
+                experimental touch ring wire 3 to 8 pads (8 for the full ring).
 
         config EPDJ_TOUCH_SCAN_TARGET_US
             int "Touch: target duration of one scan of all pads (us, 0 = no auto-range)"
@@ -80,14 +84,19 @@ menu "EP-DJ3000"
             range 1 32
             default 8
             help
-                The upper limit: at boot the firmware times one conversion and lowers the count so that
-                fader and knob together take at most 400 us of each millisecond. Each conversion runs
-                with interrupts off on the core that also serves USB. 8 trades part of that budget for
-                roughly 3x less ADC noise than a single read.
+                The upper limit: at boot the firmware times one conversion and the AS5600 read, and lowers
+                the count so that fader, knob and encoder together take at most 400 us of each
+                millisecond (the encoder read comes off the top). Each ADC conversion runs with interrupts
+                off on the core that also serves USB. 8 trades part of that budget for roughly 3x less ADC
+                noise than a single read.
 
         config EPDJ_AS5600_ENABLE
-            bool "Probe for an AS5600 encoder on I2C at boot"
+            bool "Probe for an AS5600 encoder on I2C at boot (SDA GPIO21, SCL GPIO47, address 0x36)"
             default y
+            help
+                Needed for the default AS5600 platter: with it off, platterSource AS5600 has no encoder to
+                read and the unit sends no jog. The boot log says whether the chip answered and how the
+                magnet looks.
 
     endmenu
 

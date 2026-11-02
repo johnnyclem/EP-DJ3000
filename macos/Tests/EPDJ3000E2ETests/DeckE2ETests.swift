@@ -63,11 +63,20 @@ private final class DeckBench {
         }
     }
 
+    /// The hold pad (the default build's one touch pad): a finger on it or off it. `rev` only means something on the ring.
     func finger(rev: Double? = nil, pressure: Double? = nil) async throws { try await world.finger(rev: rev, pressure: pressure, unit: unit) }
 
+    /// The platter turns by `revs` (negative = counter-clockwise) over `ms`, relative to wherever the encoder is: an
+    /// encoder cannot teleport between gestures the way a finger can lift and land somewhere else on a ring.
+    func scratch(revs: Double, ms: Int) async throws {
+        let from = world.encoderRev[unit] ?? 0
+        try await ramp("as5600", from: from, to: from + revs, ms: ms)
+        world.encoderRev[unit] = from + revs
+    }
+
     /// A platter tap: touch for 80 ms without moving, release.
-    func tap(rev: Double = 0.3) async throws {
-        try await finger(rev: rev, pressure: 1)
+    func tap() async throws {
+        try await finger(pressure: 1)
         try await run(ms: 80)
         try await finger(pressure: 0)
         try await run(ms: 120)
@@ -114,7 +123,7 @@ final class DeckE2ETests: E2ETestCase {
             XCTAssertEqual(bench.status.playheadFrames - t0, 24_000, accuracy: 600, "500 ms of audio")
 
             // A still finger on the platter holds the record: how long until it stands still?
-            try await bench.finger(rev: 0.4, pressure: 1)
+            try await bench.finger(pressure: 1)
             var stoppedAfterMs: Int?
             for block in 1...60 {
                 try await bench.run(ms: 2)
@@ -148,9 +157,9 @@ final class DeckE2ETests: E2ETestCase {
             let start = bench.status.playheadFrames
 
             // One clockwise revolution at 33 1/3 rpm on a paused deck: forwards by 1.8 s, and it stops when let go.
-            try await bench.finger(rev: 0.25, pressure: 1)
+            try await bench.finger(pressure: 1)
             try await bench.run(ms: 60)
-            try await bench.ramp("finger", from: 0.25, to: 1.25, ms: 1800)
+            try await bench.scratch(revs: 1.0, ms: 1800)
             try await bench.run(ms: 60)
             try await bench.finger(pressure: 0)
             try await bench.run(ms: 400)
@@ -162,9 +171,9 @@ final class DeckE2ETests: E2ETestCase {
 
             // Half a revolution counter-clockwise at four times that speed: backwards by 0.9 s.
             let mid = bench.status.playheadFrames
-            try await bench.finger(rev: 0.5, pressure: 1)
+            try await bench.finger(pressure: 1)
             try await bench.run(ms: 60)
-            try await bench.ramp("finger", from: 0.5, to: 0.0, ms: 225)
+            try await bench.scratch(revs: -0.5, ms: 225)
             try await bench.run(ms: 60)
             try await bench.finger(pressure: 0)
             try await bench.run(ms: 400)
@@ -180,9 +189,9 @@ final class DeckE2ETests: E2ETestCase {
                 let bench = DeckBench(world: world)
                 try await bench.seek(5)
                 let start = bench.status.playheadFrames
-                try await bench.finger(rev: 0.25, pressure: 1)
+                try await bench.finger(pressure: 1)
                 try await bench.run(ms: 60)
-                try await bench.ramp("finger", from: 0.25, to: 0.25 + revs, ms: Int(revs / revsPerSecond * 1000))
+                try await bench.scratch(revs: revs, ms: Int(revs / revsPerSecond * 1000))
                 try await bench.run(ms: 60)
                 try await bench.finger(pressure: 0)
                 try await bench.run(ms: 400)
@@ -200,11 +209,11 @@ final class DeckE2ETests: E2ETestCase {
             let bench = DeckBench(world: world)
             try await bench.seek(5)
             let start = bench.status.playheadFrames
-            try await bench.finger(rev: 0.25, pressure: 1)
+            try await bench.finger(pressure: 1)
             try await bench.run(ms: 60)
             for _ in 0..<4 {
-                try await bench.ramp("finger", from: 0.25, to: 0.40, ms: 120)
-                try await bench.ramp("finger", from: 0.40, to: 0.25, ms: 120)
+                try await bench.scratch(revs: 0.15, ms: 120)
+                try await bench.scratch(revs: -0.15, ms: 120)
             }
             try await bench.run(ms: 60)
             try await bench.finger(pressure: 0)
@@ -358,16 +367,13 @@ final class DeckE2ETests: E2ETestCase {
             let c = world.client()
             var state = ControllerState(deck: .a)
             try await c.client.startStream(rateHz: 20)
-            var rev = 0.0
             for i in 0..<60 {  // a minute of back-and-forth scratching with a moving fader
-                let to = rev + (i % 2 == 0 ? 0.4 : -0.4)
-                try await world.finger(rev: rev, pressure: 1)
+                try await world.finger(pressure: 1)
                 try await world.run(ms: 40)
-                try await world.ramp("finger", from: rev, to: to, ms: 600)
+                try await world.spin(revs: i % 2 == 0 ? 0.4 : -0.4, ms: 600)
                 try await world.finger(pressure: 0)
                 _ = try await world.command("fader u=0 raw=\(500 + (i * 53) % 3000)")
                 try await world.run(ms: 360)
-                rev = to
                 state.apply(c.events.take())
             }
             let sim = try await world.status()

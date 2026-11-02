@@ -70,7 +70,8 @@ final class DeviceClientTests: XCTestCase {
         XCTAssertEqual(info.deck, 1)
         XCTAssertEqual(info.serial, 0xDEADBEEF)
         XCTAssertEqual(info.fwMinor, 1)
-        XCTAssertEqual(Caps(rawValue: info.caps), [.touchRing, .dac, .trsMidi, .link, .usbAudio])
+        XCTAssertEqual(Caps(rawValue: info.caps), [.as5600, .dac, .trsMidi, .link, .usbAudio])
+        XCTAssertEqual(info.platterSource, PlatterSource.as5600.rawValue)
     }
 
     func testUnknownProtocolVersionIsRefusedWithTheInfoAttached() async {

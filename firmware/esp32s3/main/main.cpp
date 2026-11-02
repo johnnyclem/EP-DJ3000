@@ -5,7 +5,7 @@
  * THREADING MODEL
  * ---------------
  *   task            core  prio  what it does
- *   engine           1     24   every 1 ms: drain input queues -> sample ADC/touch/AS5600/buttons -> Engine::step()
+ *   engine           1     24   every 1 ms: drain input queues -> sample AS5600/ADC/touch/buttons -> Engine::step()
  *                               -> deliver Engine output (USB, TRS, radio) -> LED. The ONLY caller of the core.
  *   tinyusb          1     22   esp_tinyusb's tud_task(): enumeration, control requests (USB audio volume/mute),
  *                               MIDI endpoint servicing. Its callbacks only copy into queues or atomics.
@@ -36,8 +36,9 @@
  *
  *   Pacing: the engine task sleeps until the next 1 ms tick every iteration; after an overrun of more than two ticks
  *   the lost ticks are dropped rather than caught up (tick_pacing.h), so it can never run without sleeping and starve the
- *   TinyUSB task (same core, lower priority), IDLE1 or the watchdog. ADC conversions run with interrupts off; AdcInputs
- *   times them at boot and keeps the engine's share of each millisecond under 400 us.
+ *   TinyUSB task (same core, lower priority), IDLE1 or the watchdog. ADC conversions run with interrupts off and the
+ *   AS5600 read waits on the I2C driver; both are timed at boot and together kept under 400 us of each millisecond
+ *   (hal/sensor_budget.h; the ADC oversampling gives way to the I2C read).
  *
  *   Priority inversion: the engine task is the highest application priority but waits on nothing a lower task can hold
  *   except TinyUSB's endpoint mutex (inheritance, critical sections of microseconds). Every queue operation it makes is
@@ -49,6 +50,7 @@
  *   progress. Saves are user-initiated; nothing in normal playing writes flash.
  */
 
+#include <cstdio>
 #include <cstring>
 #include <new>
 
@@ -61,8 +63,10 @@
 #include "epdj/version.h"
 #include "epdj_audio/audio_out.h"
 #include "epdj_hal/dac_detect.h"
+#include "epdj_hal/board_pins.h"
 #include "epdj_hal/i2c_bus.h"
 #include "epdj_hal/nvs_store.h"
+#include "epdj_hal/sensor_budget.h"
 #include "epdj_link/radio.h"
 #include "epdj_usb/usb_device.h"
 #include "esp_idf_version.h"
@@ -102,6 +106,63 @@ const char* loadStatusText(LoadStatus s) {
   return "?";
 }
 
+const char* platterText(proto::PlatterSource s) {
+  switch (s) {
+    case proto::PlatterSource::As5600: return "AS5600";
+    case proto::PlatterSource::TouchRing: return "TOUCH_RING (experimental)";
+    case proto::PlatterSource::TouchHoldOnly: return "TOUCH_HOLD_ONLY";
+  }
+  return "?";
+}
+
+// What the platter sensing found, in one line, then a WARN for each thing that will make the platter misbehave.
+// Needs the config, the I2C bus, the AS5600 and the touch pads to be initialised.
+void logPlatter() {
+  using hal::sensor_budget::Magnet;
+  const auto source = static_cast<proto::PlatterSource>(g_cfg.get(proto::ConfigKey::PlatterSource));
+  const bool encoder = g_as5600.present();
+  const unsigned pads = g_touch.count();
+
+  char enc[112];
+  if (encoder) {
+    std::snprintf(enc, sizeof enc, "answered at 0x%02X, magnet %s, read %u us", hal::As5600::kAddress,
+                  hal::sensor_budget::magnetText(g_as5600.magnet()), g_as5600.readUs());
+  } else {
+    std::snprintf(enc, sizeof enc, "NOT answering at 0x%02X (SDA GPIO%d, SCL GPIO%d)", hal::As5600::kAddress, pins::kI2cSda,
+                  pins::kI2cScl);
+  }
+  ESP_LOGI(TAG, "platter: source %s | AS5600 %s | touch pads wired: %u%s", platterText(source), enc, pads,
+           pads == 1 ? " (GPIO4 = hold pad)" : (pads == 0 ? " (no hold pad)" : ""));
+
+  if (source == proto::PlatterSource::As5600 && !encoder) {
+#if CONFIG_EPDJ_AS5600_ENABLE
+    const char* why = !g_i2c.ok() ? "the I2C bus did not start" : "nothing ACKed the address";
+#else
+    const char* why = "the AS5600 probe is compiled out (EPDJ_AS5600_ENABLE is off)";
+#endif
+    ESP_LOGW(TAG, "!!! platterSource is AS5600 but no encoder answered (%s): JOG WILL BE SILENT. Check the I2C wiring (SDA GPIO%d, SCL GPIO%d, "
+                  "3V3, GND), the breakout's 3.3 V/5 V strap and the magnet gap (1-3 mm), then reboot !!!",
+             why, pins::kI2cSda, pins::kI2cScl);
+  }
+  if (encoder && g_as5600.magnet() != Magnet::Ok) {
+    ESP_LOGW(TAG, "AS5600 magnet %s (STATUS 0x%02X): %s", hal::sensor_budget::magnetText(g_as5600.magnet()), g_as5600.status(),
+             g_as5600.magnet() == Magnet::TooStrong ? "move it away from the chip (gap 1-3 mm)"
+             : g_as5600.magnet() == Magnet::Unknown ? "the status register could not be read"
+                                                    : "move it closer, centre it on the chip, and check it is diametrically magnetised");
+  }
+  if (encoder && source != proto::PlatterSource::As5600) {
+    ESP_LOGW(TAG, "an AS5600 answered but platterSource is %s, so the encoder is ignored (a config saved before contract v1.3 keeps "
+                  "TOUCH_RING: LOAD_DEFAULTS and SAVE_CONFIG, or set platterSource 0)",
+             platterText(source));
+  }
+  if (source == proto::PlatterSource::As5600 && pads == 0) {
+    ESP_LOGW(TAG, "no hold pad wired (EPDJ_TOUCH_PAD_COUNT = 0): the unit never sends a touch note, so DJ apps never enter scratch mode");
+  }
+  if (source == proto::PlatterSource::TouchRing && pads < 3) {
+    ESP_LOGW(TAG, "platterSource is TOUCH_RING but only %u pad(s) are wired: touch works, finger angle does not", pads);
+  }
+}
+
 }  // namespace
 
 extern "C" void app_main(void) {
@@ -112,28 +173,25 @@ extern "C" void app_main(void) {
   if (!g_store.begin()) ESP_LOGE(TAG, "NVS unavailable: running on defaults, nothing can be saved");
   const LoadStatus ls = loadConfig(g_store, &g_cfg);
   if (ls == LoadStatus::Empty) app::applyFirstBootDefaults(&g_cfg);
-  ESP_LOGI(TAG, "config: %s; deck %c, platter source %d", loadStatusText(ls), g_cfg.deck() == proto::Deck::A ? 'A' : 'B',
-           static_cast<int>(g_cfg.get(proto::ConfigKey::PlatterSource)));
+  ESP_LOGI(TAG, "config: %s; deck %c", loadStatusText(ls), g_cfg.deck() == proto::Deck::A ? 'A' : 'B');
 
   uint8_t mac[6];
   radio::readStationMac(mac);
 
   // ---- sensors ----
+  // The encoder first: the ADC's share of the 1 ms sensor budget is what the AS5600 read leaves (sensor_budget.h).
   g_buttons.begin();
-  if (!g_adc.begin()) ESP_LOGE(TAG, "ADC failed: fader and knob will read 0");
-  if (CONFIG_EPDJ_TOUCH_PAD_COUNT > 0 && !g_touch.begin(CONFIG_EPDJ_TOUCH_PAD_COUNT)) {
-    ESP_LOGE(TAG, "touch pads failed: no platter input");
-  }
 #if CONFIG_EPDJ_AS5600_ENABLE || CONFIG_EPDJ_DAC_PROBE_I2C
   g_i2c.begin();
 #endif
 #if CONFIG_EPDJ_AS5600_ENABLE
-  if (g_i2c.ok() && !g_as5600.begin(g_i2c)) ESP_LOGI(TAG, "no AS5600 on I2C");
+  if (g_i2c.ok()) g_as5600.begin(g_i2c);
 #endif
-  if (static_cast<proto::PlatterSource>(g_cfg.get(proto::ConfigKey::PlatterSource)) == proto::PlatterSource::As5600 &&
-      !g_as5600.present()) {
-    ESP_LOGW(TAG, "platterSource is AS5600 but no encoder answered: the platter will not turn");
+  if (!g_adc.begin(g_as5600.present() ? g_as5600.readUs() : 0)) ESP_LOGE(TAG, "ADC failed: fader and knob will read 0");
+  if (CONFIG_EPDJ_TOUCH_PAD_COUNT > 0 && !g_touch.begin(CONFIG_EPDJ_TOUCH_PAD_COUNT)) {
+    ESP_LOGE(TAG, "touch pads failed: no platter input");
   }
+  logPlatter();
 
   // ---- DAC ----
   // dacMode decides at boot because the USB descriptors cannot change afterwards. Only AUTO looks at the strap

@@ -82,17 +82,20 @@ void engineLoop(Runtime* rt) {
     }
 
     // ---- 2. sample the hardware and run the engine ----
+    // The encoder first, and every tick: jog is the latency-critical input, so it is sampled right at the timestamp and not
+    // after the ADC's conversions. Without an encoder (or when a read fails) angleValid stays false and the engine reports
+    // no platter motion at all; angle12 is never used then.
     RawInputs in;
     in.nowUs = hal::nowUs();
-    in.faderRaw = rt->adc->fader();
-    in.knobRaw = rt->adc->knob();
-    rt->touch->read(in.touchRaw);
-    in.touchCount = static_cast<uint8_t>(rt->touch->count());
     if (rt->as5600->present()) {
       uint16_t a = 0;
       in.angleValid = rt->as5600->readAngle(&a, in.nowUs);
       if (in.angleValid) in.angle12 = a;
     }
+    in.faderRaw = rt->adc->fader();
+    in.knobRaw = rt->adc->knob();
+    rt->touch->read(in.touchRaw);
+    in.touchCount = static_cast<uint8_t>(rt->touch->count());
     in.cue = rt->buttons->cue();
     in.rev = rt->buttons->rev();
     in.usbMounted = usb_dev::hostActive();

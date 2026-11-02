@@ -41,7 +41,7 @@ fails when it no longer matches the contract.
 | MIDI channel | `midiChannel` = AUTO: Deck A on channel 1 (status `0x90` / `0xB0`), Deck B on channel 2 (status `0x91` / `0xB1`) |
 | Slide pot | `faderRole` = `PITCH`: CC 25 (MSB) / 57 (LSB), 14-bit. Other roles: `CROSSFADER` CC 23 / 55, `CHANNEL_VOLUME` CC 7 / 39 |
 | Orange knob | `knobRole` = `GENERIC`: CC 24 (MSB) / 56 (LSB), 14-bit |
-| Platter | `platterSource` = `TOUCH_RING`, `jogInvert` = 0: CC 22, relative `64 + delta`, **1024 ticks per revolution**, clockwise positive; touch is Note 38 |
+| Platter | `platterSource` = `AS5600`, `jogInvert` = 0: CC 22, relative `64 + delta`, **1024 ticks per revolution**, clockwise positive; touch is Note 38 (a hand on the platter, from the hold pad when the platter is the AS5600) |
 | Buttons | `cue` Note 36, `rev` Note 37; a platter tap (`tapPlay` = 1) pulses `play` Note 39 |
 | Mode | `mode` = `DJ`: no clock, transport or timecode out, so `bpm`, `bpmNudge`, `tap` and `transport` stay silent |
 <!-- END GENERATED:defaults -->
@@ -116,6 +116,14 @@ an external mixer, and two units never fight over a tempo slider. The other two 
 
 ## Cross-driver caveats and open items
 
+* **Scratch mode depends on the touch note, and on the default platter that note is the hold pad's.** Mixxx
+  (`scratchEnable`), VirtualDJ (`touchwheel_touch`) and djay Pro's touch-aware plan (Scratching Mode) switch the
+  deck into scratching on note 38, not on motion. The AS5600 platter reports rotation whether or not a hand is on it, so the
+  hand detection comes from one touch pad that has to see a hand on a platter that spins and crosses a rotating
+  joint to get there. That path is undesigned and untested (`docs/ARCHITECTURE.md` decision 2, first bring-up
+  step 3 in `docs/BRINGUP.md`). If the pad never reports a hand, no mapping here scratches: Mixxx falls back to
+  pitch bend, and what VirtualDJ and djay do with jog and no touch is unknown. `platterSource` = `TOUCH_RING`
+  (experimental, `docs/ARCHITECTURE.md`) detects the finger on the same segmented surface that senses the motion.
 * **Default channels only.** Mixxx, VirtualDJ and the rekordbox CSVs hard-code channels 1 and 2. A unit with
   `midiChannel` set to something else needs the mapping edited (djay learns whatever it hears).
 * **Input channel filtering is specified.** A unit ignores channel-voice messages on any channel but its own,

@@ -244,7 +244,7 @@ constexpr ConfigDesc kConfigTable[kConfigCount] = {
   {ConfigKey::DeckId, "deckId", 0, 1, 0},
   {ConfigKey::MidiChannel, "midiChannel", 0, 16, 16},
   {ConfigKey::Mode, "mode", 0, 2, 0},
-  {ConfigKey::PlatterSource, "platterSource", 0, 2, 1},
+  {ConfigKey::PlatterSource, "platterSource", 0, 2, 0},
   {ConfigKey::JogInvert, "jogInvert", 0, 1, 0},
   {ConfigKey::TouchSectors, "touchSectors", 3, 8, 8},
   {ConfigKey::TouchOnPermille, "touchOnPermille", 1, 1000, 12},

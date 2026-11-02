@@ -67,6 +67,10 @@ These are the places the protocol is easy to get subtly wrong. Each links to the
    (only the `transport` CC commands a SYNC_MASTER unit).
 8. **A tap-to-play arrives as touch down, touch up and a `play` pulse** (2.3). The unit cannot know it is a
    tap when the touch begins, so a scratch-capable mapping briefly enters scratch mode on every tap.
+9. **Touch is not motion.** With the default `AS5600` platter, `jog` is sent whether or not a hand is on the
+   platter (a free-spinning platter coasts), and the `touch` note comes from one separate hold pad. A scratch
+   mapping must treat `touch` as "a hand is holding the record" and an untouched `jog` as a nudge, or ignore it.
+   With the experimental `TOUCH_RING` platter `jog` is only sent while a finger is down.
 
 ## Worked example: a decoder
 

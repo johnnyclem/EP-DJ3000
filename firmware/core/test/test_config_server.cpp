@@ -182,6 +182,7 @@ Bytes cat(Bytes a, const Bytes& b) {
 EPDJ_TEST(get_info_reply_is_byte_exact_with_the_reference_vector) {
   Rig r;
   r.config.set(ConfigKey::DeckId, 1);
+  r.config.set(ConfigKey::PlatterSource, static_cast<int32_t>(proto::PlatterSource::TouchRing));  // not the default: the vector says TOUCH_RING
   // Reference "info reply": deck B, mode DJ, TOUCH_RING, fw 0.1.2, hw 1, caps 62, serial DEADBEEF, 1 h up.
   const auto& v = epdj_vec::frameVectors()[7];
   CHECK_EQ(v.cmd, 0x41);
@@ -192,15 +193,23 @@ EPDJ_TEST(get_info_reply_is_byte_exact_with_the_reference_vector) {
 EPDJ_TEST(get_info_fills_identity_from_the_live_config) {
   Rig r;
   r.config.set(ConfigKey::Mode, 2);
-  r.config.set(ConfigKey::PlatterSource, 0);
   r.send(0, 0x01, {});
   proto::Info info;
   CHECK(proto::deserialize(r.only().payload.data(), r.only().payload.size(), &info));
   CHECK_EQ(info.protocolVersion, proto::kProtocolVersion);
   CHECK_EQ(info.deck, 0);
   CHECK_EQ(info.mode, 2);
-  CHECK_EQ(info.platterSource, 0);
+  CHECK_EQ(info.platterSource, static_cast<int>(proto::PlatterSource::As5600));  // nothing set: the contract default
   CHECK_EQ(info.serial, 0xDEADBEEFu);
+
+  // ... and it follows the live config, not a constant.
+  for (proto::PlatterSource s : {proto::PlatterSource::TouchRing, proto::PlatterSource::TouchHoldOnly, proto::PlatterSource::As5600}) {
+    r.config.set(ConfigKey::PlatterSource, static_cast<int32_t>(s));
+    r.clear();
+    r.send(0, 0x01, {});
+    CHECK(proto::deserialize(r.only().payload.data(), r.only().payload.size(), &info));
+    CHECK_EQ(info.platterSource, static_cast<int>(s));
+  }
 }
 
 // ---- GET_CONFIG ----

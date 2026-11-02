@@ -156,13 +156,28 @@ struct ConfigRow: View {
     private var desc: ConfigDesc { ConfigTable.desc(key) }
     private var value: Int32? { session.config[key] }
 
+    /// Greyed out (not hidden) when the unit's platter source does not use this setting.
+    private var applicable: Bool {
+        let source = CalibrationFlow.source(config: session.config[.platterSource], info: session.info?.platterSource)
+        return ConfigPresentation.isApplicable(key, platterSource: source)
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             control
-            Text(desc.summary + (ConfigPresentation.needsReboot(key) ? " Takes effect after a restart." : ""))
+            Text(caption)
                 .font(.caption).foregroundStyle(.secondary)
         }
         .padding(.vertical, 2)
+        .disabled(!applicable)
+        .opacity(applicable ? 1 : 0.5)
+    }
+
+    private var caption: String {
+        var text = desc.summary
+        if ConfigPresentation.needsReboot(key) { text += " Takes effect after a restart." }
+        if !applicable, let note = ConfigPresentation.inapplicableNote(for: key) { text += " " + note }
+        return text
     }
 
     @ViewBuilder private var control: some View {

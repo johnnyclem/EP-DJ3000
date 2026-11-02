@@ -46,12 +46,12 @@ void restartSoon(bool bootloader) {
 }  // namespace
 
 void applyFirstBootDefaults(Config* cfg) {
-#if CONFIG_EPDJ_PLATTER_AS5600
-  cfg->set(proto::ConfigKey::PlatterSource, static_cast<int32_t>(proto::PlatterSource::As5600));
+#if CONFIG_EPDJ_PLATTER_TOUCH_RING
+  cfg->set(proto::ConfigKey::PlatterSource, static_cast<int32_t>(proto::PlatterSource::TouchRing));
 #elif CONFIG_EPDJ_PLATTER_HOLD_ONLY
   cfg->set(proto::ConfigKey::PlatterSource, static_cast<int32_t>(proto::PlatterSource::TouchHoldOnly));
 #else
-  cfg->set(proto::ConfigKey::PlatterSource, static_cast<int32_t>(proto::PlatterSource::TouchRing));
+  cfg->set(proto::ConfigKey::PlatterSource, static_cast<int32_t>(proto::PlatterSource::As5600));  // the contract default
 #endif
 #if CONFIG_EPDJ_FIRST_BOOT_DECK_B
   cfg->set(proto::ConfigKey::DeckId, static_cast<int32_t>(proto::Deck::B));

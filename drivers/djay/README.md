@@ -78,8 +78,8 @@ mappings on a PC or MAC might differ"). The Action menu in your version is autho
 | `play` | tap the platter | `Note 39` | Deck 1 > Play/Pause | Button. MIDI Out: Note, 39, so the unit shows play state | official |
 | `cue` | press CUE | `Note 36` | Deck 1 > CUE | Button. MIDI Out: Note, 36 lights the button | community |
 | `rev` | hold REV | `Note 37` | Deck 1 > Reverse | Button (plays backward while held, per the list) | community |
-| `touch` | finger on the platter | `Note 38` | Deck 1 > Jog Wheels > Scratching Mode | Button (jog Plan A) | community |
-| `jog` | drag clockwise | `CC 22` | Deck 1 > Jog Wheels > Scratch (jog Plan A) or Scratch (no touch detection) (Plan B) | Rotary (3Fh/41h); Speed and Reaction by feel | official |
+| `touch` | hand on the platter (the hold pad) | `Note 38` | Deck 1 > Jog Wheels > Scratching Mode | Button (jog Plan A) | community |
+| `jog` | spin clockwise | `CC 22` | Deck 1 > Jog Wheels > Scratch (jog Plan A) or Scratch (no touch detection) (Plan B) | Rotary (3Fh/41h); Speed and Reaction by feel | official |
 | `pitch` | sweep the pot (default `faderRole` = PITCH) | `CC 25` (MSB), ignore `CC 57` (LSB) | Deck 1 > Tempo | Fader/Knob; Pickup mode on | community |
 | `crossfader` | sweep the pot (`faderRole` = CROSSFADER) | `CC 23` (MSB), ignore `CC 55` (LSB) | Mixer > Crossfader | Fader/Knob; internal mixer only | community |
 | `channelVolume` | sweep the pot (needs `faderRole` = CHANNEL_VOLUME) | `CC 7` (MSB), ignore `CC 39` (LSB) | Mixer > Deck 1: Line Volume | Fader/Knob; internal mixer only | community |
@@ -98,13 +98,17 @@ exactly, so I can't tell which works. Try in order:
 
 * **Plan A, touch aware:** `touch` Note 38 -> Scratching Mode, `jog` CC 22 -> Scratch. This is the
   closest to the two docs combined: touching stops the track, moving scratches. If the track does not
-  stop on touch, the community list says Scratch alone needs the deck paused first.
-* **Plan B, simple:** `jog` CC 22 -> Scratch (no touch detection), ignore the touch note. With the
-  default touch-ring platter the unit only reports motion while a finger is on it, so this still
-  scratches, but touching does not stop playback.
-* **Nudge:** the unit has no separate "side of the wheel" message. With a free-spinning `AS5600`
-  platter you can map CC 22 to **Pitch bend** instead of Scratch to nudge tempo; you cannot have
-  both from one CC.
+  stop on touch, the community list says Scratch alone needs the deck paused first. On the default
+  `AS5600` platter the touch note comes from the one hold pad, so this plan only works once that pad
+  reliably sees a hand on the spinning platter (`docs/BRINGUP.md`, first bring-up step 3).
+* **Plan B, simple:** `jog` CC 22 -> Scratch (no touch detection), ignore the touch note. The default
+  `AS5600` platter reports motion whether or not a hand is on it, so a platter coasting after a flick
+  would keep moving the track: untested, and probably a poor way to play. (With the experimental
+  touch-ring platter the unit only reports motion while a finger is on it, so Plan B scratches there,
+  but touching does not stop playback.)
+* **Nudge:** the unit has no separate "side of the wheel" message. With the free-spinning `AS5600`
+  platter (the default) you can map CC 22 to **Pitch bend** instead of Scratch to nudge tempo; you
+  cannot have both from one CC.
 
 Control type: the unit sends `64 + delta` (64 = no motion, 63 = -1, 65 = +1, delta up to 63).
 That is the "3Fh/41h" family; "01h/7Fh" would be two's complement and is wrong. The official page says

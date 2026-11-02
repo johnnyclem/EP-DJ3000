@@ -3,8 +3,10 @@
 // against a fake written from the spec.
 //
 // One or two Engine instances ("units") are stepped at 1 kHz of virtual time with a sensor model in front
-// (finger on the touch ring, noisy fader/knob ADC, AS5600 angle, buttons) and, for two units, a lossy
-// in-process radio between them. Nothing here reads a clock: time only moves on `run` / `ramp`.
+// (an AS5600 angle and ONE hold pad, as the default build has; or the experimental touch ring; noisy fader/knob
+// ADC, buttons) and, for two units, a lossy in-process radio between them. A unit is built like the default
+// firmware unless `init` asks for something else (platter=). Nothing here reads a clock: time only moves on
+// `run` / `ramp`.
 //
 // Protocol: one command per line on stdin, `verb key=value key=value ...` (no quoting, no spaces in values).
 // Every command is answered by zero or more event lines and then exactly one terminator, all JSON objects
@@ -160,10 +162,11 @@ struct Sensors {
   int faderNoise = 2, knobNoise = 2;  // +-counts of uniform ADC noise (PROTOCOL 2.4: +-3 must not chatter)
   double fingerRev = 0, pressure = 0;
   double as5600Rev = 0, as5600Noise = 0;  // noise in 12-bit counts
-  bool as5600Valid = true;
+  bool as5600Present = true;  // false: no chip ever answers (angleValid is always false), as when the I2C wiring is wrong
+  bool as5600Valid = true;    // a chip that is there: does this read succeed?
   bool cue = false, rev = false;
   bool usbWanted = true, dac = false, audio = false;
-  uint8_t touchCount = 8;
+  uint8_t touchCount = 1;  // pads wired: the hold pad of the default build. The experimental ring has 8.
 };
 
 struct Unit {
@@ -291,9 +294,12 @@ RawInputs sample(Unit& u) {
   in.touchCount = u.s.touchCount;
   u.ring.n = u.s.touchCount ? u.s.touchCount : 1u;
   u.ring.read(u.s.fingerRev, u.s.pressure, u.rng, in.touchRaw);
-  in.angleValid = u.s.as5600Valid;
-  const double a = u.s.as5600Rev * 4096.0 + u.s.as5600Noise * u.rng.sym();
-  in.angle12 = static_cast<uint16_t>(static_cast<int64_t>(std::floor(a)) & 4095);
+  // What the HAL reports when the encoder does not answer: angleValid false and angle12 left at 0.
+  in.angleValid = u.s.as5600Present && u.s.as5600Valid;
+  if (u.s.as5600Present) {
+    const double a = u.s.as5600Rev * 4096.0 + u.s.as5600Noise * u.rng.sym();
+    in.angle12 = static_cast<uint16_t>(static_cast<int64_t>(std::floor(a)) & 4095);
+  }
   in.cue = u.s.cue;
   in.rev = u.s.rev;
   in.usbMounted = u.s.usbWanted && g.t >= u.usbDownUntilUs;
@@ -360,7 +366,8 @@ void applyRamp(const Ramp& r, double v) {
 
 void runMs(long ms, const Ramp* ramp = nullptr) {
   for (long i = 1; i <= ms; ++i) {
-    if (ramp) applyRamp(*ramp, ramp->from + (ramp->to - ramp->from) * static_cast<double>(i) / static_cast<double>(ms));
+    // The last step lands exactly on `to`: a ramp of one revolution must end on one revolution, not a rounding error short.
+    if (ramp) applyRamp(*ramp, i == ms ? ramp->to : ramp->from + (ramp->to - ramp->from) * static_cast<double>(i) / static_cast<double>(ms));
     tick();
   }
 }
@@ -402,11 +409,26 @@ void doInit(const Args& a) {
     std::snprintf(key, sizeof key, "offset%ld", i);
     u->clockOffsetUs = a.integer(key, 0);
     u->s.dac = a.integer("dac", 0) != 0;
-    u->s.touchCount = static_cast<uint8_t>(std::min(8L, std::max(0L, a.integer("touch", 8))));
+    // `platter=` picks the hardware build: as5600 (the default: encoder + one hold pad), ring (the experimental touch
+    // ring: eight pads, no encoder) or hold (one pad, no encoder). `touch=` and `as5600=` override a piece of it.
+    // The platterSource CONFIG is only written when `platter=` is given; without it the unit boots on the contract
+    // default, which is what a factory unit does.
+    const std::string platter = a.str("platter", "as5600");
+    proto::PlatterSource source = proto::PlatterSource::As5600;
+    if (platter == "ring") source = proto::PlatterSource::TouchRing;
+    else if (platter == "hold") source = proto::PlatterSource::TouchHoldOnly;
+    else if (platter != "as5600") std::fprintf(stderr, "epdj_engine_sim: unknown platter=%s, using as5600\n", platter.c_str());
+    if (a.has("platter")) u->stored.set(proto::ConfigKey::PlatterSource, static_cast<int32_t>(source));
+    const bool hasEncoder = a.integer("as5600", source == proto::PlatterSource::As5600 ? 1 : 0) != 0;
+    const long pads = a.integer("touch", source == proto::PlatterSource::TouchRing ? 8 : 1);
+    u->s.touchCount = static_cast<uint8_t>(std::min(8L, std::max(0L, pads)));
+    u->s.as5600Present = hasEncoder;
     u->ident.hwRev = 2;
     u->ident.serial = 0xA0B0C000u + static_cast<uint32_t>(i);
-    u->ident.caps = static_cast<uint16_t>(proto::caps::kTouchRing | proto::caps::kTrsMidi | proto::caps::kLink |
-                                          proto::caps::kStatusLed | (a.integer("as5600", 0) ? proto::caps::kAs5600 : 0));
+    // Capabilities as the platform derives them (main.cpp): the encoder answered, 3 or more pads wired.
+    u->ident.caps = static_cast<uint16_t>(proto::caps::kTrsMidi | proto::caps::kLink | proto::caps::kStatusLed |
+                                          (hasEncoder ? proto::caps::kAs5600 : 0) |
+                                          (u->s.touchCount >= 3 ? proto::caps::kTouchRing : 0));
     u->ident.mac.b[0] = 2;
     u->ident.mac.b[5] = static_cast<uint8_t>(0x0A + i);
     u->ident.epoch = static_cast<uint16_t>(100 + i);
@@ -456,8 +478,10 @@ void ledJson(const Unit& u, std::string* s) {
 }
 
 const char* commandHelp =
-    "init units= deck0= deck1= usb0= usb1= offset1= seed= loss= dup= delay= jitter= group= as5600= dac= touch=; run ms=; "
-    "ramp what=fader|knob|finger|pressure|as5600 from= to= ms= [u=]; finger rev= pressure= [u=]; fader raw= noise= [u=]; "
+    "init units= deck0= deck1= usb0= usb1= offset1= seed= loss= dup= delay= jitter= group= platter=as5600|ring|hold "
+    "as5600=0|1 touch=0..8 dac=; run ms=; "
+    "ramp what=fader|knob|finger|pressure|as5600 from= to= ms= [u=]; finger rev= pressure= [u=] (pressure is the hold pad, or the "
+    "ring's finger; rev matters only with several pads); fader raw= noise= [u=]; "
     "knob raw= noise= [u=]; buttons cue= rev= [u=]; as5600 rev= noise= valid= [u=]; ring peak= width= noise= [u=]; "
     "usb mounted= [u=]; peripherals dac= audio= [u=]; midi port=0|1|2|trs hex= [u=]; usbpkt hex= [u=]; status [u=]; "
     "reboot [bootloader=] [u=]; platform saveok= toneok= [u=]; air loss= dup= partition= delay= jitter=; trace link=; quit";

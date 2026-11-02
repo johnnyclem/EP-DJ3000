@@ -29,7 +29,11 @@ pio run -d firmware/esp32s3 -t menuconfig        # the "EP-DJ3000" menu below (o
 ```
 
 Saving menuconfig writes `sdkconfig.esp32s3` (git-ignored). IDF applies `sdkconfig.defaults` only to symbols that file does
-not already set, so after editing the defaults delete the generated file.
+not already set, so after editing the defaults delete the generated file. **That includes the Kconfig defaults, and contract
+v1.3 changed two of them** (first-boot platter AS5600 instead of the touch ring, one touch pad instead of eight): a checkout
+that was built before keeps `CONFIG_EPDJ_PLATTER_TOUCH_RING=y` and `CONFIG_EPDJ_TOUCH_PAD_COUNT=8` in its old
+`sdkconfig.esp32s3`, so delete that file (or pick the values in `menuconfig`) to get the new build. A unit that already saved
+its configuration to flash keeps its saved `platterSource` as well: `LOAD_DEFAULTS`, then `SAVE_CONFIG` (the boot log says so).
 
 **Two USB-C cables.** The DevKitC-1 has two ports. **UART** (the CP210x bridge) is for flashing and the log. **USB** is the
 chip's native port, which the firmware gives to TinyUSB as soon as it boots, so from the first flash on, the Mac sees a
@@ -58,12 +62,12 @@ delete the generated sdkconfig: IDF only applies defaults to symbols that are no
 | Option | Default | |
 |---|---|---|
 | `EPDJ_BOARD_DEVKITC_1_V1_1` / `_V1_0` | v1.1 | DevKitC-1 revision: status LED on GPIO38 (v1.1) or GPIO48 (v1.0), feeds `kStatusLed` in `board_pins.h` |
-| `EPDJ_PLATTER_*` | touch ring | first-boot platter source (afterwards the `platterSource` config key) |
-| `EPDJ_TOUCH_PAD_COUNT` | 8 | pads wired from GPIO4 up; 1 for an AS5600 build (hold pad) |
+| `EPDJ_PLATTER_*` | AS5600 | first-boot platter source (afterwards the `platterSource` config key): the AS5600 encoder under a free-spinning platter, or, EXPERIMENTAL, the touch ring, or hold-only |
+| `EPDJ_TOUCH_PAD_COUNT` | 1 | pads wired from GPIO4 up: 1 = the hold pad of the AS5600 build (GPIO4); 0 = no hold pad (jog works, no touch note ever); 3 to 8 for the experimental ring |
 | `EPDJ_TOUCH_SCAN_TARGET_US` | 800 | boot-time auto-range: charge/discharge cycles are chosen so one scan of all pads takes about this long (0 = off) |
 | `EPDJ_TOUCH_CHARGE_DISCHARGE_TIMES`, `_INTERVAL_CYCLES` | 500, 16 | cycles per pad: the upper limit for auto-range, or the fixed value with the target at 0; sleep between measurements |
-| `EPDJ_ADC_OVERSAMPLE` | 8 | upper limit on conversions averaged per fader/knob sample; boot lowers it if a conversion is slow |
-| `EPDJ_AS5600_ENABLE` | on | probe for the encoder at boot |
+| `EPDJ_ADC_OVERSAMPLE` | 8 | upper limit on conversions averaged per fader/knob sample; boot lowers it so that the ADC conversions plus the AS5600 read fit 400 us of each millisecond |
+| `EPDJ_AS5600_ENABLE` | on | probe for the encoder at boot (I2C SDA GPIO21, SCL GPIO47, address 0x36); needed by the default AS5600 platter |
 | `EPDJ_USB_AUDIO` | on | USB Audio 1.0 function when a DAC is present at boot |
 | `EPDJ_AUDIO_RING_*` | 2048 frames | USB-to-DAC buffer (21 ms target delay) |
 | `EPDJ_DAC_PROBE_I2C` | off | also look for codec chips on I2C |
@@ -87,7 +91,7 @@ components/
   epdj_audio/         USB -> ring -> I2S, rate feedback, drift fallback, volume, test tone
   epdj_link/          ESP-NOW broadcast transport
 tools/crosscheck_usb_desc/   byte-compares the descriptor builder with TinyUSB's own macros; runs its audio and MIDI drivers on the host
-tools/host_checks/           host tests of the output policy, tick pacing and touch auto-range
+tools/host_checks/           host tests of the output policy, tick pacing, touch auto-range, and the AS5600 magnet decode and sensor time budget
 ```
 
 New `.cpp` files in `../core/src` are picked up automatically by `idf.py` (the wrapper globs with `CONFIGURE_DEPENDS`). PlatformIO ships ninja 1.7.1, too old to re-check that glob: after adding a core source file under `pio`, touch `components/epdj_core/CMakeLists.txt`.
@@ -163,8 +167,41 @@ cd firmware/esp32s3 && sh tools/host_checks/run.sh            # no chip, no ESP-
 
 The pure parts of the platform layer are headers with no ESP-IDF in them, compiled here against fakes with the core's test
 harness (AddressSanitizer + UBSan): `main/output_pump.h` (what the engine task does with each output event, including a USB
-endpoint that never drains), `main/tick_pacing.h` (when the engine task drops lost ticks) and `epdj_hal/touch_range.h` (the
-touch measurement-length fit). What they cannot cover is the FreeRTOS, USB and touch hardware behaviour around them.
+endpoint that never drains), `main/tick_pacing.h` (when the engine task drops lost ticks), `epdj_hal/touch_range.h` (the
+touch measurement-length fit) and `epdj_hal/sensor_budget.h` (the AS5600 magnet-status decode, and how the 400 us of sensor
+time per millisecond is split between the I2C read and the ADC). What they cannot cover is the FreeRTOS, USB, I2C and touch
+hardware behaviour around them.
+
+## The platter at boot, and what the engine task costs
+
+The default build reads an AS5600 over I2C and ONE touch pad (GPIO4, the hold pad). `app_main` prints one line for it and
+warns about everything that would make the platter misbehave:
+
+```
+platter: source AS5600 | AS5600 answered at 0x36, magnet detected, read <N> us | touch pads wired: 1 (GPIO4 = hold pad)
+platter: source AS5600 | AS5600 NOT answering at 0x36 (SDA GPIO21, SCL GPIO47) | touch pads wired: 1 (GPIO4 = hold pad)
+!!! platterSource is AS5600 but no encoder answered (nothing ACKed the address): JOG WILL BE SILENT. Check the I2C wiring (SDA GPIO21, SCL GPIO47, 3V3, GND), the breakout's 3.3 V/5 V strap and the magnet gap (1-3 mm), then reboot !!!
+```
+
+(Those lines are the format, not output from a chip: this firmware has never run on one.) Magnet status comes from the
+AS5600 STATUS register: `detected`, `too weak` (move it closer, check it is diametrically magnetised), `too strong` (move it
+away) or `not detected`, each with its own WARN. Further WARNs: an encoder answers but `platterSource` is not AS5600 (a unit
+that saved TOUCH_RING before v1.3); the AS5600 build with no hold pad (no touch note, so DJ apps never enter scratch mode); a
+ring configured with fewer than 3 pads. The once-a-second `sens:` line shows the angle (`(bad)` when the last read failed,
+`(none)` without an encoder), and a `WARN` follows whenever the count of failed I2C reads grows.
+
+Without an answering encoder the unit stays silent on jog: the engine task leaves `angleValid = false` and the engine ignores
+`angle12`. It is not retried while running; fix the wiring and reboot.
+
+**Cost of the encoder read, per 1 ms engine tick** (assumptions; the boot measures the real figure and prints it in the `adc:` line):
+one register read at the 400 kHz the device is configured for is a write of the register address, a repeated start and a
+read of two bytes, about 45 SCL clocks (112 us on the wire plus start/stop), and the IDF driver adds interrupt, event-group
+and task-switch time, so about 150 to 200 us. Unlike an ADC conversion it does not run with interrupts off: the engine task
+sleeps on the driver's semaphore, so TinyUSB (same core) keeps running. Both still come out of the same 1 ms, so
+`AdcInputs::begin(i2cReadUs)` takes the measured read off the 400 us sensor budget (`sensor_budget.h`) and lowers the ADC
+oversampling to fit, with a WARN if even one conversion per channel does not. The encoder is read first in each tick, so its
+timestamp is the tick's, not 400 us later. A failed read can block for its 2 ms timeout; two in a row back the bus off for
+100 ms (`As5600::readAngle`), at most 4 ms lost in 100. None of this has been timed on a chip.
 
 ## Not here
 

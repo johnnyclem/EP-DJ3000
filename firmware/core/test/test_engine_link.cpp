@@ -137,7 +137,6 @@ EPDJ_TEST(engine_link_discovery_and_status) {
 
 EPDJ_TEST(engine_link_deck_b_controls_arrive_on_deck_a_cable_2_exactly) {
   Pair p(2, 0.20, 0.10);  // 20% of packets lost, 10% duplicated, jitter reorders them
-  p.b.set(ConfigKey::PlatterSource, 0);
   p.rig.run(kSettleMs + 500);  // ring baseline learned, link up, first state exchanged
   CHECK(p.a.engine.link().routeIn() && p.b.engine.link().routeOut());
   const int32_t jogBase = p.b.engine.jogTotal();
@@ -471,8 +470,7 @@ EPDJ_TEST(engine_pair_session_is_deterministic) {
   int jog[2] = {};
   for (int run = 0; run < 2; ++run) {
     Pair p(42, 0.2, 0.1);
-    p.b.set(ConfigKey::PlatterSource, 0);
-    p.rig.run(kSettleMs + 500);
+      p.rig.run(kSettleMs + 500);
     int clicks = 0;
     bScript(p, &clicks);
     p.rig.run(1000);

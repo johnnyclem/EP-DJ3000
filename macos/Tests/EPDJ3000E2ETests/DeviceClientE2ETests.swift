@@ -12,12 +12,33 @@ final class DeviceClientE2ETests: E2ETestCase {
             XCTAssertEqual(info.protocolVersion, Proto.protocolVersion)
             XCTAssertEqual(info.deck, Deck.a.rawValue)
             XCTAssertEqual(info.mode, Mode.dj.rawValue)
-            XCTAssertEqual(info.platterSource, PlatterSource.touchRing.rawValue)
-            XCTAssertEqual(Caps(rawValue: info.caps), [.touchRing, .trsMidi, .link, .statusLed])
+            // Contract v1.3: the factory platter is the free-spinning AS5600, and the unit says it has one.
+            XCTAssertEqual(info.platterSource, PlatterSource.as5600.rawValue)
+            XCTAssertEqual(Caps(rawValue: info.caps), [.as5600, .trsMidi, .link, .statusLed])
             XCTAssertEqual(info.serial, 0xA0B0_C000)
             XCTAssertGreaterThanOrEqual(info.uptimeS, 3, "the unit has been up for the 3.6 s settle")
             XCTAssertLessThanOrEqual(info.uptimeS, 5)
             XCTAssertTrue(info.fwMajor | info.fwMinor | info.fwPatch != 0, "firmware reports a version")
+        }
+    }
+
+    func testGetInfoOfAnExperimentalRingBuildSaysTouchRingAndNotAS5600() async throws {
+        try await withWorld("units=1 deck0=0 platter=ring") { world in
+            let info = try await world.client(deck: 0).client.getInfo()
+            XCTAssertEqual(info.platterSource, PlatterSource.touchRing.rawValue)
+            XCTAssertEqual(Caps(rawValue: info.caps), [.touchRing, .trsMidi, .link, .statusLed])
+        }
+    }
+
+    func testTheFactoryPlatterSourceIsTheEncoderAndLoadDefaultsReturnsToIt() async throws {
+        try await withWorld { world in
+            let c = world.client().client
+            try await expectEqual(try await c.getConfig(.platterSource), Int32(PlatterSource.as5600.rawValue), "factory default")
+            try await c.setConfig(.platterSource, Int32(PlatterSource.touchRing.rawValue))
+            try await expectEqual(try await c.getInfo().platterSource, PlatterSource.touchRing.rawValue, "GET_INFO follows the live config")
+            try await c.loadDefaults()
+            try await expectEqual(try await c.getConfig(.platterSource), Int32(PlatterSource.as5600.rawValue), "LOAD_DEFAULTS puts the encoder back")
+            try await expectEqual(try await c.getInfo().platterSource, PlatterSource.as5600.rawValue)
         }
     }
 

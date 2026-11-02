@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mapper device="EPDJ3000" author="EP-DJ3000 project" version="800">
+  <!--
+    EP-DJ3000 mapping for VirtualDJ: gives the names in Devices/EPDJ3000.xml their VDJscript actions.
+
+    STATUS: NEVER LOADED INTO VIRTUALDJ (see the header of Devices/EPDJ3000.xml and README.md).
+    Mapping file format: https://www.virtualdj.com/wiki/ControllerMappingFile%20v8.html
+    Verbs: https://www.virtualdj.com/manuals/virtualdj/appendix/vdjscriptverbs.html
+
+    Each name appears twice (plain = MIDI channel 1, _CH2 = MIDI channel 2) with the same action.
+    LEDs are not mapped here: LED_CUE and LED_PLAY follow the action of their button
+    (default="" in the definition), so they show cue_stop and play_pause state.
+    Slide pot: the unit sends only the one of CROSSFADER / LEVEL / PITCH that its faderRole selects.
+    With an external mixer (the EP-136 rig) VirtualDJ's own crossfader and level do nothing audible;
+    set the unit's faderRole to PITCH there.
+  -->
+
+  <!-- Unit on MIDI channel 1 -->
+  <map value="CUE" action="cue_stop" />
+  <map value="REV" action="reverse" />
+  <map value="PLAY" action="play_pause" />
+  <map value="JOG_TOUCH" action="touchwheel_touch" />
+  <map value="JOG" action="touchwheel" />
+  <map value="CROSSFADER" action="crossfader" />
+  <map value="LEVEL" action="level" />
+  <map value="PITCH" action="pitch" />
+  <map value="KNOB" action="filter" />
+
+  <!-- Unit on MIDI channel 2 -->
+  <map value="CUE_CH2" action="cue_stop" />
+  <map value="REV_CH2" action="reverse" />
+  <map value="PLAY_CH2" action="play_pause" />
+  <map value="JOG_TOUCH_CH2" action="touchwheel_touch" />
+  <map value="JOG_CH2" action="touchwheel" />
+  <map value="CROSSFADER_CH2" action="crossfader" />
+  <map value="LEVEL_CH2" action="level" />
+  <map value="PITCH_CH2" action="pitch" />
+  <map value="KNOB_CH2" action="filter" />
+</mapper>

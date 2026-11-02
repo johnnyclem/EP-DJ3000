@@ -1,0 +1,36 @@
+# EP-DJ3000 firmware: ESP32-S3, native USB device (TinyUSB), ESP-NOW. Applies to idf.py and PlatformIO.
+CONFIG_IDF_TARGET="esp32s3"
+
+# Flash: a 4 MB layout runs on every ESP32-S3 module; see partitions.csv.
+CONFIG_ESPTOOLPY_FLASHSIZE_4MB=y
+CONFIG_PARTITION_TABLE_CUSTOM=y
+CONFIG_PARTITION_TABLE_CUSTOM_FILENAME="partitions.csv"
+
+# Timing: a 1 kHz FreeRTOS tick drives the 1 ms engine task (vTaskDelayUntil).
+CONFIG_FREERTOS_HZ=1000
+CONFIG_ESP_DEFAULT_CPU_FREQ_MHZ_240=y
+
+# Match the portable core: no C++ exceptions, no RTTI.
+# CONFIG_COMPILER_CXX_EXCEPTIONS is not set
+# CONFIG_COMPILER_CXX_RTTI is not set
+CONFIG_COMPILER_OPTIMIZATION_PERF=y
+
+# TinyUSB (esp_tinyusb): one MIDI interface for the class driver; the audio class is switched on by
+# components/epdj_usb/tusb_override/epdj_tusb_config.h.
+CONFIG_TINYUSB_MIDI_COUNT=1
+CONFIG_TINYUSB_DEBUG_LEVEL=0
+
+# Log console: UART0 on its default pins (GPIO43/44) and nothing else. Native USB belongs to TinyUSB, so no
+# USB-Serial/JTAG secondary console fighting it for the PHY. 921600 baud because at 115200 a 150-character line
+# holds the log lock, and any other task that wants to log, for 13 ms; idf.py monitor follows this rate itself.
+CONFIG_ESP_CONSOLE_UART_CUSTOM=y
+CONFIG_ESP_CONSOLE_UART_CUSTOM_NUM_0=y
+CONFIG_ESP_CONSOLE_UART_BAUDRATE=921600
+CONFIG_ESP_CONSOLE_SECONDARY_NONE=y
+
+# Legacy capacitive-touch driver (touch sensor v2): keeps working on IDF 5.x and 6.x.
+CONFIG_TOUCH_SUPPRESS_DEPRECATE_WARN=y
+
+# ESP-NOW only: no soft-AP, no Wi-Fi settings in NVS (nothing writes flash behind the USB interrupt's back).
+CONFIG_ESP_WIFI_SOFTAP_SUPPORT=n
+CONFIG_ESP_WIFI_NVS_ENABLED=n

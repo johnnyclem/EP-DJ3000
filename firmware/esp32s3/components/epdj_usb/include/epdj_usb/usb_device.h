@@ -1,0 +1,48 @@
+// USB device side: enumerate as the composite MIDI (+ UAC2) device and move USB-MIDI packets.
+//
+// Threads: the TinyUSB task owns the stack. Its MIDI callback only timestamps packets into a queue (popRx,
+// drained by the engine task); the engine task writes outgoing packets directly with writePacket(), which is
+// TinyUSB's own cross-task pattern (the endpoint FIFOs take a mutex with priority inheritance).
+#pragma once
+#include <cstdint>
+
+namespace epdj {
+namespace usb_dev {
+
+struct Params {
+  uint8_t deck = 0;      // 0 = A, 1 = B: product string "EP-DJ3000 Deck A/B"
+  bool audio = false;    // include the UAC2 function (a DAC is present and EPDJ_USB_AUDIO is on)
+  uint8_t mac[6] = {};   // the USB serial number is derived from it
+};
+
+struct RxPacket {
+  uint64_t rxUs;     // esp_timer time when the TinyUSB task saw it
+  uint8_t bytes[4];  // one USB-MIDI event packet: cable << 4 | CIN, 3 data bytes
+};
+
+struct Stats {
+  uint32_t rxPackets = 0;
+  uint32_t rxDropped = 0;     // rx queue full
+  uint32_t txPackets = 0;
+  uint32_t txRejected = 0;    // endpoint FIFO full (the caller retries) or no host
+  uint32_t audioFrames = 0;   // frames received from the host while streaming
+};
+
+bool start(const Params& p);
+
+bool mounted();          // a host has configured the device
+bool suspended();
+bool audioStreaming();   // the host has the streaming interface open
+bool audioEnabled();     // the UAC2 function is in the descriptors
+
+// What the audio task calls once per block with the rate the host should send at (Q16.16 samples per frame):
+// forwards it to the UAC2 feedback endpoint. nullptr when audio is compiled out.
+using FeedbackFn = void (*)(uint32_t samplesPerFrameQ16);
+FeedbackFn audioFeedbackSink();
+
+bool popRx(RxPacket* out);               // engine task
+bool writePacket(const uint8_t pkt[4]);  // engine task; false = FIFO full or not mounted
+Stats stats();
+
+}  // namespace usb_dev
+}  // namespace epdj

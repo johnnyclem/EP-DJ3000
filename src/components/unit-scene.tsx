@@ -30,28 +30,27 @@ type Piece = {
 // (Z up). The scene group turns that into three.js Y-up.
 const PIECES: Piece[] = [
   { id: "bottom", file: "bottom.stl", color: GREY, poses: [{ position: [0, 0, 0] }] },
-  { id: "top", file: "top.stl", color: DECK, poses: [{ position: [0, 0, 19.8] }] },
-  { id: "platter", file: "platter.stl", color: BLACK, poses: [{ position: [44, 148, 24.9] }] },
+  { id: "top", file: "top.stl", color: DECK, poses: [{ position: [0, 0, 11.8] }] },
+  { id: "platter", file: "platter.stl", color: BLACK, poses: [{ position: [44, 148, 15.3] }] },
   {
     id: "fader",
     file: "fader.stl",
     color: BLACK,
-    poses: [{ position: [44, 58, 34], rotation: [Math.PI, 0, 0] }],
+    poses: [{ position: [44, 58, 24], rotation: [Math.PI, 0, 0] }],
   },
-  { id: "lock", file: "fader_lock.stl", color: "#1c1c1e", poses: [{ position: [36, 48, 12.8] }] },
-  { id: "knob", file: "knob.stl", color: ORANGE, poses: [{ position: [74, 218, 26] }] },
+  { id: "lock", file: "fader_lock.stl", color: "#1c1c1e", poses: [{ position: [36, 48, 5.2] }] },
+  { id: "knob", file: "knob.stl", color: ORANGE, poses: [{ position: [74, 218, 16] }] },
   {
     id: "button",
     file: "button.stl",
     color: BLACK,
     poses: [
-      { position: [17, 58, 29.15], rotation: [Math.PI, 0, 0] },
-      { position: [71, 58, 29.15], rotation: [Math.PI, 0, 0] },
+      { position: [17, 58, 19.15], rotation: [Math.PI, 0, 0] },
+      { position: [71, 58, 19.15], rotation: [Math.PI, 0, 0] },
     ],
   },
-  { id: "plus", file: "plus.stl", color: ORANGE, poses: [{ position: [44, 148, 28] }] },
-  { id: "tab", file: "tab.stl", color: ORANGE, poses: [{ position: [8.2, 224.2, 25.4] }] },
-  { id: "bar", file: "bar.stl", color: ORANGE, poses: [{ position: [10.2, 196.7, 25.4] }] },
+  { id: "plus", file: "plus.stl", color: ORANGE, poses: [{ position: [44, 148, 18.4] }] },
+  { id: "plate", file: "faceplate.stl", color: "#f4f4f0", poses: [{ position: [7, 188, 14.4] }] },
   {
     id: "foot",
     file: "foot.stl",
@@ -178,7 +177,7 @@ function Scene({
           {mode === "rig" && jog && jogFace ? (
             <Suspense fallback={null}>
               <group position={jog.position} quaternion={jog.quaternion}>
-                <group position={[-44, -120, -13]}>
+                <group position={[-44, -120, -8]}>
                   <Assembly focus="rig" />
                 </group>
               </group>

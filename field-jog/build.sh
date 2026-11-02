@@ -3,7 +3,7 @@
 set -e
 cd "$(dirname "$0")"
 mkdir -p stl
-for p in top bottom platter fader fader_lock knob button plus tab bar foot; do
+for p in top bottom platter fader fader_lock knob button plus faceplate foot; do
   echo "== $p"
   openscad -o "stl/$p.stl" -D "part=\"$p\"" field-jog.scad
 done

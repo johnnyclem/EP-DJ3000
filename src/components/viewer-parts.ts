@@ -8,8 +8,7 @@ export const VIEW_ITEMS = [
   { id: "knob", label: "Knob" },
   { id: "button", label: "Buttons" },
   { id: "plus", label: "Plus" },
-  { id: "tab", label: "Tab" },
-  { id: "bar", label: "Bar" },
+  { id: "plate", label: "Plate" },
   { id: "foot", label: "Feet" },
 ] as const;
 

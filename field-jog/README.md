@@ -72,7 +72,8 @@ A second MCU is two firmwares and a private protocol in a 10 mm cavity.
 The only reason to split later is a measurement: Wi-Fi link plus USB audio
 plus a scratch voice underruns the S3. Until then, one chip.
 
-Under the plate is a bay beside the Pico. A flat LiPo fits. There is no
+Under the plate is a bay beside the board. A flat LiPo fits next to the
+display module. There is no
 cell holder. The long-side pin holes are unchanged.
 
 ## Technic pins

@@ -1,0 +1,158 @@
+// Node client for the end-to-end simulator (firmware/core/tools/engine_sim.cpp, docs/E2E.md): spawns the real
+// firmware Engine as a child process, sends it text commands and collects the JSON events it prints.
+//
+// Also a tiny SysEx helper written from docs/PROTOCOL.md section 3 (not from the firmware or the Swift
+// library), so configuring a unit from a Node test does not borrow either implementation.
+
+import { spawn } from "node:child_process";
+import { existsSync } from "node:fs";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
+import { createInterface } from "node:readline";
+import { fileURLToPath } from "node:url";
+
+const here = dirname(fileURLToPath(import.meta.url));
+const require = createRequire(import.meta.url);
+export const P = require(join(here, "../../common/epdj3000-protocol.js"));
+export const REPO = join(here, "../../..");
+
+/** Path of the simulator binary, or null if it has not been built (tools/e2e.sh builds it). */
+export function simBinary() {
+  const candidates = [
+    process.env.EPDJ_ENGINE_SIM,
+    join(REPO, "firmware/core/build-e2e/epdj_engine_sim"),
+  ].filter(Boolean);
+  return candidates.find((p) => existsSync(p)) ?? null;
+}
+
+export const toHex = (bytes) => Buffer.from(bytes).toString("hex");
+export const fromHex = (s) => [...Buffer.from(s, "hex")];
+
+export class Sim {
+  #child;
+  #pending = null;
+  #queue = Promise.resolve();
+  #events = [];
+  #stderr = "";
+  #exited = null;
+  /** Everything the units sent since `start()`: {t, u, k, ports, cable, bytes, usb}. */
+  log = [];
+
+  static async start(initArgs = "") {
+    const bin = simBinary();
+    if (!bin) throw new Error("epdj_engine_sim is not built (run tools/e2e.sh)");
+    const sim = new Sim(bin);
+    await sim.#ready;
+    await sim.cmd(`init ${initArgs}`);
+    return sim;
+  }
+
+  #ready;
+  constructor(bin) {
+    this.#child = spawn(bin, [], { stdio: ["pipe", "pipe", "pipe"] });
+    this.#child.stderr.on("data", (d) => { this.#stderr += d; });
+    this.#child.on("exit", (code, signal) => {
+      this.#exited = `exited (${signal ?? code})${this.#stderr ? `\n${this.#stderr}` : ""}`;
+      if (this.#pending) this.#pending.reject(new Error(`simulator ${this.#exited}`));
+    });
+    let readyResolve;
+    this.#ready = new Promise((r) => { readyResolve = r; });
+    createInterface({ input: this.#child.stdout }).on("line", (line) => {
+      let e;
+      try { e = JSON.parse(line); } catch { throw new Error(`simulator printed a non-JSON line: ${line}`); }
+      if (e.e === "ready") return readyResolve(e);
+      if (e.e === "out") {
+        const ev = { t: e.t, u: e.u, k: e.k, ports: e.ports, cable: e.cable, bytes: fromHex(e.hex), usb: e.usb ? fromHex(e.usb) : null };
+        this.#events.push(ev);
+        this.log.push(ev);
+      } else if (e.e === "done" || e.e === "error") {
+        const p = this.#pending;
+        this.#pending = null;
+        const events = this.#events;
+        this.#events = [];
+        if (e.e === "error") p.reject(new Error(`simulator: ${e.msg}`));
+        else p.resolve({ events, done: e });
+      } else {
+        this.#events.push(e); // platform effects and the like
+      }
+    });
+  }
+
+  /** Sends one command line; resolves {events, done} when the simulator answers it. Commands never overlap. */
+  cmd(line) {
+    const run = () => new Promise((resolve, reject) => {
+      if (this.#exited) return reject(new Error(`simulator ${this.#exited}`));
+      this.#pending = { resolve, reject };
+      this.#child.stdin.write(`${line}\n`);
+    });
+    const next = this.#queue.then(run, run);
+    this.#queue = next.catch(() => {});
+    return next;
+  }
+
+  run(ms) { return this.cmd(`run ms=${ms}`); }
+  midi(u, port, bytes) { return this.cmd(`midi u=${u} port=${port} hex=${toHex(bytes)}`); }
+  status(u = 0) { return this.cmd(`status u=${u}`).then((r) => r.done); }
+
+  async close() {
+    if (this.#exited) return;
+    this.#child.stdin.end("quit\n");
+    await new Promise((r) => this.#child.once("exit", r));
+  }
+}
+
+// ---- SysEx (PROTOCOL.md section 3) -------------------------------------------------------------------------------
+
+export function pack8to7(bytes) {
+  const out = [];
+  for (let i = 0; i < bytes.length; i += 7) {
+    const group = bytes.slice(i, i + 7);
+    out.push(group.reduce((h, b, j) => h | ((b >> 7) << j), 0), ...group.map((b) => b & 0x7f));
+  }
+  return out;
+}
+
+export function unpack7to8(septets) {
+  const out = [];
+  for (let i = 0; i < septets.length; i += 8) {
+    const hdr = septets[i];
+    septets.slice(i + 1, i + 8).forEach((b, j) => out.push(b | (((hdr >> j) & 1) << 7)));
+  }
+  return out;
+}
+
+export function sysexFrame(deck, code, payload = []) {
+  const body = [P.sysex.version, deck, code, ...pack8to7(payload)];
+  const sum = body.reduce((a, b) => a + b, 0);
+  return [0xf0, ...P.sysex.header, ...body, (-sum) & 0x7f, 0xf7];
+}
+
+/** Splits a reply frame into {deck, code, payload}; throws if the frame is not a well-formed EP-DJ3000 reply. */
+export function parseSysex(bytes) {
+  const hdr = P.sysex.header;
+  if (bytes[0] !== 0xf0 || bytes[bytes.length - 1] !== 0xf7) throw new Error("sysex framing");
+  if (hdr.some((b, i) => bytes[1 + i] !== b)) throw new Error("sysex header");
+  const body = bytes.slice(4, -2);
+  const sum = body.reduce((a, b) => a + b, 0);
+  if (((-sum) & 0x7f) !== bytes[bytes.length - 2]) throw new Error("sysex checksum");
+  return { deck: body[1], code: body[2], payload: unpack7to8(body.slice(3)) };
+}
+
+export const i32le = (v) => [v & 0xff, (v >> 8) & 0xff, (v >> 16) & 0xff, (v >> 24) & 0xff];
+
+/** SET_CONFIG on `unit`, port 0; returns the reply frames. Throws unless the unit ACKs. */
+export async function setConfig(sim, unit, deck, key, value) {
+  const { events } = await sim.midi(unit, 0, sysexFrame(deck, P.sysex.cmd.setConfig, [key, ...i32le(value)]));
+  const replies = events.filter((e) => e.k === "sysex" && e.u === unit).map((e) => parseSysex(e.bytes));
+  const ack = replies.find((r) => r.code === P.sysex.ack && r.payload[0] === P.sysex.cmd.setConfig);
+  if (!ack) throw new Error(`SET_CONFIG ${key}=${value} was not acknowledged: ${JSON.stringify(replies)}`);
+  return replies;
+}
+
+/** Config key ids by name, read from the contract so a renumbering cannot hide behind a literal. */
+export const CONFIG_KEYS = (() => {
+  const contract = require(join(REPO, "protocol/epdj3000.json"));
+  const keys = {};
+  for (const k of contract.config.keys) keys[k.name] = k.id;
+  return keys;
+})();

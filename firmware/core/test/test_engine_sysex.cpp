@@ -111,13 +111,14 @@ EPDJ_TEST(engine_sysex_config_round_trip) {
   Deck d(0);
   d.run(10);
   const std::vector<Reply> all = ask(d, 0, Cmd::GetConfig, b({0xFF}));
-  CHECK_EQ(all.size(), proto::kConfigCount);
+  CHECK_EQ(all.size(), proto::kConfigCount + 1);  // one CONFIG per key, then ACK[GET_CONFIG] as the end marker
   for (size_t i = 0; i < all.size() && i < proto::kConfigCount; ++i) {
     CHECK_EQ(all[i].cmd, 0x42);
     CHECK_EQ(all[i].payload.size(), 5);
     CHECK_EQ(all[i].payload[0], i);
     CHECK_EQ(syx::readI32le(&all[i].payload[1]), proto::kConfigTable[i].defaultValue);
   }
+  CHECK(all.size() == proto::kConfigCount + 1 && isAck(all.back(), Cmd::GetConfig));
 
   std::vector<Reply> r = ask(d, 0, Cmd::SetConfig, setConfigPayload(ConfigKey::FaderRole, 2));
   CHECK_EQ(r.size(), 1);
@@ -130,6 +131,9 @@ EPDJ_TEST(engine_sysex_config_round_trip) {
   r = ask(d, 0, Cmd::SetConfig, setConfigPayload(ConfigKey::TouchSectors, 9));
   CHECK(r.size() == 1 && isNak(r[0], Cmd::SetConfig, Err::OutOfRange));
   Bytes badKey = setConfigPayload(ConfigKey::DeckId, 0);
+  badKey[0] = static_cast<uint8_t>(proto::kConfigCount);  // one past the last key
+  r = ask(d, 0, Cmd::SetConfig, badKey);
+  CHECK(r.size() == 1 && isNak(r[0], Cmd::SetConfig, Err::BadKey));
   badKey[0] = 200;
   r = ask(d, 0, Cmd::SetConfig, badKey);
   CHECK(r.size() == 1 && isNak(r[0], Cmd::SetConfig, Err::BadKey));
@@ -150,17 +154,33 @@ EPDJ_TEST(engine_sysex_config_round_trip) {
 
   r = ask(d, 0, Cmd::LoadDefaults);
   CHECK(r.size() == 1 && isAck(r[0], Cmd::LoadDefaults));
-  CHECK_EQ(cfgValue(d, ConfigKey::FaderRole), 0);
+  CHECK_EQ(cfgValue(d, ConfigKey::FaderRole), 1);  // the default role is CHANNEL_VOLUME
+  CHECK_EQ(cfgValue(d, ConfigKey::LinkGroup), 0);
 }
 
-EPDJ_TEST(engine_deck_identity_changes_only_after_a_restart) {
-  // deckId needs a reboot (PROTOCOL 3.1): LOAD_DEFAULTS or SET_CONFIG of it must not move a running Deck B
-  // to channel 1 / deck A colours while its USB name and radio identity still say B.
+EPDJ_TEST(engine_deck_identity_changes_only_through_set_deck_and_a_restart) {
+  // Deck B. Neither LOAD_DEFAULTS nor SET_CONFIG may move it: the USB name, the radio id and the address it
+  // answers to are one identity, and only SET_DECK (which persists and restarts) changes it.
   Deck d(1, 0x0B);
   d.run(20);
-  ask(d, 127, Cmd::LoadDefaults);
-  CHECK_EQ(d.cfg.get(ConfigKey::DeckId), 0);
-  ask(d, 127, Cmd::SetConfig, setConfigPayload(ConfigKey::DeckId, 0));
+  std::vector<Reply> r = ask(d, 1, Cmd::SetConfig, setConfigPayload(ConfigKey::BpmX10, 1285));
+  CHECK(r.size() == 1 && isAck(r[0], Cmd::SetConfig));
+  r = ask(d, 1, Cmd::LoadDefaults);  // used to reset deckId, after which requests to deck 1 went unanswered
+  CHECK(r.size() == 1 && isAck(r[0], Cmd::LoadDefaults));
+  CHECK_EQ(r.empty() ? -1 : r[0].deck, 1);
+  CHECK_EQ(d.cfg.get(ConfigKey::DeckId), 1);
+  CHECK_EQ(d.cfg.get(ConfigKey::BpmX10), 1200);  // everything else did reset
+  r = ask(d, 1, Cmd::GetInfo);
+  CHECK_EQ(r.size(), 1);
+  if (r.size() == 1) CHECK_EQ(r[0].deck, 1);
+  CHECK_EQ(ask(d, 0, Cmd::GetInfo).size(), 0);  // and it is still not deck A
+
+  r = ask(d, 1, Cmd::SetConfig, setConfigPayload(ConfigKey::DeckId, 0));
+  CHECK(r.size() == 1 && isNak(r[0], Cmd::SetConfig, Err::NotSupported));
+  CHECK_EQ(d.cfg.get(ConfigKey::DeckId), 1);
+  CHECK(d.plat.deckSets.empty() && d.plat.reboots.empty());
+  CHECK_EQ(cfgValue(d, ConfigKey::DeckId), 1);
+
   d.click(true, 20);
   CHECK(d.engine.led().deck == proto::Deck::B);
   CHECK_EQ(countEq(usbMsgs(d.log, 0), b({0x91, 36, 127})), 1);  // still channel 2
@@ -169,10 +189,23 @@ EPDJ_TEST(engine_deck_identity_changes_only_after_a_restart) {
   d.set(ConfigKey::MidiChannel, 5);
   d.click(true, 20);
   CHECK_EQ(countEq(usbMsgs(d.log, 0), b({0x95, 36, 127})), 1);
+
+  // SET_DECK is the one way: it acknowledges under the old deck, hands over to the platform, and the engine
+  // keeps behaving as the deck it booted as until the restart.
+  d.set(ConfigKey::MidiChannel, 16);
+  r = ask(d, 1, Cmd::SetDeck, b({0}));
+  CHECK(r.size() == 1 && isAck(r[0], Cmd::SetDeck));
+  CHECK_EQ(r.empty() ? -1 : r[0].deck, 1);
+  CHECK_EQ(d.plat.deckSets.size(), 1);
+  CHECK_EQ(d.cfg.get(ConfigKey::DeckId), 0);
+  d.click(true, 20);
+  CHECK(d.engine.led().deck == proto::Deck::B);
+  CHECK_EQ(countEq(usbMsgs(d.log, 0), b({0x91, 36, 127})), 2);
 }
 
 EPDJ_TEST(engine_sysex_set_config_applies_live_to_the_fader) {
   Deck d(0);
+  d.set(ConfigKey::FaderRole, 0);  // CROSSFADER (CC 23 / 55); the default role is CHANNEL_VOLUME
   d.in.faderRaw = 3000;
   d.run(100);
   const int base = lastPair(d, 23, 55);
@@ -331,6 +364,7 @@ EPDJ_TEST(engine_sysex_telemetry_shows_touch_angle_and_jog) {
 
 EPDJ_TEST(engine_sysex_calibrates_the_fader) {
   Deck d(0);
+  d.set(ConfigKey::FaderRole, 0);  // CROSSFADER (CC 23 / 55)
   d.in.faderRaw = 2000;
   d.run(50);
   std::vector<Reply> r = ask(d, 0, Cmd::CalBegin, b({0}));
@@ -689,21 +723,43 @@ EPDJ_TEST(engine_output_queue_is_bounded_and_counts_what_it_drops) {
   OutEvent ev;
   while (d.engine.popOut(&ev)) {}
 
-  // Three full config dumps fit without anyone draining.
+  // Several full config dumps (every key plus the end marker) fit without anyone draining.
+  constexpr size_t kDumpEvents = proto::kConfigCount + 1;
   for (int i = 0; i < 3; ++i) d.engine.onSysexIn(dump.data(), dump.size(), d.localNow());
   CHECK_EQ(d.engine.stats().outDropped, 0);
-  size_t frames = 0;
-  while (d.engine.popOut(&ev)) ++frames;
-  CHECK_EQ(frames, 3 * proto::kConfigCount);
+  size_t frames = 0, acks = 0;
+  while (d.engine.popOut(&ev)) {
+    ++frames;
+    syx::Frame f;
+    CHECK(syx::decodeFrame(ev.data, ev.len, syx::kNoDeckFilter, &f) == syx::DecodeStatus::Ok);
+    acks += f.cmd == proto::sysex::kAck ? 1u : 0u;
+  }
+  CHECK_EQ(frames, 3 * kDumpEvents);
+  CHECK_EQ(acks, 3u);
 
-  // A HAL that stops draining loses the newest events, and every loss is counted.
+  // A HAL that stops draining loses the newest events, and every loss is counted. A dump that no longer
+  // fits stops at the first refused frame and has no end marker, so it costs exactly one counted loss.
   const uint32_t pushedBefore = d.engine.stats().outPushed;
   for (int i = 0; i < 30; ++i) d.engine.onSysexIn(dump.data(), dump.size(), d.localNow());
   const Engine::Stats s = d.engine.stats();
   CHECK(s.outDropped > 0);
   CHECK(d.engine.queuedBytes() <= Engine::kOutQueueBytes);
-  CHECK_EQ(s.outPushed - pushedBefore + s.outDropped, 30 * proto::kConfigCount);  // every frame is either queued or counted
   CHECK(s.outHighWaterBytes <= Engine::kOutQueueBytes);
-  while (d.engine.popOut(&ev)) {}
+  acks = 0;
+  frames = 0;
+  while (d.engine.popOut(&ev)) {
+    ++frames;
+    syx::Frame f;
+    CHECK(syx::decodeFrame(ev.data, ev.len, syx::kNoDeckFilter, &f) == syx::DecodeStatus::Ok);
+    acks += f.cmd == proto::sysex::kAck ? 1u : 0u;
+  }
+  CHECK_EQ(frames, s.outPushed - pushedBefore);
+  CHECK_EQ(acks + s.outDropped, 30u);  // each of the 30 dumps either completed (ACK) or was cut short and counted once
   CHECK_EQ(d.engine.queuedBytes(), 0);
+
+  // Draining again, the very next dump is complete.
+  d.engine.onSysexIn(dump.data(), dump.size(), d.localNow());
+  frames = 0;
+  while (d.engine.popOut(&ev)) ++frames;
+  CHECK_EQ(frames, kDumpEvents);
 }

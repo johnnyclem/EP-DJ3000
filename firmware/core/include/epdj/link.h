@@ -592,6 +592,9 @@ class Link {
   Link(LinkTransport& tx, LinkSink& sink) : tx_(tx), sink_(sink) {}
 
   void configure(const Config& c);
+  // Moves this unit to another rig while running. Everything learned in the old group is void: the peer
+  // table is emptied, the partner counts as lost (held notes are released) and a HELLO goes out at once.
+  void setGroup(uint8_t group, uint64_t nowUs);
   void setUsbHost(bool mounted);
   void setBridgeMode(proto::LinkBridge mode);
 

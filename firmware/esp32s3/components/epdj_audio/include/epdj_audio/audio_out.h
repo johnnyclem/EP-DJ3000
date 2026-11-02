@@ -39,7 +39,7 @@ bool running();
 size_t pushFromUsb(const int16_t* interleaved, size_t frames);
 // The host selected (true) or left (false) the streaming alternate setting.
 void setStreaming(bool streaming);
-// Feature unit state, UAC2 units (1/256 dB, 0 = unity) and mute.
+// Feature unit state, USB audio units (1/256 dB, 0 = unity) and mute.
 void setVolume(int16_t volume256Db, bool mute);
 
 // ---- engine side ----

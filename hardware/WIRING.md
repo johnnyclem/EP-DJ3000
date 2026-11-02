@@ -83,7 +83,8 @@ On the usual breakout these four pins are the solder jumpers H1..H4 (FLT, DEMP, 
 
 **DAC-present strap:** a jumper (or a wire on the DAC board) from **GPIO14** to **GND**. With the jumper in,
 `dacMode = AUTO` (the default) enumerates the USB audio function; without it the unit is MIDI-only. The decision is
-taken at boot because the USB descriptors cannot change afterwards.
+taken at boot because the USB descriptors cannot change afterwards. The pin is sampled 16 times over 16 ms and counts
+only if every sample reads low, so a loose or noisy strap means "no DAC" (the boot log says `UNSTABLE`).
 
 **Line out:** from the DAC board's L, R and GND to a 3.5 mm TRS jack, with 100 Ω in series with each output and a
 100 pF to ground after it if the cable picks up noise. The EP-136's inputs are line level. Keep the line-out jack

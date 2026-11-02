@@ -33,3 +33,12 @@ foreach(t ${TEST_SRC})
   target_compile_options(${n} PRIVATE -Wall -Wextra)
   add_test(NAME ${n} COMMAND ${n})
 endforeach()
+
+# End-to-end simulator (docs/E2E.md): the real Engine behind a text pipe, for the Swift and Node suites.
+option(EPDJ_BUILD_TOOLS "Build epdj_engine_sim, the end-to-end conformance simulator" OFF)
+if(EPDJ_BUILD_TOOLS)
+  add_executable(epdj_engine_sim ${CMAKE_CURRENT_SOURCE_DIR}/tools/engine_sim.cpp)
+  target_link_libraries(epdj_engine_sim PRIVATE epdj_core)
+  target_include_directories(epdj_engine_sim PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/test)
+  target_compile_options(epdj_engine_sim PRIVATE -Wall -Wextra -Wshadow -Wconversion -Wsign-conversion)
+endif()

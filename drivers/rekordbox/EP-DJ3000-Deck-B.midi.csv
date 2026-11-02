@@ -11,7 +11,7 @@ TempoSlider,TempoSlider,KnobSliderHiRes,B019,,1,,,,,,,,Fast,Tempo fader - set fa
 ,,,,,,,,,,,,,,
 # Mixer,,,,,,,,,,,,,,
 CrossFader,CrossFader,KnobSliderHiRes,B117,,,,,,,,,,Fast,Crossfader - faderRole CROSSFADER - no use with an external mixer
-#ChannelFader,ChannelFader,KnobSliderHiRes,B007,,1,,,,,,,,Fast,UNVERIFIED command name - faderRole CHANNEL_VOLUME
+#ChannelFader,ChannelFader,KnobSliderHiRes,B007,,1,,,,,,,,Fast,UNVERIFIED command name - faderRole CHANNEL_VOLUME (the default)
 Gain,Gain,KnobSliderHiRes,B018,,1,,,,,,,,Fast,Orange knob as trim - an arbitrary choice - re-learn to taste
 ,,,,,,,,,,,,,,
 # Jog - EXPERIMENTAL - disabled - see README,,,,,,,,,,,,,,

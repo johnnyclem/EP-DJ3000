@@ -121,7 +121,9 @@ What is forwarded: cable-0 Note On/Off and Control Change (jog, faders, knob, bu
 **not**: system messages (clock, start/stop, SPP, MTC), program change, SysEx. Tempo and transport between
 decks go through TRANSPORT and the clock sync, not through the bridge, and a bridged deck cannot follow
 host MIDI clock in v1. Cable 1 (TRS) is not bridged. Host feedback relayed back is limited to Note and CC
-(LED states, tempo).
+(LED states, tempo) and is handled exactly as if it had arrived on the bridged deck's own cable 0: in
+particular the `play` note (velocity > 0) is LED feedback only and never starts or stops that deck's clock;
+only the `transport` CC commands a clock master (PROTOCOL.md section 2.6).
 
 When a route ends for any reason (peer timeout, reboot, host plugged in, `linkBridge` changed), the
 receiver emits Note Off for every note still held on behalf of the peer, so a lost link cannot leave a note
@@ -262,9 +264,20 @@ A host also sees a conflict without the bit: a `Peer.deck` equal to the replying
 
 ## 11. What the platform layer must provide
 
-* **Identity**: station MAC from efuse; `deck` from `deckId`; `epoch` from the hardware RNG at every boot;
-  `group` (default 0). Call `Link::configure`, then `setUsbHost(tud_mounted())` whenever it changes and
-  `setBridgeMode(linkBridge)` when the config key changes.
+* **Identity**: station MAC from efuse; `deck` from `deckId` (the deck the unit booted as: `deckId` changes
+  only through `SET_DECK`, which restarts the unit, and the new `epoch` makes the peer drop everything it held);
+  `epoch` from the hardware RNG at every boot; `group` as below. The `Engine` does all of this: it calls
+  `Link::configure` on its first call, `setUsbHost`, `setBridgeMode` and `setGroup` when the corresponding input
+  or config key changes. The platform only supplies `Engine::Identity`.
+* **Group**: the rig id is the `linkGroup` config key (u8, default 0). The value in force is the config value
+  when it is non-zero, otherwise `Engine::Identity::linkGroup` (the platform's build-time default, 0 if it
+  has none), so a build-time id keeps working and a value set over SysEx wins. The consequence of that rule is
+  that a unit built with a non-zero default cannot be put back on group 0 over SysEx. It applies **live**,
+  without a reboot (`Link::setGroup`): the peer table is emptied, so the old partner is dropped on the spot
+  (bridged notes held for it are released, reliable messages cancelled, time sync restarted), a HELLO goes out
+  at once in the new group, and the old partner, which now hears a group it ignores, times this unit out
+  within 1.5 s. A host that changes both units of a rig sends `SET_CONFIG linkGroup` to each; they link again
+  as soon as both are on the same group. Persist it with `SAVE_CONFIG` like any config value.
 * **Radio**: all units on the same Wi-Fi channel (fix it; the ESP-NOW default is the current channel),
   broadcast peer registered, no encryption (as far as the ESP-IDF docs go, ESP-NOW does not encrypt broadcast
   frames; unicast with a shared LMK would be the later option; verify). Set a PHY rate well above the 1 Mbps default for broadcast
@@ -293,15 +306,18 @@ combinations x 3 clock origins x 4 seeds, wrap, large offsets, clock step, slew 
 last-value-wins fader (mutation-checked: stale-state acceptance, missing dedupe, missing 16-bit wrap, no
 retries and no heartbeat each make it fail); and two complete `Link` instances over a simulated air:
 discovery, bridge in both directions, mode changes, loss of a peer with a held note, reboot with a new epoch,
-reliable transport with time translation, duplicate deck id, group isolation, hostile input.
+reliable transport with time translation, duplicate deck id, group isolation and moving a unit between groups at
+runtime, hostile input.
 
 **Not verified**: anything on real hardware or a real radio (ESP-NOW latency, jitter, loss, airtime, PHY
 rate, channel coexistence with Wi-Fi/BLE); the time-sync figures above come from the simulated link only.
 
-## 13. Contract changes this document relies on
+## 13. Contract elements this document uses
 
-Both are now in [`protocol/epdj3000.json`](../protocol/epdj3000.json):
+All are in [`protocol/epdj3000.json`](../protocol/epdj3000.json) (contract v1.1):
 
-1. `structs.Peer.status` with the `PeerStatus` bit field (`CONFLICT = bit 0`).
-2. Config key `linkGroup` (u8 0..255, default 0), so two rigs in one room can be separated without
-   reflashing; the group is in the wire header.
+1. `structs.Peer.status` with the `PeerStatus` bit field (`CONFLICT = bit 0`), section 10.
+2. Config key `linkGroup` (id 32, u8 0..255, default 0), section 11: separates two rigs in one room without
+   reflashing; the group is in the wire header. `SET_CONFIG` applies it live; `LOAD_DEFAULTS` resets it to 0.
+3. `SET_CONFIG` of `deckId` is `NAK NOT_SUPPORTED` and `LOAD_DEFAULTS` keeps `deckId`: the deck in the packet
+   header (`deck`) is the unit's identity and changes only through `SET_DECK`, which restarts it.

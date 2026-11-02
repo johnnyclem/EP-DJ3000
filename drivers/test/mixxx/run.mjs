@@ -378,11 +378,11 @@ test("checked-in XML is exactly what the generator produces from the contract co
   assert.equal(readFileSync(XML_PATH, "utf8"), buildXml());
 });
 
-test("epdj3000-protocol.js next to the mapping is identical to drivers/common (the generated source)", () => {
+test("epdj3000-protocol.js next to the mapping is identical to drivers/common's (tools/gen_protocol.py writes both)", () => {
   assert.equal(
     readFileSync(join(MIXXX_DIR, "epdj3000-protocol.js"), "utf8"),
     readFileSync(COMMON_JS, "utf8"),
-    "re-copy: cp drivers/common/epdj3000-protocol.js drivers/mixxx/epdj3000-protocol.js"
+    "the two generated copies differ: run python3 tools/gen_protocol.py"
   );
 });
 
@@ -471,6 +471,31 @@ test("LED feedback: Mixxx cue_indicator / play -> Note On vel 127/0 on the deck'
   engine.mixxxSet("[Channel1]", "cue_indicator", 0);
   engine.mixxxSet("[Channel2]", "play", 0);
   assert.deepEqual(m.takeSent(), [[0x90, 36, 127], [0x91, 39, 127], [0x90, 36, 0], [0x91, 39, 0]]);
+});
+
+test("LED feedback for both decks reaches every enabled port on each deck's own channel, and is only ever notes 36/39", () => {
+  // Two ports (two units on their own cables). Each unit ignores the other's channel (PROTOCOL.md 2, channel filter).
+  const engine = makeEngine();
+  const portA = loadMapping(engine);
+  const portB = loadMapping(engine);
+  portA.init();
+  portB.init();
+  engine.take();
+  portA.takeSent();
+  portB.takeSent();
+  engine.mixxxSet("[Channel1]", "cue_indicator", 1);
+  engine.mixxxSet("[Channel2]", "play", 1);
+  engine.mixxxSet("[Channel2]", "play", 0);
+  const expected = [[0x90, 36, 127], [0x91, 39, 127], [0x91, 39, 0]];
+  const sentA = portA.takeSent();
+  const sentB = portB.takeSent();
+  assert.deepEqual(sentA, expected);
+  assert.deepEqual(sentB, expected);
+  // The play note is feedback only; the mapping never sends the transport CC or anything but Note On to the unit.
+  for (const [status, data] of [...sentA, ...sentB]) {
+    assert.equal(status & 0xF0, 0x90);
+    assert.ok(data === P.note.cue || data === P.note.play, `unexpected note ${data}`);
+  }
 });
 
 test("shutdown: LEDs off, connections released, scratch ended, held buttons released", () => {
@@ -653,7 +678,7 @@ test("tap (note 41) pulses tempo_tap; transport CC 29: 1 play, 2 pause, 0 start_
 
 // ---- 14-bit controls ----
 
-test("slide pot (default CROSSFADER): 14-bit 0 -> crossfader -1, 16383 -> +1, mid ~0, exact ratio in between", () => {
+test("slide pot set to CROSSFADER (CC 23/55, FADER_ROLE default): 14-bit 0 -> crossfader -1, 16383 -> +1, mid ~0, exact ratio in between", () => {
   const { engine, m } = fresh();
   feed(m, Unit.pair(0, "crossfader", 0));
   assert.equal(engine.getValue("[Master]", "crossfader"), -1);
@@ -699,7 +724,7 @@ test("14-bit: LSB-only or MSB-only updates use the stored other half; nothing ap
   assert.equal(engine.take("setParameter").length, 0);
 });
 
-test("faderRole CHANNEL_VOLUME (CC 7/39) -> deck volume; PITCH (CC 25/57) -> deck rate; ends map to the control's range", () => {
+test("the unit's default faderRole CHANNEL_VOLUME (CC 7/39) -> deck volume; PITCH (CC 25/57) -> deck rate; ends map to the control's range", () => {
   const { engine, m } = fresh();
   feed(m, Unit.pair(1, "channelVolume", 0));
   assert.equal(engine.getValue("[Channel2]", "volume"), 0);
@@ -712,7 +737,7 @@ test("faderRole CHANNEL_VOLUME (CC 7/39) -> deck volume; PITCH (CC 25/57) -> dec
   assert.equal(engine.getValue("[Channel1]", "volume"), 0, "deck 1 volume untouched by deck 2");
 });
 
-test("FADER_ROLE constant redirects the default fader CC pair (volume, rate)", () => {
+test("FADER_ROLE constant redirects the CROSSFADER CC pair 23/55 (volume, rate)", () => {
   for (const [role, key, lo, hi] of [["volume", "volume", 0, 1], ["rate", "rate", -1, 1]]) {
     const { engine, m } = fresh();
     m.obj.FADER_ROLE = role;
@@ -803,6 +828,29 @@ test("every deck-targeting control lands on its own deck only", () => {
   const groupsOf = (arr) => new Set(arr.map((g) => g.replace(/^\[QuickEffectRack1_(\[Channel\d\])\]$/, "$1")));
   assert.deepEqual([...groupsOf(per(0))], ["[Channel1]"]);
   assert.deepEqual([...groupsOf(per(1))], ["[Channel2]"]);
+});
+
+test("two units on their own cables, default fader role: each pot cuts only its own deck's volume; the master crossfader is never touched", () => {
+  const engine = makeEngine();
+  const unitA = loadMapping(engine);
+  const unitB = loadMapping(engine);
+  unitA.init();
+  unitB.init();
+  engine.take();
+
+  // A sweeps up while B sweeps down, interleaved, the way two hands would.
+  for (const v of [0, 4096, 8192, 12288, 16383]) {
+    feed(unitA, Unit.pair(0, "channelVolume", v));
+    feed(unitB, Unit.pair(1, "channelVolume", 16383 - v));
+  }
+  const writes = engine.take();
+  assert.ok(writes.length > 0);
+  assert.deepEqual([...new Set(writes.map((c) => `${c.fn}|${c.args[0]}|${c.args[1]}`))].sort(),
+    ["setParameter|[Channel1]|volume", "setParameter|[Channel2]|volume"]);
+  assert.equal(writes.filter((c) => String(c.args[0]).startsWith("[Master]")).length, 0);
+  assert.equal(engine.getValue("[Channel1]", "volume"), 1);
+  assert.equal(engine.getValue("[Channel2]", "volume"), 0);
+  assert.equal(engine.getValue("[Master]", "crossfader"), 0);
 });
 
 test("linked deck on a second cable: a second script instance sharing the engine drives deck 2 independently", () => {

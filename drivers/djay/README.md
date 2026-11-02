@@ -35,8 +35,9 @@ controller, so djay offers MIDI Learn for it ([help article][howto]).
 Same idea as `docs/ARCHITECTURE.md` section 1: each unit is a controller plus its own USB sound
 card, and the EP-136 mixes in hardware.
 
-1. **Slide pot as tempo fader.** Set `faderRole` to `PITCH` (config key 11, value 2) and save. With an
-   external mixer, djay's crossfader and line faders do nothing audible.
+1. **Slide pot as tempo fader.** The unit's default `faderRole` is `CHANNEL_VOLUME` (CC 7 / 39), which the cheat
+   sheet below maps to Line Volume. With an external mixer, djay's crossfader and line faders do nothing audible, so
+   that pot would be inert. Set `faderRole` to `PITCH` (config key 11, value 2) and save to get a tempo fader.
 2. **Mixer mode External.** Official [audio devices page][audio]: in External mode "Audio is routed to
    separate channels" and you assign a **stereo output per deck** (Decks 1-4), plus Sampler, Looper and
    Pre-cueing. Per the [external mixers page][ext], click Apply with the mixer powered on, then
@@ -77,7 +78,7 @@ mappings on a PC or MAC might differ"). The Action menu in your version is autho
 | `jog` | drag clockwise | `CC 22` | Deck 1 > Jog Wheels > Scratch (jog Plan A) or Scratch (no touch detection) (Plan B) | Rotary (3Fh/41h); Speed and Reaction by feel | official |
 | `pitch` | sweep the pot (`faderRole` = PITCH) | `CC 25` (MSB), ignore `CC 57` (LSB) | Deck 1 > Tempo | Fader/Knob; Pickup mode on | community |
 | `crossfader` | sweep the pot (`faderRole` = CROSSFADER) | `CC 23` (MSB), ignore `CC 55` (LSB) | Mixer > Crossfader | Fader/Knob; internal mixer only | community |
-| `channelVolume` | sweep the pot (`faderRole` = CHANNEL_VOLUME) | `CC 7` (MSB), ignore `CC 39` (LSB) | Mixer > Deck 1: Line Volume | Fader/Knob; internal mixer only | community |
+| `channelVolume` | sweep the pot (default `faderRole` = CHANNEL_VOLUME) | `CC 7` (MSB), ignore `CC 39` (LSB) | Mixer > Deck 1: Line Volume | Fader/Knob; internal mixer only | community |
 | `knob` | turn the orange knob | `CC 24` (MSB), ignore `CC 56` (LSB) | Deck 1 > Effects > Filter | Fader/Knob (the list calls Filter a Rotary action; this knob is absolute) | community |
 
 Not mapped: `bpm`, `bpmNudge`, `tap`, `transport`. The unit only sends them in its own clock-master
@@ -115,8 +116,9 @@ to "test each option", and the Reaction slider trades smooth for responsive.
   the tempo jump (official: it prevents sudden jumps on shared controls and is especially useful for
   tempo sliders).
 * **Fader direction.** Wrong way round: djay's **Invert**, or the unit's `faderInvert`.
-* **Two units, one crossfader.** If you leave `faderRole` at the default CROSSFADER on both units, both
-  drive djay's one crossfader. Use PITCH for the rig.
+* **Two units, one crossfader.** Only if you set both units to `faderRole` = CROSSFADER, then both drive djay's one
+  crossfader. The default CHANNEL_VOLUME gives each unit its own deck's Line Volume; for the external-mixer rig use
+  PITCH.
 
 ### Test for the biggest risk: does djay read the magnitude?
 
@@ -134,7 +136,9 @@ firmware, which the contract does not have today.
 * djay's official docs do not mention 14-bit, so the high-resolution half of every pot is probably
   wasted.
 * MIDI Out (LED feedback) is configurable per control (Channel, Type, Control, Value 0-127); I wrote the
-  note numbers above but the exact feedback wiring is untested.
+  note numbers above but the exact feedback wiring is untested. Set its Channel to the unit's own (1 for the Deck A
+  unit, 2 for the Deck B unit): a unit ignores feedback on any other channel (PROTOCOL.md section 2). The play
+  note only lights the LED; it never starts the unit's clock.
 * Android has no MIDI Learn; this README is for the Mac app. iOS and Windows have the same flow, but
   their menus and action lists differ.
 * No clock/timecode path to djay.

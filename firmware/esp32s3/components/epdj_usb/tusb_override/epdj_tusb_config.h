@@ -1,5 +1,5 @@
 // TinyUSB configuration for the EP-DJ3000: esp_tinyusb's stock tusb_config.h (class counts from Kconfig) plus
-// the UAC2 speaker function and larger MIDI FIFOs. Selected through CFG_TUSB_CONFIG_FILE, see CMakeLists.txt.
+// the USB Audio 1.0 speaker function and larger MIDI FIFOs. Selected through CFG_TUSB_CONFIG_FILE, see CMakeLists.txt.
 #pragma once
 
 #include "sdkconfig.h"
@@ -9,13 +9,17 @@
 extern "C" {
 #endif
 
-// ---- MIDI: three cables share one bulk pair; sysex replies (a CONFIG dump is ~480 bytes) need room ----
+// ---- MIDI: three cables share one bulk pair; sysex replies need room ----
+// TX: a GET_CONFIG dump is 34 SysEx frames = 169 USB-MIDI packets = 676 bytes, which must fit in one go
+// (static_assert in usb_device.cpp). RX: host requests are small and one at a time (the app waits for each answer).
 #undef CFG_TUD_MIDI_RX_BUFSIZE
 #undef CFG_TUD_MIDI_TX_BUFSIZE
 #define CFG_TUD_MIDI_RX_BUFSIZE 256
-#define CFG_TUD_MIDI_TX_BUFSIZE 512
+#define CFG_TUD_MIDI_TX_BUFSIZE 1024
 
-// ---- Audio: one UAC2 function, host -> device only, stereo 48 kHz 16 bit, asynchronous with feedback ----
+// ---- Audio: one USB Audio 1.0 function, host -> device only, stereo 48 kHz 16 bit, asynchronous with feedback ----
+// The descriptors (core/src/usb_desc.cpp) make TinyUSB's driver take its UAC1 path, which sends the feedback value
+// as three bytes 10.14, what full-speed hosts expect.
 #if CONFIG_EPDJ_USB_AUDIO
 #define CFG_TUD_AUDIO 1
 #define CFG_TUD_AUDIO_ENABLE_EP_OUT 1

@@ -14,9 +14,9 @@ SysEx monitor, a small scratch-capable player, and a two-deck rig view. It speak
 >
 > | Check | Result |
 > |---|---|
-> | `swift build` and `swift test` of `EPDJ3000Protocol` and `EPDJ3000Engine` on Linux (Swift 6.0.3) | pass, 226 tests |
-> | The Foundation-only part of the Kit (`Sources/EPDJ3000Kit/Pure/`: MIDI formatting, log, waveform overview, test signals, config presentation, rig checklist, error text, name matching) compiled with the real toolchain and run under 47 unit tests, which were mutation-checked | pass (the test file is not in this package; see "Tests") |
-> | All Kit and app sources type-checked in Swift 5 language mode, with complete strict-concurrency checking, against **hand-written stand-ins** for CoreMIDI, CoreAudio, AudioToolbox, AVFoundation, Combine, SwiftUI, AppKit and UniformTypeIdentifiers | no errors; 5 warnings, all artefacts of the stand-ins (the `NSSecureCoding` casts that only fail on Linux, and isolation of the stand-in `NSApplicationDelegate` / `App` protocols, whose isolation in the real SDK may differ; on an older SDK the same warnings may appear for real) |
+> | `swift build` and `swift test` of `EPDJ3000Protocol`, `EPDJ3000Engine` and `EPDJ3000KitPure` on Linux (Swift 6.0.3) | pass, 300 tests (169 + 80 + 51); also warning-free with `-Xswiftc -strict-concurrency=complete` |
+> | The Foundation-only part of the Kit (`Sources/EPDJ3000Kit/Pure/`, the `EPDJ3000KitPure` target: MIDI formatting, log, waveform overview, test signals, config presentation, rig checklist, error text, name matching) | compiled and tested with the real toolchain as part of `swift test` (`EPDJ3000KitPureTests`) |
+> | All Kit and app sources type-checked in Swift 5 language mode, with complete strict-concurrency checking, against **hand-written stand-ins** for CoreMIDI, CoreAudio, AudioToolbox, AVFoundation, Combine, SwiftUI, AppKit and UniformTypeIdentifiers (not part of this repository) | no errors; 5 warnings in the app, all artefacts of the stand-ins (the `NSSecureCoding` casts that only fail on Linux, and isolation of the stand-in `NSApplicationDelegate` / `App` protocols, whose isolation in the real SDK may differ; on an older SDK the same warnings may appear for real) |
 >
 > The stand-ins were written from memory of Apple's documentation. That check proves the code is consistent with
 > itself and calls the Protocol and Engine libraries correctly (those are real). It proves nothing about whether
@@ -57,7 +57,8 @@ targets are only declared when the manifest is evaluated on macOS.
 |---|---|---|
 | `EPDJ3000Protocol` | Foundation | Wire contract (generated), SysEx codec, `DeviceClient`, MIDI parser, `ControllerState`, calibration state machines. Tested. |
 | `EPDJ3000Engine` | Foundation | `ScratchPlayerCore` (the sample player), `DeckModel` (MIDI to player commands), jog velocity. Tested. |
-| `EPDJ3000Kit` | CoreMIDI, CoreAudio, AVFoundation, Combine | The Apple glue: `CoreMidiService` / `CoreMidiTransport` (a `MidiTransport` for `DeviceClient`), `DeviceManager`, `DeckSession`, `DeckAudio` / `AudioOutput` (source node into `ScratchPlayerCore`), `TrackLoader`, `AudioDevices`, `CalibrationController`. `Pure/` holds the parts that need no Apple framework. |
+| `EPDJ3000KitPure` | Foundation | The part of the Kit that needs no Apple framework (`Sources/EPDJ3000Kit/Pure/`): MIDI formatting and log, waveform overview, test signals, config presentation, rig checklist, error text, name matching. A target of its own so it builds and is tested everywhere. |
+| `EPDJ3000Kit` | CoreMIDI, CoreAudio, AVFoundation, Combine | The Apple glue: `CoreMidiService` / `CoreMidiTransport` (a `MidiTransport` for `DeviceClient`), `DeviceManager`, `DeckSession`, `DeckAudio` / `AudioOutput` (source node into `ScratchPlayerCore`), `TrackLoader`, `AudioDevices`, `CalibrationController`. Depends on `EPDJ3000KitPure` (its `Pure/` folder is excluded from this target). |
 | `EPDJ3000App` | SwiftUI, AppKit | Six tabs. No logic of its own beyond layout. |
 
 The Apple layer is deliberately thin. Anything with a decision in it (timing of the calibration steps, thresholds,
@@ -68,7 +69,9 @@ what a message means, what the player does) lives in the two tested libraries.
 **Decks.** One card per connected unit: an animated platter driven by the jog ticks, a touch indicator, the slide pot
 and knob, CUE / REV / TOUCH lights, tempo, transport, song position and MIDI time code as the unit reports them. Buttons
 send transport and tempo to the unit (the unit acts on them in sync-master mode; elsewhere they only drive its LEDs).
-The unit's PLAY and CUE LEDs follow the player unless you switch that off.
+The unit's PLAY and CUE LEDs follow the player unless you switch that off. That works in every mode: the unit takes the
+play note as LED feedback only and never starts its clock from it. A tap on a unit in sync-master mode arrives as
+Start/Stop and as the play pulse; the player treats the pair as one tap.
 
 **Calibrate.** A guided wizard over the protocol library's state machines: slide pot sweep, knob sweep, touch ring
 (idle noise, then a finger on each sector, with live per-sector bars), platter direction. Each step shows its live
@@ -84,7 +87,8 @@ handling the packet).
 **Player.** Drop an audio file (or open one, or load the built-in demo loop or 440 Hz tone, which need no file and no
 DAC). Waveform overview with playhead and cue point; click to seek. Play / pause, stop, CUE (hold) and REV (hold) work from
 the buttons *and* from the unit at the same time; touching the unit's platter holds the record and sliding scratches.
-The pitch fader, knob and slide pot act as in `DeckModel`. The output picker pins this deck's player to any CoreAudio
+The pitch fader, knob and slide pot act as in `DeckModel`: the slide pot is a channel volume by default (the unit's
+`faderRole`), or a crossfader-style cut, or the pitch fader. The output picker pins this deck's player to any CoreAudio
 output, including the deck's own USB audio device, which is the end-to-end audio test. With no unit connected the *On-screen
 deck* works with the buttons and a platter you drag with the mouse.
 
@@ -95,8 +99,10 @@ macOS, DJ-software routing, mixer), and per-deck audio tests: the unit's own ton
 that deck's USB audio output so you can hear it arrive on that mixer channel.
 
 **Settings.** An editor generated from `ConfigTable`: a row per key, with pickers for enums, switches for flags, check
-boxes for bit fields and sliders for numbers. Changes are live; *Save to unit* persists them. Also: reload, load defaults,
-make this unit the other deck (it restarts), restart, and enter the ROM bootloader. Each of the last four asks first.
+boxes for bit fields and sliders for numbers (including `linkGroup`, the radio rig id: units only link within the same
+group). Changes are live; *Save to unit* persists them. The deck id is shown but read-only (the unit refuses it in
+`SET_CONFIG`); change it with *Make Deck ...*, which saves it and restarts the unit. Also: reload, load defaults (which
+keeps the deck id), restart, and enter the ROM bootloader. Each of the last four asks first.
 
 ## Permissions
 
@@ -135,8 +141,9 @@ the unit's `midiChannel` setting. A unit on another channel is ignored by the de
 shows it.
 
 **No sound.**
-- Is a track loaded and playing, and is the unit's slide pot open? With the default crossfader role the sound is off at
-  the closed end and reaches full volume about 10 % into the travel; the player stays open until the pot first moves.
+- Is a track loaded and playing, and is the unit's slide pot open? With the default channel-volume role the level
+  follows the pot linearly, so it is silent at the closed end (with the crossfader role it is off there and reaches full
+  volume about 10 % into the travel). The player stays open until the pot first moves.
 - **Player > Output**: check which device is chosen. *System default* follows whatever macOS uses.
 - The deck's own output exists only if macOS lists it (a DAC is fitted and `dacMode` is not OFF). The Rig checklist says so.
 - Test the path without the app's player: **Test > Tools > Send test tone** (the unit's own DAC) should be audible on
@@ -167,10 +174,11 @@ decoded track is held in memory). DRM-protected files are refused by macOS.
 
 ## Tests
 
-`swift test` runs the Protocol and Engine tests. The Kit's Foundation-only code (`Sources/EPDJ3000Kit/Pure/`) has a test
-file that was run in a scratch package outside this repository, because `Package.swift` declares the Kit only on macOS.
-To keep those tests in CI, `Package.swift` has to give `Pure/` a target of its own that builds everywhere (see the report
-that accompanied this change).
+`swift test` runs the Protocol, Engine and KitPure tests on any OS (300 tests on Linux with Swift 6.0.3). The Kit's
+Foundation-only code (`Sources/EPDJ3000Kit/Pure/`) is the `EPDJ3000KitPure` target, tested by `EPDJ3000KitPureTests`;
+`Package.swift` declares the Kit and the app only on macOS, so nothing that imports CoreMIDI, AVFoundation or SwiftUI is
+tested here. `DeviceClientTests` talk to `FakeDevice`, an in-memory unit written from `docs/PROTOCOL.md` section 3 and
+held to it by `FakeDeviceTests`.
 
 ## Residual risks (read before the first build)
 

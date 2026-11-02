@@ -4,6 +4,7 @@
 // created the client.
 
 import CoreMIDI
+import EPDJ3000KitPure
 import EPDJ3000Protocol
 import Foundation
 

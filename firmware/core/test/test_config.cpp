@@ -77,6 +77,9 @@ EPDJ_TEST(defaults_come_from_the_contract_table) {
   CHECK_EQ(c.get(ConfigKey::ClockOutMask), 3);
   CHECK_EQ(c.get(ConfigKey::MtcFps), 3);
   CHECK_EQ(c.get(ConfigKey::ButtonDebounceMs), 4);
+  CHECK_EQ(c.get(ConfigKey::FaderRole), 1);  // CHANNEL_VOLUME: two units never fight over one crossfader
+  CHECK_EQ(c.get(ConfigKey::LinkGroup), 0);
+  CHECK_EQ(proto::kConfigCount, 33u);
   CHECK_EQ(c.revision(), 0u);
 }
 
@@ -92,7 +95,9 @@ EPDJ_TEST(validate_enforces_every_range_at_the_edges) {
     CHECK(Config::validate(id, INT32_MIN) == ConfigStatus::OutOfRange);
     CHECK(Config::validate(id, INT32_MAX) == ConfigStatus::OutOfRange);
   }
-  CHECK(Config::validate(32, 0) == ConfigStatus::BadKey);
+  CHECK(Config::validate(32, 255) == ConfigStatus::Ok);  // linkGroup, the last key
+  CHECK(Config::validate(32, 256) == ConfigStatus::OutOfRange);
+  CHECK(Config::validate(33, 0) == ConfigStatus::BadKey);
   CHECK(Config::validate(255, 0) == ConfigStatus::BadKey);
   // A few literal ranges from the spec.
   CHECK(Config::validate(1, 16) == ConfigStatus::Ok);
@@ -112,7 +117,9 @@ EPDJ_TEST(set_validates_and_leaves_value_alone_on_failure) {
   CHECK(c.set(ConfigKey::PlatterSource, 3) == ConfigStatus::OutOfRange);
   CHECK_EQ(c.get(ConfigKey::PlatterSource), 2);
   CHECK(c.set(ConfigKey::FaderRawMin, -1) == ConfigStatus::OutOfRange);
-  CHECK(c.set(static_cast<ConfigKey>(32), 0) == ConfigStatus::BadKey);
+  CHECK(c.set(ConfigKey::LinkGroup, 255) == ConfigStatus::Ok);
+  CHECK_EQ(c.get(ConfigKey::LinkGroup), 255);
+  CHECK(c.set(static_cast<ConfigKey>(33), 0) == ConfigStatus::BadKey);
   CHECK(c.set(static_cast<ConfigKey>(200), 0) == ConfigStatus::BadKey);
   CHECK_EQ(c.get(static_cast<ConfigKey>(200)), 0);  // unknown key reads as 0, never out of bounds
 }
@@ -165,10 +172,12 @@ EPDJ_TEST(blob_roundtrips_every_value) {
 
 EPDJ_TEST(blob_layout_is_stable) {
   const Bytes b = blobOf(Config());
-  CHECK_EQ(Config::kBlobMaxBytes, 6 + 4 * 32 + 4);
+  CHECK_EQ(Config::kBlobMaxBytes, 6 + 4 * 33 + 4);
+  CHECK_EQ(b.size(), Config::kBlobMaxBytes);
   CHECK_EQ(b[0], 'E'); CHECK_EQ(b[1], 'P'); CHECK_EQ(b[2], 'C'); CHECK_EQ(b[3], 'F');
   CHECK_EQ(b[4], 1);
-  CHECK_EQ(b[5], 32);
+  CHECK_EQ(b[5], 33);
+  CHECK_EQ(b[6 + 4 * 11], 1);       // faderRole = CHANNEL_VOLUME by default
   CHECK_EQ(b[6 + 4 * 1], 16);       // midiChannel = 16, little-endian
   CHECK_EQ(b[6 + 4 * 13], 4055 & 0xFF);
   CHECK_EQ(b[6 + 4 * 13 + 1], 4055 >> 8);
@@ -240,6 +249,22 @@ EPDJ_TEST(older_blob_with_fewer_keys_loads_and_defaults_the_rest) {
   CHECK_EQ(c.get(ConfigKey::BpmX10), 1285);
   CHECK_EQ(c.get(ConfigKey::LedBrightness), 64);  // keys 30 and 31 are not in the blob: defaults
   CHECK_EQ(c.get(ConfigKey::ButtonDebounceMs), 4);
+}
+
+EPDJ_TEST(a_blob_saved_before_linkgroup_existed_loads_with_group_zero_and_keeps_its_fader_role) {
+  // Contract v1.0 wrote 32 keys, with faderRole defaulting to CROSSFADER (0). A unit that saved such a
+  // config keeps what it stored; only never-saved units get the new default.
+  auto vals = defaultValues();
+  vals.resize(32);
+  vals[static_cast<size_t>(ConfigKey::FaderRole)] = 0;
+  vals[static_cast<size_t>(ConfigKey::DeckId)] = 1;
+  const Bytes b = makeBlob(1, vals);
+  Config c;
+  c.set(ConfigKey::LinkGroup, 9);
+  CHECK(c.fromBlob(b.data(), b.size()) == LoadStatus::Ok);
+  CHECK_EQ(c.get(ConfigKey::FaderRole), 0);
+  CHECK_EQ(c.get(ConfigKey::DeckId), 1);
+  CHECK_EQ(c.get(ConfigKey::LinkGroup), 0);
 }
 
 EPDJ_TEST(out_of_range_values_are_repaired_individually) {

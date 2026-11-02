@@ -2,6 +2,7 @@
 
 import EPDJ3000Engine
 import EPDJ3000Kit
+import EPDJ3000KitPure
 import EPDJ3000Protocol
 import SwiftUI
 
@@ -117,7 +118,7 @@ struct DeckCardView: View {
             }
             Toggle("Light the unit's PLAY and CUE LEDs from the player", isOn: $session.ledFeedback)
                 .font(.caption)
-            Text("Transport and tempo are only acted on by a unit in sync-master mode (Settings > Mode); in DJ mode they just update its LEDs.")
+            Text("The LEDs follow the player in every mode: the unit only lights them for those notes, it never starts its clock from them. Transport buttons and tempo are acted on only by a unit in sync-master mode (Settings > Mode).")
                 .font(.caption).foregroundStyle(.secondary)
         }
         .disabled(!session.isReady)

@@ -1,5 +1,5 @@
 // USB descriptor builder: lengths, wTotalLength, interface numbering, endpoints, MIDI jack/cable topology, IAD
-// placement, UAC2 entity graph; with and without the audio function.
+// placement, UAC1 entity graph, string table against the contract's identity; with and without the audio function.
 #include <cstdio>
 #include <cstring>
 #include <fstream>
@@ -7,10 +7,12 @@
 #include <string>
 #include <vector>
 
+#include "epdj/protocol.h"
 #include "epdj/usb_desc.h"
 #include "test_harness.h"
 
 using namespace epdj::usb;
+namespace proto = epdj::proto;
 
 namespace {
 
@@ -62,6 +64,7 @@ std::vector<Desc> ofType(const std::vector<Desc>& all, uint8_t type) {
 }
 
 unsigned u16(const uint8_t* p) { return static_cast<unsigned>(p[0]) | (static_cast<unsigned>(p[1]) << 8); }
+unsigned u24(const uint8_t* p) { return u16(p) | (static_cast<unsigned>(p[2]) << 16); }
 
 std::string readFile(const std::string& path) {
   std::ifstream f(path);
@@ -86,15 +89,21 @@ unsigned jsonHex(const std::string& json, const char* key) {
   return static_cast<unsigned>(std::strtoul(json.c_str() + q + 1, nullptr, 16));
 }
 
+const uint8_t kMac[6] = {0x24, 0x0A, 0xC4, 0x00, 0xBE, 0xEF};
+
 }  // namespace
 
-EPDJ_TEST(identity_matches_the_protocol_contract) {
+EPDJ_TEST(generated_identity_matches_the_contract_file) {
+  // protocol.h is generated from the JSON (tools/gen_protocol.py --check guards the files); this guards the
+  // values this builder actually reads.
   const std::string json = protocolJson();
   CHECK(!json.empty());
-  CHECK_EQ(jsonHex(json, "usbVendorId"), kVendorId);
-  CHECK_EQ(jsonHex(json, "usbProductId"), kProductId);
-  for (const char* deck : kDeckNames) CHECK(json.find(std::string("\"") + deck + "\"") != std::string::npos);
-  for (const char* cable : kCableNames) CHECK(json.find(std::string("\"name\": \"") + cable + "\"") != std::string::npos);
+  CHECK_EQ(jsonHex(json, "usbVendorId"), proto::kUsbVendorId);
+  CHECK_EQ(jsonHex(json, "usbProductId"), proto::kUsbProductId);
+  CHECK(json.find(std::string("\"name\": \"") + proto::kProductName + "\"") != std::string::npos);
+  for (const char* deck : proto::kDeckNames) CHECK(json.find(std::string("\"") + deck + "\"") != std::string::npos);
+  for (const char* cable : proto::kCableNames)
+    CHECK(json.find(std::string("\"name\": \"") + cable + "\"") != std::string::npos);
 }
 
 EPDJ_TEST(device_descriptor_fields) {
@@ -108,8 +117,8 @@ EPDJ_TEST(device_descriptor_fields) {
     CHECK_EQ(d[5], 0x02);
     CHECK_EQ(d[6], 0x01);
     CHECK_EQ(d[7], 64);
-    CHECK_EQ(u16(d + 8), kVendorId);
-    CHECK_EQ(u16(d + 10), kProductId);
+    CHECK_EQ(u16(d + 8), proto::kUsbVendorId);
+    CHECK_EQ(u16(d + 10), proto::kUsbProductId);
     CHECK_EQ(u16(d + 12), audio ? 0x0101 : 0x0100);
     CHECK_EQ(d[14], kStrManufacturer);
     CHECK_EQ(d[15], kStrProduct);
@@ -138,9 +147,9 @@ EPDJ_TEST(config_length_and_total_length_agree) {
     for (const Desc& d : all) sum += d.len();
     CHECK_EQ(sum, c.size());
   }
-  // The sizes the layout comment promises.
+  // The sizes the layout promises (TinyUSB's crosscheck compares the bytes).
   CHECK_EQ(configDescriptorBytes(false), 173);
-  CHECK_EQ(configDescriptorBytes(true), 316);
+  CHECK_EQ(configDescriptorBytes(true), 294);
 }
 
 EPDJ_TEST(interfaces_are_numbered_contiguously_and_counted) {
@@ -171,6 +180,8 @@ EPDJ_TEST(iads_precede_and_cover_exactly_their_function) {
     for (const Desc& a : iads) {
       CHECK_EQ(a.len(), 8);
       CHECK_EQ(a.p[4], 1);  // audio function class
+      CHECK_EQ(a.p[5], 0);  // no function subclass
+      CHECK_EQ(a.p[6], 0);  // audio 1.0 / MIDI: protocol 0 (a 0x20 here would announce audio 2.0)
       const unsigned first = a.p[2], count = a.p[3];
       // The descriptor right after the IAD is the first interface, and exactly `count` interfaces belong to it
       // before the next IAD or the end.
@@ -193,12 +204,21 @@ EPDJ_TEST(iads_precede_and_cover_exactly_their_function) {
     CHECK_EQ(iads[0].off, 9);
     CHECK_EQ(iads[0].p[2], kItfMidiControl);
     CHECK_EQ(iads[0].p[3], 2);
-    CHECK_EQ(iads[0].p[6], 0);  // MIDI function: no audio-class protocol version
     if (audio) {
       CHECK_EQ(iads[1].p[2], kItfAudioControl);
       CHECK_EQ(iads[1].p[3], 2);
-      CHECK_EQ(iads[1].p[6], 0x20);  // UAC2
     }
+  }
+}
+
+EPDJ_TEST(every_interface_in_the_audio_function_is_audio_1_0) {
+  // TinyUSB's audio driver tells UAC1 from UAC2 by the protocol code of the AudioControl interface; a stray
+  // 0x20 on any interface of the function would make hosts expect audio 2.0 entities.
+  const Bytes c = config(true);
+  const std::vector<Desc> all = walk(c);
+  for (const Desc& d : ofType(all, kItf)) {
+    CHECK_EQ(itf(d).cls, 1);
+    CHECK_EQ(itf(d).proto, 0);
   }
 }
 
@@ -211,21 +231,24 @@ EPDJ_TEST(endpoints_addresses_sizes_and_uniqueness) {
       const uint8_t addr = d.p[2];
       for (uint8_t a : addrs) CHECK(a != addr);
       addrs.push_back(addr);
+      CHECK_EQ(d.len(), 9);  // audio 1.0 style endpoint descriptors: bRefresh + bSynchAddress
       if (addr == kEpMidiOut || addr == kEpMidiIn) {
-        CHECK_EQ(d.len(), 9);  // audio 1.0 style endpoint: bRefresh + bSynchAddress
         CHECK_EQ(d.p[3], 0x02);
         CHECK_EQ(u16(d.p + 4), 64);
       } else if (addr == kEpAudioOut) {
-        CHECK_EQ(d.len(), 7);
         CHECK_EQ(d.p[3], 0x05);  // isochronous, asynchronous, data
         CHECK_EQ(u16(d.p + 4), 196);
         CHECK_EQ(u16(d.p + 4), kAudioPacketBytes);
-        CHECK_EQ(d.p[6], 1);
+        CHECK_EQ(d.p[6], 1);          // every frame
+        CHECK_EQ(d.p[7], 0);          // bRefresh
+        CHECK_EQ(d.p[8], kEpAudioFeedback);  // bSynchAddress: the feedback endpoint below
       } else if (addr == kEpAudioFeedback) {
-        CHECK_EQ(d.len(), 7);
-        CHECK_EQ(d.p[3], 0x11);  // isochronous, no sync, explicit feedback
-        CHECK_EQ(u16(d.p + 4), 4);
+        CHECK_EQ(d.p[3], 0x01);  // isochronous, no sync: TinyUSB's UAC1 driver finds the feedback endpoint by this
+        CHECK_EQ(u16(d.p + 4), 3);  // 10.14 in three bytes
+        CHECK_EQ(u16(d.p + 4), kFeedbackPacketBytes);
         CHECK_EQ(d.p[6], 1);
+        CHECK_EQ(d.p[7], 0);  // bRefresh 0 on purpose, see usb_desc.cpp
+        CHECK_EQ(d.p[8], 0);
       } else {
         CHECK(false);  // no other endpoint may exist
       }
@@ -319,7 +342,7 @@ EPDJ_TEST(midi_streaming_jack_and_cable_topology) {
   for (const Jack& j : jacks) CHECK(j.str < kStringCount);
 }
 
-EPDJ_TEST(uac2_entity_graph) {
+EPDJ_TEST(uac1_entity_graph) {
   const Bytes c = config(true);
   const std::vector<Desc> all = walk(c);
   // Find the audio function: everything after the second IAD.
@@ -329,7 +352,7 @@ EPDJ_TEST(uac2_entity_graph) {
   CHECK(start != 0);
 
   const Desc* header = nullptr;
-  const Desc *clk = nullptr, *it = nullptr, *ot = nullptr, *fu = nullptr, *asGeneral = nullptr, *fmt = nullptr;
+  const Desc *it = nullptr, *ot = nullptr, *fu = nullptr;
   size_t acEnd = 0;
   unsigned nEntities = 0;
   for (size_t i = start; i < all.size(); ++i) {
@@ -338,75 +361,84 @@ EPDJ_TEST(uac2_entity_graph) {
     if (d.type() != kCsItf) continue;
     ++nEntities;
     if (d.sub() == 0x01) header = &d;
-    if (d.sub() == 0x0A) clk = &d;
     if (d.sub() == 0x02) it = &d;
     if (d.sub() == 0x03) ot = &d;
     if (d.sub() == 0x06) fu = &d;
     acEnd = d.off + d.len();
   }
-  CHECK(header && clk && it && ot && fu);
-  CHECK_EQ(nEntities, 5u);  // header, clock, IT, OT, FU
+  CHECK(header && it && ot && fu);
+  CHECK_EQ(nEntities, 4u);  // header, IT, OT, FU: audio 1.0 has no clock source entity
 
-  // Class-specific AC header: bcdADC 2.00, wTotalLength spans header..feature unit.
-  CHECK_EQ(u16(header->p + 3), 0x0200);
-  CHECK_EQ(u16(header->p + 6), acEnd - header->off);
+  // Class-specific AC header: bcdADC 1.00, wTotalLength spans header..last unit, one streaming interface.
+  CHECK_EQ(header->len(), 9);
+  CHECK_EQ(u16(header->p + 3), 0x0100);
+  CHECK_EQ(u16(header->p + 5), acEnd - header->off);
+  CHECK_EQ(header->p[7], 1);
+  CHECK_EQ(header->p[8], kItfAudioStreaming);
 
-  // Clock source: internal fixed clock, frequency control read-only.
-  CHECK_EQ(clk->len(), 8);
-  CHECK_EQ(clk->p[3], kEntityClockSource);
-  CHECK_EQ(clk->p[4], 0x01);
-  CHECK_EQ(clk->p[5], 0x01);
-  // Input terminal: USB streaming, 2 channels, on the clock.
-  CHECK_EQ(it->len(), 17);
+  // Entity ids are what the control request handlers address.
   CHECK_EQ(it->p[3], kEntityInputTerminal);
-  CHECK_EQ(u16(it->p + 4), 0x0101);
-  CHECK_EQ(it->p[7], kEntityClockSource);
-  CHECK_EQ(it->p[8], kChannels);
-  // Output terminal: line out, fed by the feature unit.
-  CHECK_EQ(ot->len(), 12);
   CHECK_EQ(ot->p[3], kEntityOutputTerminal);
+  CHECK_EQ(fu->p[3], kEntityFeatureUnit);
+  CHECK(kEntityInputTerminal != kEntityFeatureUnit && kEntityFeatureUnit != kEntityOutputTerminal &&
+        kEntityInputTerminal != kEntityOutputTerminal);
+  CHECK(kEntityInputTerminal != 0 && kEntityFeatureUnit != 0 && kEntityOutputTerminal != 0);
+
+  // Input terminal: USB streaming, 2 channels, front left + right, no associated terminal.
+  CHECK_EQ(it->len(), 12);
+  CHECK_EQ(u16(it->p + 4), 0x0101);
+  CHECK_EQ(it->p[6], 0);
+  CHECK_EQ(it->p[7], kChannels);
+  CHECK_EQ(u16(it->p + 8), 0x0003);
+  // Output terminal: line out, fed by the feature unit.
+  CHECK_EQ(ot->len(), 9);
   CHECK_EQ(u16(ot->p + 4), kTerminalLineConnector);
   CHECK_EQ(ot->p[7], kEntityFeatureUnit);
-  CHECK_EQ(ot->p[8], kEntityClockSource);
-  // Feature unit: input terminal -> unit, mute + volume read/write on master and both channels.
-  CHECK_EQ(fu->len(), 6 + 3 * 4 + 0);
-  CHECK_EQ(fu->p[3], kEntityFeatureUnit);
+  // Feature unit: input terminal -> unit, 2-byte bitmaps, mute + volume on the master and both channels.
+  CHECK_EQ(fu->len(), 7 + (kChannels + 1) * 2);
   CHECK_EQ(fu->p[4], kEntityInputTerminal);
-  for (unsigned ch = 0; ch < 3; ++ch) {
-    const uint8_t* p = fu->p + 5 + 4 * ch;
-    CHECK_EQ(p[0] | (p[1] << 8) | (p[2] << 16) | (p[3] << 24), 0x0F);
-  }
+  CHECK_EQ(fu->p[5], 2);
+  for (unsigned ch = 0; ch <= kChannels; ++ch) CHECK_EQ(u16(fu->p + 6 + 2 * ch), 0x0003);
 
   // Streaming interface: alt 0 idle, alt 1 with the two endpoints; AS general links to the input terminal.
   bool sawAlt0 = false, sawAlt1 = false;
+  const Desc *asGeneral = nullptr, *fmt = nullptr, *csEp = nullptr;
   for (size_t i = start; i < all.size(); ++i) {
     const Desc& d = all[i];
     if (d.type() == kItf && itf(d).num == kItfAudioStreaming) {
       const Itf x = itf(d);
       CHECK_EQ(x.cls, 1);
       CHECK_EQ(x.sub, 2);
-      CHECK_EQ(x.proto, 0x20);
+      CHECK_EQ(x.proto, 0);
       if (x.alt == 0) { sawAlt0 = true; CHECK_EQ(x.numEps, 0); }
       if (x.alt == 1) { sawAlt1 = true; CHECK_EQ(x.numEps, 2); }
     }
-    if (d.type() == kCsItf && d.sub() == 0x01 && d.len() == 16) asGeneral = &d;
-    if (d.type() == kCsItf && d.sub() == 0x02 && d.len() == 6) fmt = &d;
+    if (d.type() == kCsItf && d.sub() == 0x01 && d.len() == 7) asGeneral = &d;
+    if (d.type() == kCsItf && d.sub() == 0x02 && d.len() == 11) fmt = &d;
+    if (d.type() == kCsEp) csEp = &d;
   }
   CHECK(sawAlt0 && sawAlt1);
-  CHECK(asGeneral && fmt);
+  CHECK(asGeneral && fmt && csEp);
   CHECK_EQ(asGeneral->p[3], kEntityInputTerminal);
-  CHECK_EQ(asGeneral->p[5], 1);                    // format type I
-  CHECK_EQ(asGeneral->p[6] | (asGeneral->p[7] << 8), 1);  // PCM
-  CHECK_EQ(asGeneral->p[10], kChannels);
-  CHECK_EQ(fmt->p[4], kSubslotBytes);
-  CHECK_EQ(fmt->p[5], kBitResolution);
+  CHECK_EQ(u16(asGeneral->p + 5), 1);  // PCM
+  CHECK_EQ(fmt->p[3], 1);              // format type I
+  CHECK_EQ(fmt->p[4], kChannels);
+  CHECK_EQ(fmt->p[5], kSubslotBytes);
+  CHECK_EQ(fmt->p[6], kBitResolution);
+  CHECK_EQ(fmt->p[7], 1);              // exactly one discrete rate
+  CHECK_EQ(u24(fmt->p + 8), 48000);
+  CHECK_EQ(u24(fmt->p + 8), kSampleRateHz);
+  // The data endpoint advertises a sampling-frequency control, so the firmware must answer it (usb_audio.cpp).
+  CHECK_EQ(csEp->len(), 7);
+  CHECK_EQ(csEp->sub(), 0x01);
+  CHECK_EQ(csEp->p[3], 0x01);
   // The audio packet fits one USB frame at +1 sample.
   CHECK_EQ(kAudioPacketBytes, (48 + 1) * 2 * 2);
 }
 
 EPDJ_TEST(audio_function_adds_exactly_the_audio_bytes) {
   const Bytes a = config(false), b = config(true);
-  CHECK_EQ(b.size() - a.size(), 143);
+  CHECK_EQ(b.size() - a.size(), 121);
   // MIDI part is byte-identical apart from the header's interface count and wTotalLength.
   for (size_t i = 9; i < a.size(); ++i) CHECK_EQ(a[i], b[i]);
   CHECK_EQ(a[4], 2);
@@ -437,14 +469,75 @@ EPDJ_TEST(string_helpers) {
   CHECK_EQ(formatProductName(0, s, 16), 0);  // no room for the NUL
   CHECK_EQ(formatProductName(0, s, 17), 16);
 
-  const uint8_t mac[6] = {0x24, 0x0A, 0xC4, 0x00, 0xBE, 0xEF};
-  CHECK_EQ(formatSerial(mac, s, sizeof s), 12);
+  CHECK_EQ(formatSerial(kMac, s, sizeof s), 12);
   CHECK(std::strcmp(s, "240AC400BEEF") == 0);
-  CHECK_EQ(formatSerial(mac, s, 12), 0);
-  // esp_tinyusb truncates string descriptors at 31 characters.
-  CHECK(std::strlen(kProductPrefix) + std::strlen(kDeckNames[0]) <= 31);
-  for (const char* name : kCableNames) CHECK(std::strlen(name) <= 31);
-  CHECK(std::strlen(kAudioName) <= 31);
+  CHECK_EQ(formatSerial(kMac, s, 12), 0);
+}
+
+EPDJ_TEST(string_table_carries_the_contracts_identity) {
+  for (uint8_t deck = 0; deck < 2; ++deck) {
+    Strings s;
+    CHECK(buildStrings(deck, kMac, &s));
+    for (const char* str : s.table) CHECK(str != nullptr);
+
+    // string 0 is the LANGID, two raw bytes (English, US)
+    CHECK_EQ(static_cast<uint8_t>(s.table[kStrLangId][0]), 0x09);
+    CHECK_EQ(static_cast<uint8_t>(s.table[kStrLangId][1]), 0x04);
+    CHECK(std::string(s.table[kStrManufacturer]) == proto::kProductName);
+    CHECK(std::string(s.table[kStrProduct]) == std::string(proto::kProductName) + " " + proto::kDeckNames[deck]);
+    CHECK(std::string(s.table[kStrSerial]) == "240AC400BEEF");
+    for (unsigned c = 0; c < kMidiCables; ++c) CHECK(std::string(s.table[kStrCable0 + c]) == proto::kCableNames[c]);
+    CHECK(std::string(s.table[kStrAudio]) == std::string(proto::kProductName) + " Audio");
+
+    // esp_tinyusb serves at most 31 characters of a string.
+    for (unsigned i = kStrManufacturer; i < kStringCount; ++i) CHECK(std::strlen(s.table[i]) <= kMaxStringChars);
+    // Strings that depend on the unit live in the struct (so they outlive the call), the rest is static text.
+    CHECK(s.table[kStrProduct] == s.product);
+    CHECK(s.table[kStrSerial] == s.serial);
+    CHECK(s.table[kStrAudio] == s.audio);
+  }
+  // Two units never share a serial number.
+  const uint8_t other[6] = {0x24, 0x0A, 0xC4, 0x00, 0xBE, 0xF0};
+  Strings a, b;
+  CHECK(buildStrings(0, kMac, &a));
+  CHECK(buildStrings(0, other, &b));
+  CHECK(std::strcmp(a.table[kStrSerial], b.table[kStrSerial]) != 0);
+
+  CHECK(!buildStrings(0, kMac, nullptr));
+  Strings s;
+  CHECK(!buildStrings(0, nullptr, &s));
   CHECK_EQ(kStrCable0 + kMidiCables, kStrAudio);
   CHECK_EQ(kStrAudio + 1, kStringCount);
+}
+
+EPDJ_TEST(every_string_index_the_descriptors_use_is_in_the_table) {
+  Strings s;
+  CHECK(buildStrings(0, kMac, &s));
+  for (bool audio : {false, true}) {
+    std::vector<uint8_t> used;
+    uint8_t dev[kDeviceDescriptorBytes];
+    CHECK_EQ(buildDeviceDescriptor(audio, dev, sizeof dev), kDeviceDescriptorBytes);
+    used.push_back(dev[14]);
+    used.push_back(dev[15]);
+    used.push_back(dev[16]);
+    const Bytes c = config(audio);
+    const std::vector<Desc> all = walk(c);
+    for (const Desc& d : all) {
+      if (d.type() == kItf) used.push_back(d.p[8]);
+      if (d.type() == kCsItf && d.sub() == 0x02 && d.len() == 6) used.push_back(d.p[5]);   // MIDI IN jack
+      if (d.type() == kCsItf && d.sub() == 0x03 && d.len() == 9) used.push_back(d.p[8]);   // MIDI OUT jack
+    }
+    unsigned nonZero = 0;
+    for (uint8_t idx : used) {
+      if (idx == 0) continue;  // "no string"
+      ++nonZero;
+      CHECK(idx < kStringCount);
+      CHECK(s.table[idx] != nullptr && s.table[idx][0] != '\0');
+    }
+    CHECK(nonZero > 0);
+    // The audio function's name is used exactly when the function exists.
+    bool usesAudioName = false;
+    for (uint8_t idx : used) usesAudioName = usesAudioName || idx == kStrAudio;
+    CHECK_EQ(usesAudioName, audio);
+  }
 }

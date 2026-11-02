@@ -62,7 +62,7 @@ menu "EP-DJ3000"
     menu "USB"
 
         config EPDJ_USB_AUDIO
-            bool "Add a UAC2 audio output function when a DAC is present"
+            bool "Add a USB Audio 1.0 output function when a DAC is present"
             default y
             help
                 Without it the unit is MIDI-only whatever the DAC strap says. The function exists only if
@@ -115,10 +115,15 @@ menu "EP-DJ3000"
             default 1
 
         config EPDJ_LINK_GROUP
-            int "Rig id: units with different ids ignore each other"
+            int "Build-time rig id (default for the linkGroup config key)"
             depends on EPDJ_LINK
             range 0 255
             default 0
+            help
+                Units with different rig ids ignore each other. This is only the fallback: the linkGroup
+                config key (SysEx, live, saved with SAVE_CONFIG) wins whenever it is non-zero, so a value set
+                from the app overrides this one. Because 0 means "no override", a unit built with a non-zero
+                value here cannot be put back on group 0 over SysEx (docs/LINK.md section 11).
 
     endmenu
 

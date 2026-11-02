@@ -26,8 +26,16 @@ struct Runtime {
   hal::TrsMidi* trs = nullptr;    // null when compiled out
   hal::StatusLed* led = nullptr;  // null when the LED failed to initialise
   bool radioOn = false;
+  uint8_t linkGroupDefault = 0;  // Engine::Identity::linkGroup: the build-time rig id, used while the config key is 0
   bool dacPresent = false;
 };
+
+// The radio group the engine uses right now: the linkGroup config key when non-zero, else the build default
+// (docs/LINK.md section 11). Same rule as the engine's, for logging only.
+inline uint8_t effectiveLinkGroup(const Runtime& rt) {
+  const int32_t g = rt.cfg->get(proto::ConfigKey::LinkGroup);
+  return static_cast<uint8_t>(g != 0 ? g : rt.linkGroupDefault);
+}
 
 // What the engine task last saw and how well it keeps time. Written by the engine task only; the diagnostics
 // task reads it without locking, so a log line can show a value from one iteration and another from the next.

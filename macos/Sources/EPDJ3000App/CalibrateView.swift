@@ -2,6 +2,7 @@
 // this shows their phase, the live readings, and moves the result to the unit.
 
 import EPDJ3000Kit
+import EPDJ3000KitPure
 import EPDJ3000Protocol
 import SwiftUI
 

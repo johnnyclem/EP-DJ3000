@@ -363,16 +363,26 @@ EPDJ_TEST(engine_master_platter_tap_plays_and_pauses) {
   }
   CHECK(d->engine.transport() == proto::TransportState::Paused);
 
-  // Host feedback: "deck is playing" (note 39, velocity > 0) starts the master; the release changes
-  // nothing, so a pulse echoed back by a mapping cannot pause it again.
+  // The play note is feedback only, in every mode (PROTOCOL 2.6): a host mirroring its play state to the
+  // unit must not start or stop the clock. Only the transport CC commands a master.
   mark = d->log.size();
   d->hostMsg(b({0x90, 39, 127}));
-  CHECK(d->engine.transport() == proto::TransportState::Playing);
   d->hostMsg(b({0x90, 39, 0}));
   d->hostMsg(b({0x80, 39, 0}));
   d->hostMsg(b({0x90, 39, 127}));
+  d->run(50);
+  CHECK(d->engine.transport() == proto::TransportState::Paused);
+  CHECK(d->engine.led().transport == proto::TransportState::Paused);  // the master's own state, not the host's claim
+  CHECK_BYTES(transportBytes(d->log, mark), Bytes());
+  hostTransport(*d, 1);
+  CHECK_BYTES(transportBytes(d->log, mark), b({0xFB}));
   CHECK(d->engine.transport() == proto::TransportState::Playing);
-  CHECK_BYTES(transportBytes(d->log, mark), b({0xFB}));  // one Continue, then idempotent
+  mark = d->log.size();
+  d->hostMsg(b({0x90, 39, 0}));  // "stopped playing" does not pause it either
+  d->hostMsg(b({0x80, 39, 0}));
+  d->run(50);
+  CHECK(d->engine.transport() == proto::TransportState::Playing);
+  CHECK_BYTES(transportBytes(d->log, mark), Bytes());
 }
 
 // ---- tempo ---------------------------------------------------------------------------------------

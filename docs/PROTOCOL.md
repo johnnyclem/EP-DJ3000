@@ -18,10 +18,12 @@ The unit is a USB **composite** device (full speed, ESP32-S3 native USB):
 | Function | Class | When present |
 |---|---|---|
 | MIDI | USB-MIDI 1.0 streaming, **3 cables** each way | always |
-| Audio out | USB Audio Class 2.0, stereo, 48 kHz, 16-bit, asynchronous with feedback endpoint | only when a DAC is present (`dacMode` AUTO finds one, or ON) |
+| Audio out | USB Audio Class 1.0, stereo, 48 kHz, 16-bit, asynchronous with a feedback endpoint (3 bytes, 10.14 samples per frame), mute and volume | only when a DAC is present (`dacMode` AUTO finds one, or ON) |
 
-Class-compliant means no driver on macOS, iPadOS, Linux, or Windows 10+ (Windows
-needs a vendor ASIO driver for low-latency audio; MIDI works natively).
+Class-compliant means no driver on macOS, iPadOS, Linux or Windows (Windows
+needs a vendor ASIO driver for low-latency audio; MIDI works natively). Audio is
+UAC1 rather than UAC2 because the ESP32-S3 is a full-speed device: see
+[`ARCHITECTURE.md`](ARCHITECTURE.md) decision 5.
 Descriptor changes need re-enumeration, so `dacMode` takes effect after reboot.
 Product string: `EP-DJ3000 Deck A` / `EP-DJ3000 Deck B` (from `deckId`); the serial
 number string is derived from the chip MAC so two units never collide.

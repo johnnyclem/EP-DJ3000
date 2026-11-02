@@ -3,6 +3,7 @@
 #include <atomic>
 #include <cstring>
 
+#include "epdj/config_server.h"
 #include "epdj/usb_desc.h"
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -27,13 +28,17 @@ static_assert(usb::kAudioPacketBytes == CFG_TUD_AUDIO_FUNC_1_EP_OUT_SZ_MAX,
 #endif
 static_assert(usb::kStringCount == 8, "esp_tinyusb keeps exactly 8 string descriptors");
 
+// A GET_CONFIG dump (PROTOCOL.md section 3: one CONFIG frame per key, then the ACK) must fit the MIDI TX FIFO in one
+// go, so the engine task never has to hold an event back for it. Every frame is its own SysEx message, and a
+// message of n bytes is ceil(n / 3) four-byte USB-MIDI packets: 33 x 5 + 4 = 169 packets = 676 bytes.
+constexpr size_t kDumpPackets = proto::kConfigCount * ((kConfigFrameBytes + 2) / 3) + (kAckFrameBytes + 2) / 3;
+static_assert(CFG_TUD_MIDI_TX_BUFSIZE >= kDumpPackets * 4,
+              "CFG_TUD_MIDI_TX_BUFSIZE (epdj_tusb_config.h) cannot hold a full GET_CONFIG dump");
+
 // Descriptors and strings must outlive the stack.
 alignas(4) uint8_t g_device[usb::kDeviceDescriptorBytes];
 alignas(4) uint8_t g_config[usb::kMaxConfigDescriptorBytes];
-char g_product[32];
-char g_serial[13];
-const char kLangId[2] = {0x09, 0x04};  // English (US); esp_tinyusb reads these two bytes as string 0
-const char* g_strings[usb::kStringCount];
+usb::Strings g_strings;
 
 constexpr size_t kRxDepth = 128;
 QueueHandle_t g_rxQ = nullptr;
@@ -84,15 +89,10 @@ bool start(const Params& p) {
     ESP_LOGE(TAG, "descriptor build failed");
     return false;
   }
-  usb::formatProductName(p.deck, g_product, sizeof g_product);
-  usb::formatSerial(p.mac, g_serial, sizeof g_serial);
-
-  g_strings[usb::kStrLangId] = kLangId;
-  g_strings[usb::kStrManufacturer] = usb::kManufacturer;
-  g_strings[usb::kStrProduct] = g_product;
-  g_strings[usb::kStrSerial] = g_serial;
-  for (unsigned c = 0; c < usb::kMidiCables; ++c) g_strings[usb::kStrCable0 + c] = usb::kCableNames[c];
-  g_strings[usb::kStrAudio] = usb::kAudioName;
+  if (!usb::buildStrings(p.deck, p.mac, &g_strings)) {
+    ESP_LOGE(TAG, "string descriptors do not fit");
+    return false;
+  }
 
   g_rxQ = xQueueCreate(kRxDepth, sizeof(RxPacket));
   if (g_rxQ == nullptr) return false;
@@ -107,7 +107,7 @@ bool start(const Params& p) {
   cfg.task.xCoreID = 1;
   cfg.descriptor.device = reinterpret_cast<const tusb_desc_device_t*>(g_device);
   cfg.descriptor.qualifier = nullptr;  // full speed only
-  cfg.descriptor.string = g_strings;
+  cfg.descriptor.string = g_strings.table;
   cfg.descriptor.string_count = usb::kStringCount;
   cfg.descriptor.full_speed_config = g_config;
   cfg.descriptor.high_speed_config = nullptr;
@@ -120,8 +120,9 @@ bool start(const Params& p) {
     ESP_LOGE(TAG, "tinyusb_driver_install: %s", esp_err_to_name(err));
     return false;
   }
-  ESP_LOGI(TAG, "\"%s\" serial %s, config %u bytes, VID:PID %04X:%04X, audio %s", g_product, g_serial,
-           static_cast<unsigned>(cfgLen), usb::kVendorId, usb::kProductId, g_audioEnabled ? "UAC2 on" : "off");
+  ESP_LOGI(TAG, "\"%s\" serial %s, config %u bytes, VID:PID %04X:%04X, audio %s", g_strings.product, g_strings.serial,
+           static_cast<unsigned>(cfgLen), proto::kUsbVendorId, proto::kUsbProductId,
+           g_audioEnabled ? "UAC1 on" : "off");
   return true;
 }
 

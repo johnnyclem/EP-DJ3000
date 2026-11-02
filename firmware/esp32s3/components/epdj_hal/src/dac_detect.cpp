@@ -26,7 +26,10 @@ DacDetection detectDac(I2cBus* bus) {
   cfg.pull_up_en = GPIO_PULLUP_ENABLE;
   gpio_config(&cfg);
   esp_rom_delay_us(500);  // let the pull-up settle through any filter capacitor
-  d.strap = gpio_get_level(static_cast<gpio_num_t>(pins::kDacStrap)) == 0;
+  for (uint8_t i = 0; i < DacDetection::kStrapSamples; ++i) {
+    if (i != 0) esp_rom_delay_us(DacDetection::kStrapSpacingUs);
+    if (gpio_get_level(static_cast<gpio_num_t>(pins::kDacStrap)) == 0) ++d.strapLow;
+  }
 #if CONFIG_EPDJ_DAC_PROBE_I2C
   if (bus != nullptr && bus->ok()) {
     for (uint8_t a : kCodecAddrs) {

@@ -43,7 +43,7 @@ CDJs into a DJ mixer. The decks' MIDI drives the software players.
 | `protocol/` | `epdj3000.json` (contract), `test-vectors.json` (byte-exact oracle) |
 | `tools/` | `gen_protocol.py`, `gen_vectors.py` (+ `--check` drift detectors) |
 | `firmware/core/` | Portable C++17 firmware logic. No ESP-IDF. Host unit tests (`ctest`). |
-| `firmware/esp32s3/` | ESP-IDF project: HAL, TinyUSB (MIDI + UAC2), I2S, ESP-NOW, NVS, tasks |
+| `firmware/esp32s3/` | ESP-IDF project: HAL, TinyUSB (MIDI + USB Audio 1.0), I2S, ESP-NOW, NVS, tasks |
 | `macos/` | SwiftPM: pure-Swift libraries (build/test on Linux too) + CoreMIDI/AVAudio/SwiftUI app |
 | `drivers/` | DJ-software mappings (Mixxx, VirtualDJ, djay Pro, rekordbox) |
 | `hardware/` | Wiring, BOM, conductive-PLA platter guidance |
@@ -60,7 +60,7 @@ CDJs into a DJ mixer. The decks' MIDI drives the software players.
    If you intended only one of these, delete the other later; the abstraction is ~one class.
 3. **Slide pot** -> 12-bit ADC (ADC1 only; ADC2 is unusable while the radio is on). 14-bit MIDI out. Role is configurable (crossfader default).
 4. **DAC**: I2S, PCM5102A-class (no I2C, no MCLK) as the reference part. "When a suitable DAC is available" = `dacMode` AUTO probes known I2C codec addresses and a DAC-present strap pin; otherwise MIDI-only. Descriptors can't change after enumeration, so a mode change reboots.
-5. **USB audio = UAC2**, because TinyUSB only implements UAC2 for devices. macOS, iPadOS and Linux support it natively; Windows 10+ does for basic output. Async + feedback endpoint (drift between the USB 1 kHz clock and the I2S clock is the classic failure mode of DIY USB DACs; it is handled explicitly).
+5. **USB audio = USB Audio Class 1.0** (stereo, 48 kHz, 16-bit, asynchronous, with a feedback endpoint and a mute + volume feature unit). The ESP32-S3 is a full-speed-only device, and at full speed UAC1 is the class TinyUSB itself uses: its full-speed speaker-with-feedback example is UAC1 (UAC2 only on high-speed devices), and its UAC2 driver sends the feedback value as four bytes 16.16 whatever the bus speed, whereas a full-speed host expects three bytes 10.14, which is what its UAC1 driver sends. (The first draft chose UAC2 because the installed TinyUSB 0.21 was assumed to have no UAC1 device driver; it has both, with `TUD_AUDIO10_*` descriptor macros.) macOS, iPadOS, Linux and Windows all bind an in-box UAC1 driver, so there is nothing to install; **none of that was tested on a host here** (`BRINGUP.md`). Async + feedback endpoint: drift between the USB 1 kHz clock and the I2S clock is the classic failure mode of DIY USB DACs, so the device measures its ring fill, tells the host its real consumption rate, and slips single samples in software for hosts that ignore the feedback.
 6. **MIDI**: Deck A = ch 1, Deck B = ch 2. Jog is relative CC 22 at 1024 ticks/rev; touch note; fader/knob 14-bit. Compatible in spirit with the earlier Field Jog map (CC 22/23/24, notes 36/37). See `PROTOCOL.md`.
 7. **Link**: ESP-NOW between decks (TE's own vocabulary is USB-C MIDI, 3.5 mm TRS MIDI and BLE MIDI; we use TRS for external gear and radio for deck-to-deck). BLE-MIDI is **not** in v1: its connection interval adds 7-15 ms of jitter, which is bad for scratching. It's a fine roadmap item for transport-only control.
 8. **TRS MIDI** is **Type A** (MIDI Association spec for 3.5 mm). Verify against your EP-133 before wiring; if its jack is Type B, swap tip/ring (one-line change in `hardware/`).
@@ -93,8 +93,8 @@ Mechanically, the shell already has Technic-pin holes at the EP spacing so decks
 |---|---|---|
 | Wire contract | generator `--check`, C++/Swift/JS compile, hand-checked vectors | - |
 | Firmware core logic | host unit tests incl. shared vectors, simulation of sensors, sanitizers | real sensor behavior on printed conductive PLA |
-| ESP-IDF layer | **compiles and links** for ESP32-S3 via PlatformIO (real IDF + TinyUSB headers) | running on a chip; USB enumeration; I2S audio quality; ESP-NOW latency |
-| USB audio | descriptor and feedback-controller logic unit-tested | enumeration on macOS; glitch-free playback |
+| ESP-IDF layer | **compiles and links** for ESP32-S3 via PlatformIO and `idf.py` (ESP-IDF 6.1.0, esp_tinyusb 3.0.0 = TinyUSB 0.21.0; real headers) | running on a chip; USB enumeration; I2S audio quality; ESP-NOW latency |
+| USB audio | descriptor unit-tested; bytes identical to TinyUSB's own `TUD_*` macros; TinyUSB's real audio driver run on the host against the descriptors and the firmware's callbacks (feedback bytes, endpoints, mute/volume); feedback-controller logic unit-tested | enumeration on macOS, Windows, Linux, iPadOS; glitch-free playback; how each host treats the feedback endpoint |
 | Swift libraries | `swift test` on Linux | - |
 | macOS app (CoreMIDI/AVAudio/SwiftUI) | reviewed against Apple API signatures; pure logic tested | **not compiled** (no Xcode here) |
 | DJ mappings | Mixxx script run against a mock engine; XML well-formedness; numbers cross-checked to the contract | import into the real apps (VirtualDJ, djay, rekordbox) |

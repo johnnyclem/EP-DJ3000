@@ -60,12 +60,13 @@ void statsLines(const Runtime& rt) {
   if (rt.radioOn) {
     const radio::Stats rs = radio::stats();
     const link::Link& lk = rt.engine->link();
-    ESP_LOGI(TAG, "link: %s, peers %u, radio rx %lu (dropped %lu) tx %lu (queue full %lu, failed %lu), core rx ok %lu corrupt %lu",
+    ESP_LOGI(TAG, "link: group %u %s, peers %u, radio rx %lu (dropped %lu) tx %lu (queue full %lu, failed %lu), core rx ok %lu corrupt %lu other-group %lu",
+             static_cast<unsigned>(effectiveLinkGroup(rt)),
              lk.linkUp() ? (lk.bridging() ? "up, bridging" : "up") : "searching", static_cast<unsigned>(lk.peers().count()),
              static_cast<unsigned long>(rs.rxPackets), static_cast<unsigned long>(rs.rxDropped),
              static_cast<unsigned long>(rs.txPackets), static_cast<unsigned long>(rs.txQueueFull),
              static_cast<unsigned long>(rs.txFailed), static_cast<unsigned long>(lk.stats().rxPackets),
-             static_cast<unsigned long>(lk.stats().rxCorrupt));
+             static_cast<unsigned long>(lk.stats().rxCorrupt), static_cast<unsigned long>(lk.stats().rxForeign));
   }
   if (rt.trs != nullptr) {
     ESP_LOGI(TAG, "trs: rx overflows %lu, tx dropped %lu", static_cast<unsigned long>(rt.trs->rxOverflows()),

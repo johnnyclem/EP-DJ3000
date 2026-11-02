@@ -157,6 +157,45 @@ final class DeckModelTests: XCTestCase {
         XCTAssertEqual(d.status.playheadFrames, 0)
     }
 
+    func testATapOnASyncMasterUnitIsOneToggleNotTwo() {
+        let d = DeckRig()
+        // The unit's transport and its platter-tap pulse both report the same tap (docs/PROTOCOL.md section 2.3).
+        d.send(.start)
+        d.send(d.note(Proto.Note.play, true))
+        d.run(0.012)
+        d.send(d.note(Proto.Note.play, false))
+        d.run(0.3)
+        XCTAssertEqual(d.status.transport, .playing, "Start then pulse is one tap: playing, not toggled back")
+
+        d.send(.stop, .songPosition(beats: 3))  // second tap: pause at the announced beat
+        d.send(d.note(Proto.Note.play, true))
+        d.run(0.012)
+        d.send(d.note(Proto.Note.play, false))
+        d.run(0.1)
+        XCTAssertEqual(d.status.transport, .paused)
+
+        d.send(.continue)  // third tap
+        d.send(d.note(Proto.Note.play, true))
+        d.run(0.012)
+        d.send(d.note(Proto.Note.play, false))
+        d.run(0.1)
+        XCTAssertEqual(d.status.transport, .playing)
+    }
+
+    func testAPulseWellAfterATransportMessageIsANewTap() {
+        let d = DeckRig()
+        d.send(.start)
+        d.run(DeckModel.pulseAfterTransportWindow * 2)
+        d.send(d.note(Proto.Note.play, true))
+        d.run(0.1)
+        XCTAssertEqual(d.status.transport, .paused)
+
+        d.send(d.cc(Proto.CC.transport, 1))  // the transport CC counts as a transport message too
+        d.send(d.note(Proto.Note.play, true))
+        d.run(0.1)
+        XCTAssertEqual(d.status.transport, .playing)
+    }
+
     // MARK: platter
 
     func testTouchHoldsTheTrackAndReleaseLetsItGo() {
@@ -260,12 +299,25 @@ final class DeckModelTests: XCTestCase {
         XCTAssertEqual(d.run(0.05).map { abs($0) }.max()!, 0.8, accuracy: 0.01)
     }
 
-    func testChannelVolumeRoleIsALinearGain() {
+    func testChannelVolumeIsTheDefaultRoleAndAlwaysALinearGain() {
         let d = DeckRig()
-        d.set14(.channelVolume, 8192)
         d.tap()
         d.run(0.3)
-        XCTAssertEqual(d.run(0.05).map { abs($0) }.max()!, 0.4, accuracy: 0.01)
+        XCTAssertEqual(d.run(0.05).map { abs($0) }.max()!, 0.8, accuracy: 0.01, "open until the pot first moves")
+        XCTAssertNil(d.deck.controller.faderRole)
+
+        // CC 7 / 39 is what a unit sends with its default faderRole.
+        for (value, expected) in [(UInt16(0), Float(0)), (4096, 0.2), (8192, 0.4), (16383, 0.8)] as [(UInt16, Float)] {
+            d.set14(.channelVolume, value)
+            d.run(0.05)
+            XCTAssertEqual(d.run(0.05).map { abs($0) }.max()!, expected, accuracy: 0.01, "pot at \(value)")
+        }
+        XCTAssertEqual(d.deck.controller.faderRole, .channelVolume)
+
+        d.deck.cutCurve = .sharpCut  // the crossfader knee must not leak into channel volume (25 % would be fully open)
+        d.set14(.channelVolume, 4096)
+        d.run(0.05)
+        XCTAssertEqual(d.run(0.05).map { abs($0) }.max()!, 0.2, accuracy: 0.01)
     }
 
     func testPitchRoleSetsTheTempoWithinPlusMinusEightPercent() {
@@ -291,11 +343,13 @@ final class DeckModelTests: XCTestCase {
     }
 
     func testSwitchingFaderRoleAwayFromPitchResetsTheTempo() {
-        let d = DeckRig()
-        d.set14(.pitch, 16383)
-        XCTAssertEqual(d.deck.tempoRatio, 1.08, accuracy: 1e-9)
-        d.set14(.crossfader, 16383)
-        XCTAssertEqual(d.deck.tempoRatio, 1.0)
+        for role in [Control14.channelVolume, .crossfader] {
+            let d = DeckRig()
+            d.set14(.pitch, 16383)
+            XCTAssertEqual(d.deck.tempoRatio, 1.08, accuracy: 1e-9)
+            d.set14(role, 16383)
+            XCTAssertEqual(d.deck.tempoRatio, 1.0, "\(role)")
+        }
     }
 
     func testKnobSetsTheOutputVolume() {
@@ -411,6 +465,35 @@ final class DeckModelTests: XCTestCase {
                                             .noteOn(channel: 1, note: 36, velocity: 127)])
     }
 
+    func testFeedbackIsNeverHeldBackWhateverTheUnitIsDoing() {
+        // The model has no notion of the unit's mode, and the unit takes the play note as LED feedback only (section 2.6),
+        // so a unit in SYNC_MASTER (clock, Start/Stop, tempo, tap tempo) gets the same LED updates as any other.
+        let d = DeckRig()
+        d.run(0.01)
+        XCTAssertEqual(d.deck.feedback().count, 2)
+
+        d.send(.clock, .clock, .start)
+        d.deck.handle(MidiEvent.cc14(.bpm, channel: d.ch, value: 1285), at: d.time)
+        d.send(d.note(Proto.Note.tap, true), d.note(Proto.Note.tap, false))
+        d.run(0.1)
+        XCTAssertEqual(d.status.transport, .playing)
+        XCTAssertEqual(d.deck.feedback(), [.noteOn(channel: 0, note: Proto.Note.play, velocity: 127),
+                                           .noteOff(channel: 0, note: Proto.Note.cue, velocity: 0)])
+
+        d.send(.stop, .songPosition(beats: 0))
+        d.run(0.1)
+        let back = d.deck.feedback()
+        XCTAssertEqual(back, [.noteOff(channel: 0, note: Proto.Note.play, velocity: 0),
+                              .noteOn(channel: 0, note: Proto.Note.cue, velocity: 127)])
+        for event in back {
+            // LEDs only: never a transport CC or a tempo, which are the only things that command a master.
+            switch event {
+            case let .noteOn(_, note, _), let .noteOff(_, note, _): XCTAssertTrue([Proto.Note.play, Proto.Note.cue].contains(note))
+            default: XCTFail("feedback must be LED notes only, got \(event)")
+            }
+        }
+    }
+
     func testPreviewLightsTheCueLedAwayFromTheCuePoint() {
         let d = DeckRig()
         d.deck.player.send(.seek(seconds: 1))
@@ -429,11 +512,11 @@ final class DeckModelTests: XCTestCase {
 
     // MARK: a recorded session, as bytes off the wire
 
-    /// What a unit on channel 1 sends for: open the fader, tap to play, let it run, touch the platter, scratch
+    /// What a unit on channel 1 sends for: open the fader (default role), tap to play, let it run, touch the platter, scratch
     /// forwards and back, let go, hold REV, then CUE. Running status is used the way a real device does.
     private static let session: [(t: Double, bytes: [UInt8])] = {
         var s = [(Double, [UInt8])]()
-        s.append((0.000, [0xB0, 23, 127, 55, 127]))                // crossfader 16383 (MSB, LSB in running status)
+        s.append((0.000, [0xB0, 7, 127, 39, 127]))                 // channel volume 16383, the default fader role (MSB, LSB in running status)
         s.append((0.010, [0xB0, 24, 0, 56, 0]))                    // knob 0 -- then
         s.append((0.020, [0xB0, 24, 127, 56, 127]))                // knob up to full
         s.append((0.100, [0x90, 39, 127]))                         // platter tap: play pulse
@@ -489,7 +572,7 @@ final class DeckModelTests: XCTestCase {
 
         XCTAssertEqual(next, session.count, "every recorded message was replayed")
         XCTAssertTrue(allFinite(out))
-        XCTAssertEqual(d.deck.controller.faderRole, .crossfader)
+        XCTAssertEqual(d.deck.controller.faderRole, .channelVolume)
         XCTAssertEqual(d.deck.controller.knob, 16383)
 
         let playing = checkpoints["playing"]!

@@ -43,9 +43,15 @@ constexpr uint16_t kToneMinHz = 20, kToneMaxHz = 20000;
 constexpr uint8_t kToneMaxAttenDb = 96;
 }  // namespace
 
-void ConfigServer::ack(uint8_t cmd) {
+bool ConfigServer::reply(const uint8_t* frame, size_t len) {
+  if (len != 0 && sink_.send(frame, len)) return true;
+  ++repliesDropped_;  // the sink refused it (or the encoder could not build it): counted, never silent
+  return false;
+}
+
+bool ConfigServer::ack(uint8_t cmd) {
   uint8_t buf[syx::kMaxFrameBytes];
-  reply(buf, syx::encodeAck(replyDeck_, cmd, buf, sizeof(buf)));
+  return reply(buf, syx::encodeAck(replyDeck_, cmd, buf, sizeof(buf)));
 }
 
 void ConfigServer::nak(uint8_t cmd, Err err) {
@@ -53,10 +59,10 @@ void ConfigServer::nak(uint8_t cmd, Err err) {
   reply(buf, syx::encodeNak(replyDeck_, cmd, err, buf, sizeof(buf)));
 }
 
-void ConfigServer::sendConfigValue(uint8_t key) {
+bool ConfigServer::sendConfigValue(uint8_t key) {
   uint8_t buf[syx::kMaxFrameBytes];
-  reply(buf, syx::encodeConfigValue(replyDeck_, key, config_.get(static_cast<proto::ConfigKey>(key)), buf,
-                                    sizeof(buf)));
+  return reply(buf, syx::encodeConfigValue(replyDeck_, key, config_.get(static_cast<proto::ConfigKey>(key)), buf,
+                                           sizeof(buf)));
 }
 
 ConfigServer::Result ConfigServer::handle(const uint8_t* msg, size_t len, uint64_t nowUs) {
@@ -121,7 +127,11 @@ void ConfigServer::getConfig(const syx::Frame& f) {
   EPDJ_REQUIRE_LEN(f, 1u);
   const uint8_t key = f.payload[0];
   if (key == kAllKeys) {
-    for (size_t i = 0; i < Config::kCount; ++i) sendConfigValue(static_cast<uint8_t>(i));
+    // The ACK closes the dump, so it is only sent when every key made it into the sink.
+    for (size_t i = 0; i < Config::kCount; ++i) {
+      if (!sendConfigValue(static_cast<uint8_t>(i))) return;
+    }
+    ack(f.cmd);
   } else if (key < Config::kCount) {
     sendConfigValue(key);
   } else {
@@ -132,6 +142,10 @@ void ConfigServer::getConfig(const syx::Frame& f) {
 void ConfigServer::setConfig(const syx::Frame& f) {
   EPDJ_REQUIRE_LEN(f, 5u);
   const uint8_t key = f.payload[0];
+  if (key == static_cast<uint8_t>(proto::ConfigKey::DeckId)) {  // SET_DECK is the only way: it persists and restarts
+    nak(f.cmd, Err::NotSupported);
+    return;
+  }
   switch (config_.set(static_cast<proto::ConfigKey>(key), syx::readI32le(f.payload + 1))) {
     case ConfigStatus::Ok: ack(f.cmd); break;
     case ConfigStatus::BadKey: nak(f.cmd, Err::BadKey); break;
@@ -150,7 +164,11 @@ void ConfigServer::saveConfig(const syx::Frame& f) {
 
 void ConfigServer::loadDefaults(const syx::Frame& f) {
   EPDJ_REQUIRE_LEN(f, 0u);
+  // The deck is the unit's identity (USB name, radio id, the address it answers to) and changes only
+  // through SET_DECK, which restarts the unit.
+  const int32_t deck = config_.get(proto::ConfigKey::DeckId);
   config_.setDefaults();
+  config_.set(proto::ConfigKey::DeckId, deck);
   ack(f.cmd);
 }
 

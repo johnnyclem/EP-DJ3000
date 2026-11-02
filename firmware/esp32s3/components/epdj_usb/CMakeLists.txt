@@ -1,4 +1,4 @@
-# USB device: composite MIDI (+ UAC2 audio when a DAC is present), on esp_tinyusb with our own descriptors.
+# USB device: composite MIDI (+ USB Audio 1.0 when a DAC is present), on esp_tinyusb with our own descriptors.
 idf_component_register(
     SRCS "src/usb_device.cpp" "src/usb_audio.cpp"
     INCLUDE_DIRS "include"
@@ -6,7 +6,7 @@ idf_component_register(
     PRIV_REQUIRES epdj_audio espressif__esp_tinyusb esp_timer freertos log)
 target_compile_options(${COMPONENT_LIB} PRIVATE -Wall -Wextra -Wshadow)
 
-# esp_tinyusb's own tusb_config.h has no UAC support, and the TinyUSB sources are compiled from that header.
+# esp_tinyusb's own tusb_config.h has no audio class, and the TinyUSB sources are compiled from that header.
 # TinyUSB reads CFG_TUSB_CONFIG_FILE instead of tusb_config.h when it is defined, so point every translation
 # unit that includes tusb.h (the esp_tinyusb library and everything linking it) at tusb_override/epdj_tusb_config.h,
 # which includes the original and adds the audio class and bigger MIDI FIFOs.

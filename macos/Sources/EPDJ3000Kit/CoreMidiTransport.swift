@@ -1,6 +1,7 @@
 // MidiTransport over one USB-MIDI cable (the "Deck" cable) of one unit, so DeviceClient works unchanged.
 
 import CoreMIDI
+import EPDJ3000KitPure
 import EPDJ3000Protocol
 import Foundation
 

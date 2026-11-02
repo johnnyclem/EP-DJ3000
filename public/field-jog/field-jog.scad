@@ -37,8 +37,8 @@ shaft_hole = 5.6;     // ledge hole, clears an M3 shank, supports the bearing ra
 
 /* [Fader] */
 fader_slot_w = 8.0;
-fader_slot_l = 64;
-fader_y0 = 26;
+fader_slot_l = 40;
+fader_y0 = 10;
 fader_stem_w = 7.2;
 fader_stem_l = 13.0;
 fader_stem_below = 3.2;
@@ -102,28 +102,26 @@ encoder_pad_top = 6.2;
 encoder_pad_w = 26;
 encoder_pad_d = 20;
 
-pico_w = 21;          // board width
-pico_l = 51;
-pico_x0 = W / 2 - pico_w / 2;
-pico_y0 = H - wall - pico_l - 1.2;
+// ESP32-Audio-Kit V2.2. PCB is 82 x 73 (±0.2). The 73 mm side goes across
+// the deck. 82 mm across an 88 mm shell leaves no room once the pin ribs exist.
+// Sits below the encoder pad (pad starts at y = 138) and above the short fader.
+kit_w = 73;
+kit_l = 82;
+kit_x0 = wall + ((W - 2 * wall) - kit_w) / 2;
+kit_y0 = 54;
 
-// Transport, lower left, clear of the scratch fader. Round caps, no wells.
-play_x = 17;
-play_y = 36;
-cue_x = 17;
-cue_y = 60;
-play_d = 16;
+// Cue and play stay in the fader strip, left of the cap. The audio kit's
+// own keys are the pads, so there are no extra holes over that PCB.
+play_x = 18;
+play_y = 20;
+cue_x = 18;
+cue_y = 38;
+play_d = 15;
 play_h = 7.0;
-// IN / OUT sit above CUE, still left of the fader. REV stays small, lower right.
-in_x = 17;
-in_y = 86;
-out_x = 17;
-out_y = 102;
 loop_d = 10;
 loop_h = 5.2;
-led_d = 3.1;
-rev_x = 71;
-rev_y = 48;
+rev_x = 70;
+rev_y = 28;
 stem_past = 2.4;      // how far the stem pokes through the skin onto a tactile
 
 hall_x = fader_cx + 13;
@@ -221,13 +219,14 @@ module bottom() {
                        platter_cy - encoder_pad_d / 2,
                        floor_t - eps])
                 cube([encoder_pad_w, encoder_pad_d, encoder_pad_top - floor_t + eps]);
-            // Pico / Pro Micro side rails. USB end faces the top wall.
-            translate([pico_x0 - 2.4, pico_y0, floor_t])
-                cube([1.6, pico_l, 2.4]);
-            translate([pico_x0 + pico_w + 0.6, pico_y0, floor_t])
-                cube([1.6, pico_l, 2.4]);
-            translate([pico_x0 - 2.4, pico_y0 - 1.4, floor_t])
-                cube([pico_w + 4.6, 1.4, 2.4]);
+            // Audio-kit locating lip. The opening is 0.6 mm over the PCB.
+            // Ribs at y = 16, 25, 48 stay below the board.
+            difference() {
+                translate([kit_x0 - 1.3, kit_y0 - 1.3, floor_t])
+                    cube([kit_w + 2.6, kit_l + 2.6, 0.8]);
+                translate([kit_x0 - 0.3, kit_y0 - 0.3, floor_t - eps])
+                    cube([kit_w + 0.6, kit_l + 0.6, 1.2]);
+            }
             // Hall posts. Magnet in the fader lock passes these.
             translate([hall_x, fader_y0 + 12, floor_t - eps])
                 cylinder(d = hall_d, h = hall_z_top - floor_t + eps, $fn = 24);
@@ -320,13 +319,9 @@ module top_plate() {
             y_round_slot(fader_slot_w, fader_y0, fader_y0 + fader_slot_l, 0, skin + 2 * eps);
 
         // Stem holes only. No square wells: a shallow pocket tears the top skin.
-        for (p = [[play_x, play_y], [cue_x, cue_y], [in_x, in_y], [out_x, out_y], [rev_x, rev_y]])
+        for (p = [[play_x, play_y], [cue_x, cue_y], [rev_x, rev_y]])
             translate([p[0], p[1], tray_h - eps])
                 cylinder(d = 5.2, h = skin + 2 * eps, $fn = 28);
-        // 3 mm LED next to each loop button.
-        for (p = [[in_x + 11, in_y], [out_x + 11, out_y]])
-            translate([p[0], p[1], tray_h - eps])
-                cylinder(d = led_d, h = skin + 2 * eps, $fn = 20);
 
         // pot / knob bushing
         translate([knob_x, knob_y, tray_h - eps])
@@ -541,14 +536,8 @@ module assembly_solids() {
     color([0.12, 0.12, 0.13]) {
         cap_placed(play_x, play_y, play_d, play_h);
         cap_placed(cue_x, cue_y, play_d, play_h);
-        cap_placed(in_x, in_y, loop_d, loop_h);
-        cap_placed(out_x, out_y, loop_d, loop_h);
         cap_placed(rev_x, rev_y, loop_d, loop_h);
     }
-    color([0.93, 0.40, 0.09])
-        for (p = [[in_x + 11, in_y], [out_x + 11, out_y]])
-            translate([p[0], p[1], body_h - 0.4])
-                cylinder(d = 2.6, h = 1.1, $fn = 20);
     color([0.94, 0.94, 0.92])
         translate([plate_x0, plate_y0, body_h - plate_t])
             faceplate();
@@ -622,6 +611,6 @@ echo("KNOB", knob_x, knob_y);
 echo("FADER_TRAVEL", fader_slot_l - fader_stem_l);
 echo("ENCODER_PAD_TOP_Z", encoder_pad_top);
 echo("HALL_POST_TOP_Z", hall_z_top);
-echo("PICO_ORIGIN", pico_x0, pico_y0);
+echo("KIT", kit_x0, kit_y0, kit_w, kit_l);
 echo("USB_WINDOW_Z", usb_z0, usb_z0 + usb_h);
 echo("TECHNIC", technic_ys, "z", technic_z, "d", technic_d);

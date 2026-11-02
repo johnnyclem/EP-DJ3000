@@ -76,16 +76,28 @@ Under the plate is a bay beside the board. A flat LiPo fits next to the
 display module. There is no
 cell holder. The long-side pin holes are unchanged.
 
-## Controls
+## Audio kit
 
-Not a CDJ. The buttons worth taking from one:
+The brain is an ESP32-Audio-Kit V2.2. The PCB is 82 × 73 mm, ±0.2.
+The 73 mm side goes across the deck. Turned the other way, an 82 mm
+board has under half a millimeter of clearance inside an 88 mm shell,
+and a print will fuse it to the walls.
 
-- **PLAY** and **CUE** are 16 mm round caps, stacked on the lower left, beside the scratch fader. They sit on tactiles. No pocket around them.
-- **IN** and **OUT** are 10 mm round caps above those, each with a 3 mm LED. Firmware toggles the LED. The button is momentary. The LED is the latch you can see.
-- **REV** stays, smaller, on the lower right. Scratch reverse is not a CDJ button and it is not getting dropped.
-- There is no tempo fader. A 64 mm pitch slider does not belong on an 88 mm deck. Tempo is the knob at the top right.
+The board sits at x = 7.5, y = 54, in a lip on the tray floor. That
+clears the pin ribs at 16, 25 and 48 mm, and it stops at y = 136, just
+short of the encoder pad. The scratch fader is now a 40 mm slot below
+it (about 27 mm of throw). Cue and play stay in that strip. The kit's
+own six keys are the pads, so the deck has no holes over the PCB until
+the button centers are measured off the real board.
 
-The center slot is still the loose scratch fader, not a pitch control.
+Headphone and line-in face a long side. Don't cut those holes yet. A
+3.5 mm plug can reach across the 5 mm gap, but only if the hole is on
+the jack's real center.
+
+Cue and play are 15 mm round caps in the fader strip, left of the cap.
+Reverse is the small cap on the right. Tempo is still the knob. The
+slot is still a loose scratch fader, just shorter, because the audio
+kit now owns the middle of the deck.
 
 ## Technic pins
 

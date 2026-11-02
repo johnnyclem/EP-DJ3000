@@ -19,7 +19,7 @@ Not a Teenage Engineering product and not affiliated with them.
 > * The macOS app has **never been compiled against the Apple SDKs** (only against hand-written stand-ins).
 > * No DJ-app mapping has been **loaded into the real app**, Mixxx included.
 > * There is **no enclosure** for this design. The owner redrew the Field Jog shell to 16 mm with a jack row, battery bay and
->   faceplate; it keeps the platter mechanics (bearing, M3 axle, magnet, AS5600 pad), but its Pico-sized bay and hall-fader
+>   faceplate; it keeps the platter mechanics (bearing, M3 axle, magnet, AS5600 pad), but its bay (Pico-sized until commit `e04c912`, an ESP32-Audio-Kit lip since `b06055e`: see the BOARD CONFLICT under Known open issues) and hall-fader
 >   slot do not fit this design, and nothing draws a contact from the spinning platter to the hold pad
 >   ([`hardware/README.md`](hardware/README.md)).
 
@@ -190,9 +190,9 @@ ring** (`platterSource = TOUCH_RING`, [`docs/BRINGUP.md`](docs/BRINGUP.md) appen
 
 | Decision | Current default | Note |
 |---|---|---|
-| Board and firmware path | ESP32-S3-DevKitC-1; the pin plan (`board_pins.h`) is invented for it, 21 GPIOs | no smaller board has been checked against it. The redrawn shell's bay is Pico-sized (21 x 51 mm): the DevKitC-1 does not fit, a Pico-footprint board does. **Open question about the RP2040 experiment: see [Known open issues](#known-open-issues)** |
+| Board and firmware path | ESP32-S3-DevKitC-1; the pin plan (`board_pins.h`) is invented for it, 21 GPIOs | no smaller board has been checked against it. **The owner's latest shell redraw is built around an ESP32-Audio-Kit V2.2 (a classic ESP32, which has no USB device mode), which this firmware cannot run on: see the BOARD CONFLICT in [Known open issues](#known-open-issues)** |
 | Platter | **AS5600 for now** (`platterSource = AS5600`, contract v1.3): free-spinning platter on a 683ZZ bearing, diametric magnet over an AS5600, one touch pad for hold and tap | the owner's call, "for now". The fixed conductive-PLA sector ring (`TOUCH_RING`) is kept as an experimental option, code, tests and docs included. Open: the rotating contact from the platter to the hold pad is undesigned |
-| Enclosure | none for this design | the owner's redrawn 16 mm shell (jack row, battery bay, faceplate) keeps the platter well, bearing sleeve and AS5600 pad; its Pico-sized bay and hall-fader slot do not fit this design, its line-in and headphone jacks have no firmware support, and there is no hold-pad contact. Check the AS5600 pad height on the first assembly ([`hardware/README.md`](hardware/README.md)) |
+| Enclosure | none for this design | the owner's redrawn 16 mm shell (jack row, battery bay, faceplate) keeps the platter well, bearing sleeve and AS5600 pad; its bay (Pico-sized until `e04c912`, an ESP32-Audio-Kit lip since `b06055e`; see the BOARD CONFLICT) and hall-fader slot do not fit this design, its line-in and headphone jacks have no firmware support, and there is no hold-pad contact. Check the AS5600 pad height on the first assembly ([`hardware/README.md`](hardware/README.md)) |
 | Untouched platter jog | `jogUntouched` = `AUTO` (contract v1.4): sent until the hold pad has registered a touch since power-up, then not sent | `REPORT` always sends it (a nudge), `SUPPRESS` never does. The unit cannot measure that the pad works, only that it has reported a touch (a phantom touch counts too); the proof is not stored, it restarts at every reboot and when `platterSource` changes |
 | Slide-pot default | `PITCH`, the tempo slider (contract v1.2; v1.1 had `CHANNEL_VOLUME`) | works in all four apps behind an external mixer, and two units never fight over one control. `CHANNEL_VOLUME` (audible in Mixxx only) and `CROSSFADER` stay selectable |
 | USB audio class | UAC1 (the S3 is full-speed only) | meant to bind the in-box driver on macOS, Linux and Windows 10+, untried on any host; Windows wants ASIO for low latency |
@@ -211,9 +211,24 @@ ring** (`platterSource = TOUCH_RING`, [`docs/BRINGUP.md`](docs/BRINGUP.md) appen
 * A bridged deck (one-cable mode) cannot be used, shown or calibrated from the Mac app.
 * **The redrawn shell is 16 mm and still not an enclosure for this deck.** The owner's other tool redrew `field-jog/` (jack row
   for MIDI in, MIDI out, USB, line in and line out, a headphone jack, a battery bay under a removable faceplate). Still wrong for
-  us: the controller bay is Pico-sized, the fader slot is for hall sensors with no slide-pot mount, the line-in and headphone
-  jacks have no firmware behind them, and nothing carries the hold pad's contact. The AS5600 pad height has to be re-checked
-  for the thinner body: `hardware/README.md` has the stack-up arithmetic (done against the old 26 mm shell).
+  us: the fader slot is for a hall-sensor block with no slide-pot mount (and is now only 40 mm long), the line-in and headphone
+  jacks have no firmware behind them, the 0.91" SSD1306 display and microSD playback described in `field-jog/README.md` have no
+  firmware here either, and nothing carries the hold pad's contact. **The AS5600 stack-up does not close in this shell:**
+  `hardware/README.md` has the arithmetic for the 16 mm SCAD (1.9 mm between the board seat and the magnet zone, and the BOM's
+  M3 x 12 axle puts the magnet in the floor); it was computed from the SCAD as of `main` at commit `e04c912`, so re-check it
+  if the shell changes again.
+* **BOARD CONFLICT for the owner (blocks the shell and the firmware from meeting).** The shell's current SCAD and
+  `field-jog/README.md` (from the owner's other tool, `main` at `b06055e`) say "the brain is an ESP32-Audio-Kit V2.2", an 82 x 73 mm
+  board, with its six keys as the deck's pads, a microSD card, headphones and a 0.91" OLED, while the same README says
+  all of that "stays on the ESP32-S3 that already runs MIDI, the link, and USB audio". Those cannot both be true. The
+  ESP32-Audio-Kit V2.2 is AI-Thinker's ESP32-A1S: a **classic ESP32** with an ES8388 or AC101 codec, a CP2102 USB-UART bridge
+  and a microSD slot (see the sources in the review notes). Classic ESP32 has **no USB device peripheral**, so it cannot be a
+  class-compliant USB MIDI or USB audio device, which is what this repo's firmware (ESP32-S3, TinyUSB) does. On that board you
+  would get BLE-MIDI, TRS MIDI and standalone playback, but **no USB MIDI and no USB sound card**. Options: (a) an ESP32-S3 plus
+  separate codec/SD/headphone parts (the firmware here runs on it), (b) the Audio Kit and give up USB MIDI/audio (a different
+  firmware), (c) an ESP32-S3 board that has the codec and SD built in (none checked against the pin plan), (d) two boards. Please
+  pick; nothing in this repo has been changed to follow either direction. The standalone-playback features (SD, headphone amp,
+  OLED, varispeed) are not implemented in this repo's firmware under any option.
 * **OPEN QUESTION for the owner: which board and firmware path do you intend, this ESP32-S3 deck or the RP2040 experiment?**
   `field-jog/firmware/rp2040/` (from the owner's other tool) is a different stack: an RP2040 Pico-footprint board that
   **synthesizes audio on the device** (a loop whose rate follows the platter, sent to the host as a USB Audio Class 1 *input*

@@ -74,8 +74,10 @@ instead of 26, the 683ZZ in a sleeve hanging below the deck, a battery bay under
 the top edge (MIDI in, MIDI out, USB, line in, line out) and a headphone jack on the fader end. The bearing platter is still
 the one part that matches: the default `AS5600` platter is a 76 mm disc in a well over a 683ZZ bearing, on an M3 axle that
 carries a 6 x 2.5 mm diametric magnet, with an AS5600 pad under it (`field-jog/README.md`, `field-jog/field-jog.scad`).
-Against what this firmware needs, the rest does not fit: the controller bay is still the Pico-sized one (21 x 51 mm), so an
-ESP32-S3-DevKitC-1 (about 70 x 25 mm) does not fit while a board with the Pico footprint does; the fader slot is for the
+Against what this firmware needs, the rest does not fit: the controller bay was the Pico-sized one (21 x 51 mm) until shell commit `e04c912` (so an
+ESP32-S3-DevKitC-1, about 70 x 25 mm, did not fit while a board with the Pico footprint did), and the latest redraw (`b06055e`)
+replaced it with a lip for the 82 x 73 mm ESP32-Audio-Kit V2.2, a classic ESP32 that cannot run this firmware (see the BOARD
+CONFLICT in the root README); the fader slot is for the
 hall-sensor block, with no mount for our slide pot; the line-in and headphone jacks have no firmware behind them (our
 line out is the optional DAC, topology A); and the AS5600 pad height has to be checked on the first assembly now that the
 body is 16 mm (`hardware/README.md` measured the old stack-up). Nothing in the SCAD carries a touch from the spinning platter

@@ -29,7 +29,7 @@ with a multimeter), and set `self_powered` / `vbus_monitor_io` in `usb_device.cp
 | 47 | I2C SCL | same |
 | 40 | TRS MIDI TX | UART1, 31250 baud, through the output stage below |
 | 41 | TRS MIDI RX | UART1, from the optocoupler |
-| 48 | Status LED | the DevKitC-1 v1.0 WS2812. **v1.1 moved it to GPIO38**: change `kStatusLed`. |
+| 38 (v1.1) or 48 (v1.0) | Status LED | the DevKitC-1's on-board WS2812. **v1.1 boards, the current ones, have it on GPIO38; v1.0 on GPIO48.** Pick the revision in `menuconfig` (EP-DJ3000 > board revision, `EPDJ_BOARD_REV`); the default is v1.1. A wrong choice leaves the LED dark and nothing else changes. |
 
 Why these: fader and knob are on ADC1 because ADC2 cannot be used while the radio is on. GPIO4..11 are the S3's
 touch pads 4..11 (contiguous, away from the strapping pins). Left alone on purpose: GPIO0 (BOOT/strapping),
@@ -38,12 +38,13 @@ GPIO43/44 (UART0 log).
 
 Notes on the pins that are used: GPIO39-42 are the S3's external-JTAG pins (GPIO40/41 carry TRS MIDI here); they
 are plain GPIO unless you debug with an external probe, and the built-in USB-Serial/JTAG is not affected.
-GPIO47/48 sit in the module's VDD_SPI power domain: fine on the usual 3.3 V modules (N4/N8/N16, R2/R8), but a module
-variant with 1.8 V flash (the "V" parts, e.g. N32R8V) would drive them at 1.8 V. From memory of the datasheet,
-**verify for your module** before relying on I2C or the LED there.
+GPIO47 (I2C SCL), and GPIO48 on a v1.0 board (status LED), sit in the module's VDD_SPI power domain: fine on the usual
+3.3 V modules (N4/N8/N16, R2/R8), but a module variant with 1.8 V flash (the "V" parts, e.g. N32R8V) would drive them at
+1.8 V. From memory of the datasheet, **verify for your module** before relying on I2C or the LED there. The v1.1 LED pin,
+GPIO38, is not one of them as far as I remember the datasheet: the same advice applies.
 
-Unused pins you could take for something later: GPIO18, 38, 39, 42 (check your module: some boards put an LED or
-a flash/PSRAM line on them).
+Unused pins you could take for something later: GPIO18, 39, 42, and whichever of GPIO38 / 48 the status LED is not on
+(check your module: some boards put an LED or a flash/PSRAM line on them).
 
 ## Power
 
@@ -173,7 +174,8 @@ shielding, and what counts to expect.
 
 ## Status LED
 
-One WS2812 (GRB, 800 kHz) on GPIO48 (DevKitC-1 v1.0; v1.1 has it on GPIO38, see the pin table). Colours: deck A blue, deck B orange; dim while the platter is untouched;
+One WS2812 (GRB, 800 kHz), the DevKitC-1's own: GPIO38 on v1.1 boards (the default build), GPIO48 on v1.0 (see the pin
+table; the boot log prints the pin it drives). Colours: deck A blue, deck B orange; dim while the platter is untouched;
 slow blink while searching for the other deck; alternates with red on a deck-id conflict; white flash on the
 beat in clock modes; white blink for `IDENTIFY`; amber/red while CUE+REV is held toward the mode-change/deck-swap
 thresholds. `ledBrightness` scales it.

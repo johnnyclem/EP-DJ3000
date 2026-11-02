@@ -31,7 +31,7 @@
     * Jog: relative CC, value 64 + delta (delta -63..+63), 1024 ticks per revolution, positive =
       clockwise. That is zero="0x40" full="1024". Not inverted.
     * The slide pot sends ONE of CROSSFADER / LEVEL / PITCH depending on the unit's faderRole
-      (LEVEL, CC 7/39, by default).
+      (PITCH, CC 25/57, by default).
     * vid/pid are the contract's DEV PLACEHOLDER (pid.codes test PID 0x1209:0x0001). Change both
       here and in the audio line when the unit gets a real PID. check.mjs follows the contract.
     * Not defined on purpose: bpm, bpmNudge, tap, transport. The unit only sends them in its

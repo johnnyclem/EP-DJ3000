@@ -15,14 +15,19 @@ The Mixxx manual says Deck outputs "are taken post-fader, which means they inclu
 volume and crossfader adjustments and applied effects", and that the internal mixer must
 be left neutral when mixing on external hardware.
 
-The unit's default `faderRole` is `CHANNEL_VOLUME` (CC 7 / 39): each unit's slide pot cuts its own
-deck's volume (`[ChannelN],volume`) and Mixxx's crossfader is never touched, so two units do not fight
-over it. Because the Deck outputs are post-fader, that cut is audible on the Sidekick channel. Leave the
+The unit's default `faderRole` is `PITCH` (CC 25 / 57): each unit's slide pot is a CDJ-style tempo fader
+(`[ChannelN],rate`), Mixxx's crossfader is never touched, and two units do not fight over anything. Leave the
 rest of Mixxx's mixer neutral (crossfader centred, EQ flat); nothing else needs setting.
 
-The other roles: `PITCH` (CC 25 / 57) makes the pot a CDJ-style tempo fader (`[ChannelN],rate`).
-`CROSSFADER` (CC 23 / 55) is the one to avoid in this rig: by default `FADER_ROLE` sends it to Mixxx's master
-crossfader, which (decks on opposite sides) cuts one deck's output, and two units would both drive it.
+Mixxx is the one app where the other roles are useful too, because the Deck outputs are post-fader:
+
+- `CHANNEL_VOLUME` (CC 7 / 39, set it with one SysEx frame: `docs/BRINGUP.md` section 2b) makes each unit's pot cut its
+  own deck's volume (`[ChannelN],volume`): a per-deck scratch cut that is audible on the Sidekick channel. Pick it
+  when you want to cut with the slide pot and tempo comes from elsewhere. In VirtualDJ, djay Pro and rekordbox this
+  role is inert with an external mixer, which is why it is not the default.
+- `CROSSFADER` (CC 23 / 55) is the one to avoid with two units: by default `FADER_ROLE` sends it to Mixxx's master
+  crossfader, which (decks on opposite sides) cuts one deck's output, and two units would both drive it. Use it for a
+  single unit in a software-only setup.
 
 The orange knob drives the deck's Quick Effect (filter). That one is deliberate: applied
 effects are included in the Deck outputs, so it stays audible through the hardware mixer.
@@ -84,8 +89,8 @@ cp drivers/mixxx/EP-DJ3000.midi.xml drivers/mixxx/EP-DJ3000-scripts.js \
 | Platter tap | note 39 | toggles `[ChannelN],play`. The touch down/up of the tap scratches for a moment and releases |
 | CUE | note 36 | `cue_default` follows the button (honours Mixxx's cue mode setting). LED follows `cue_indicator` |
 | REV | note 37 | `reverseroll` while held. See `REV_BEHAVIOR` |
-| Slide pot, unit default (`CHANNEL_VOLUME`) | CC 7/39 | deck `volume`, regardless of `FADER_ROLE` |
-| Slide pot, unit set to `PITCH` | CC 25/57 | deck `rate`, regardless of `FADER_ROLE` |
+| Slide pot, unit default (`PITCH`) | CC 25/57 | deck `rate`, regardless of `FADER_ROLE` |
+| Slide pot, unit set to `CHANNEL_VOLUME` | CC 7/39 | deck `volume`, regardless of `FADER_ROLE` |
 | Slide pot, unit set to `CROSSFADER` | CC 23/55 | per `FADER_ROLE`: `[Master],crossfader` (default), deck `volume`, or deck `rate` |
 | Orange knob | CC 24/56 | `[QuickEffectRack1_[ChannelN]],super1` (the deck's filter knob) |
 | Play LED | host to unit, note 39 | lit while `[ChannelN],play` is 1. Feedback only: it never starts the unit's clock, in any mode |
@@ -109,7 +114,7 @@ At the top of `EP-DJ3000-scripts.js`, as properties of `EPDJ3000Mixxx`:
 
 | Setting | Default | |
 |---|---|---|
-| `FADER_ROLE` | `"crossfader"` | `"crossfader"`, `"volume"` or `"rate"`; what CC 23/55 controls, i.e. a unit set to `faderRole` = `CROSSFADER`. Not used for the default CC 7/39 or for CC 25/57 |
+| `FADER_ROLE` | `"crossfader"` | `"crossfader"`, `"volume"` or `"rate"`; what CC 23/55 controls, i.e. a unit set to `faderRole` = `CROSSFADER`. Not used for the default CC 25/57 or for CC 7/39 |
 | `REV_BEHAVIOR` | `"roll"` | `"roll"`: `reverseroll` while held (momentary reverse that resumes where the track would have been, Mixxx's "censor"). `"toggle"`: `reverse` flips each press, CDJ style |
 | `BEND_SCALE` | `1.0` | untuned |
 | `SCRATCH` | see file | `rpm`, `alpha`, `beta`, ramp on touch / release. alpha and beta are the values the Mixxx docs suggest as a starting point, untuned |
@@ -128,7 +133,7 @@ Switch to `"toggle"` if you want a latching reverse.
   drive the one master crossfader; the last one moved wins, with no soft takeover (a crossfader should
   follow the hand).
 - Deck volume, rate and the filter knob use soft takeover: a pot that disagrees with Mixxx's value is ignored
-  until it reaches that value, so the deck does not jump. With the default role the pot can seem dead at first.
+  until it reaches that value, so the deck does not jump. The pot can seem dead at first: move it until it passes Mixxx's current value.
 - LED feedback for both decks is sent to every enabled port, on each deck's own channel. That is correct
   because a unit ignores channel-voice messages that are not on its own channel (PROTOCOL.md section 2,
   "Channel filter"; implemented and host-tested in the firmware core, not tried on hardware).

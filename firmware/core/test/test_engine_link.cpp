@@ -162,8 +162,9 @@ EPDJ_TEST(engine_link_deck_b_controls_arrive_on_deck_a_cable_2_exactly) {
   kc.rawMax = 4095;
   kc.deadLoPermille = kc.deadHiPermille = 0;
   knob.configure(kc);
-  CHECK_EQ(lastPairOf(c2, 1, proto::cc::kChannelVolumeMsb, proto::cc::kChannelVolumeLsb), fader.update(2500, 0).value);  // the default role
+  CHECK_EQ(lastPairOf(c2, 1, proto::cc::kPitchMsb, proto::cc::kPitchLsb), fader.update(2500, 0).value);  // the default role
   CHECK_EQ(lastPairOf(c2, 1, proto::cc::kCrossfaderMsb, proto::cc::kCrossfaderLsb), -1);
+  CHECK_EQ(lastPairOf(c2, 1, proto::cc::kChannelVolumeMsb, proto::cc::kChannelVolumeLsb), -1);
   CHECK_EQ(lastPairOf(c2, 1, proto::cc::kKnobMsb, proto::cc::kKnobLsb), knob.update(3100, 0).value);
 
   // Buttons: every press and release, once, in order. Touch: one down, one up.
@@ -415,7 +416,7 @@ EPDJ_TEST(engine_link_group_is_a_live_config_value) {
   const size_t mark2 = p.a.log.size();
   p.b.in.faderRaw = 3500;
   p.rig.run(100);
-  CHECK(lastPairOf(usbMsgs(p.a.log, 2, mark2), 1, proto::cc::kChannelVolumeMsb, proto::cc::kChannelVolumeLsb) > 0);
+  CHECK(lastPairOf(usbMsgs(p.a.log, 2, mark2), 1, proto::cc::kPitchMsb, proto::cc::kPitchLsb) > 0);
 }
 
 // The radio group of a unit as its HELLO announces it.

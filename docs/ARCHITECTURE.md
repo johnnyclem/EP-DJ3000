@@ -3,7 +3,7 @@
 A 3D-printed, ESP32-based scratch deck that sits in the same row as a Teenage
 Engineering EP-133 K.O. II and an EP-136 K.O.-SIDEKICK mixer. This document
 records **what we are building, what we decided, and what is and is not
-verified**. The wire contract (v1.1) is in [`PROTOCOL.md`](PROTOCOL.md); start at the
+verified**. The wire contract (v1.2) is in [`PROTOCOL.md`](PROTOCOL.md); start at the
 [root README](../README.md) for the status summary and quick-starts.
 
 ## 1. The system
@@ -57,7 +57,7 @@ used (section 3).
 | Path | What |
 |---|---|
 | `protocol/` | `epdj3000.json` (contract), `test-vectors.json` (byte-exact oracle) |
-| `tools/` | `gen_protocol.py`, `gen_vectors.py` (+ `--check` drift detectors), `e2e.sh` |
+| `tools/` | `gen_protocol.py`, `gen_vectors.py` (+ `--check` drift detectors), `e2e.sh`, `check-all.sh` (every portable check in one run) |
 | `firmware/core/` | Portable C++17 firmware logic. No ESP-IDF. Host unit tests (`ctest`). |
 | `firmware/esp32s3/` | ESP-IDF project: HAL, TinyUSB (MIDI + USB Audio 1.0), I2S, ESP-NOW, NVS, tasks; host checks in `tools/` |
 | `macos/` | SwiftPM: pure-Swift libraries (build/test on Linux too) + CoreMIDI/AVAudio/SwiftUI app |
@@ -83,10 +83,10 @@ printable file. [`hardware/README.md`](../hardware/README.md) lists what has to 
    * `AS5600` - the earlier mechanical design: free-spinning platter on a 683ZZ bearing with a diametric magnet over an AS5600. The platter (or one pad) still provides touch/hold sensing. How a *rotating* conductive platter reaches that pad (a slip contact, spring pin or brush) is not designed: see `hardware/PLATTER.md`.
    * `TOUCH_HOLD_ONLY` - touch detect only, no rotation.
    If you intended only one of these, delete the other later; the abstraction is ~one class.
-3. **Slide pot** -> 12-bit ADC (ADC1 only; ADC2 is unusable while the radio is on). 14-bit MIDI out. The role is configurable and **defaults to CHANNEL_VOLUME** (CC 7/39; contract v1.1), so two units never fight over one crossfader. That default is inaudible in VirtualDJ, djay Pro and rekordbox with an external mixer; set `PITCH` there (`drivers/README.md`).
+3. **Slide pot** -> 12-bit ADC (ADC1 only; ADC2 is unusable while the radio is on). 14-bit MIDI out. The role is configurable and **defaults to PITCH** (CC 25/57; contract v1.2): the CDJ-style tempo slider. With an external mixer, which is the headline rig (two decks into the EP-136), VirtualDJ, djay Pro and rekordbox do not make their own channel faders audible, so v1.1's CHANNEL_VOLUME default left the pot dead in three of the four apps; a tempo slider works in all four, and two units never fight over one control. `CHANNEL_VOLUME` (CC 7/39) stays selectable as a per-deck scratch cut, which is audible in Mixxx only because its deck outputs are post-fader; `CROSSFADER` (CC 23/55) is for one unit into a single software mixer. One SysEx frame switches it (`BRINGUP.md` section 2b; the macOS app's Settings does the same); `drivers/README.md` has the per-app detail.
 4. **DAC**: I2S, PCM5102A-class (no I2C, no MCLK) as the reference part. `dacMode` AUTO means **a DAC-present strap is fitted**: a jumper from GPIO14 to GND, sampled at boot. A scan of known I2C codec addresses exists but is compiled out by default (`EPDJ_DAC_PROBE_I2C`, off); with no strap the unit is MIDI-only. Descriptors can't change after enumeration, so a mode change reboots.
 5. **USB audio = USB Audio Class 1.0** (stereo, 48 kHz, 16-bit, asynchronous, with a feedback endpoint and a mute + volume feature unit). The ESP32-S3 is a full-speed-only device, and at full speed UAC1 is the class TinyUSB itself uses: its full-speed speaker-with-feedback example is UAC1 (UAC2 only on high-speed devices), and its UAC2 driver sends the feedback value as four bytes 16.16 whatever the bus speed, whereas a full-speed host expects three bytes 10.14, which is what its UAC1 driver sends. It is intended to be class-compliant, so a host should bind its in-box UAC1 driver and nothing needs installing; **it has not been tried on any host** (`BRINGUP.md`). Async + feedback endpoint: drift between the USB 1 kHz clock and the I2S clock is the classic failure mode of DIY USB DACs, so the device measures its ring fill, tells the host its real consumption rate, and slips single samples in software for hosts that ignore the feedback.
-6. **MIDI**: Deck A = ch 1, Deck B = ch 2. Jog is relative CC 22 at 1024 ticks/rev; touch note; fader/knob 14-bit. Jog (CC 22), the knob (CC 24) and the CUE/REV notes (36/37) are the same as the earlier Field Jog map; the slide pot is not: it sends CC 7/39 by default, and the Field Jog's CC 23 is now the CROSSFADER role (CC 23/55, 14-bit). See `PROTOCOL.md`.
+6. **MIDI**: Deck A = ch 1, Deck B = ch 2. Jog is relative CC 22 at 1024 ticks/rev; touch note; fader/knob 14-bit. Jog (CC 22), the knob (CC 24) and the CUE/REV notes (36/37) are the same as the earlier Field Jog map; the slide pot is not: it sends CC 25/57 (the PITCH role) by default, and the Field Jog's CC 23 is now the CROSSFADER role (CC 23/55, 14-bit); CHANNEL_VOLUME is CC 7/39. See `PROTOCOL.md`.
 7. **Link**: ESP-NOW between decks (TE's own vocabulary is USB-C MIDI, 3.5 mm TRS MIDI and BLE MIDI; we use TRS for external gear and radio for deck-to-deck). BLE-MIDI is **not** in v1: its connection interval adds 7-15 ms of jitter, which is bad for scratching. It's a fine roadmap item for transport-only control.
 8. **TRS MIDI** is **Type A** (MIDI Association spec for 3.5 mm). Verify against your EP-133 before wiring; if its jack is Type B, swap tip/ring (one-line change in `hardware/`).
 9. **Config**: everything tunable is an int32 key in the contract (`config.keys`), live-settable, persisted to NVS on `SAVE_CONFIG`. Calibration is host-driven.
@@ -118,7 +118,7 @@ Mechanically, the Field Jog shell has Technic-pin holes at positions the author 
 |---|---|---|
 | Wire contract | generator `--check`, C++/Swift/JS compile, hand-checked vectors | - |
 | Firmware core logic | host unit tests incl. shared vectors, simulation of sensors, sanitizers | real sensor behavior on printed conductive PLA |
-| End to end ([`E2E.md`](E2E.md)) | the real firmware `Engine` behind a text pipe with simulated sensors and a lossy radio, driven by the real Swift client libraries and the real Mixxx script on a mock engine | hardware, CoreMIDI, the real DJ apps. Open findings E2E-1..3 are listed there |
+| End to end ([`E2E.md`](E2E.md)) | the real firmware `Engine` behind a text pipe with simulated sensors and a lossy radio, driven by the real Swift client libraries and the real Mixxx script on a mock engine | hardware, CoreMIDI, the real DJ apps. The three disagreements it found (E2E-1..3) are fixed; their history is tabulated there |
 | ESP-IDF layer | **compiles and links** for ESP32-S3 via PlatformIO and `idf.py` (ESP-IDF 6.1.0, esp_tinyusb 3.0.0 = TinyUSB 0.21.0; real headers); host checks of its pure logic (`firmware/esp32s3/tools/host_checks`) and of the USB descriptors against TinyUSB (`tools/crosscheck_usb_desc`) | running on a chip; USB enumeration; I2S audio quality; ESP-NOW latency |
 | USB audio | descriptor unit-tested; bytes identical to TinyUSB's own `TUD_*` macros; TinyUSB's real audio driver run on the host against the descriptors and the firmware's callbacks (feedback bytes, endpoints, mute/volume); feedback-controller logic unit-tested | enumeration on macOS, Windows, Linux, iPadOS; glitch-free playback; how each host treats the feedback endpoint |
 | Radio link | `LINK.md` section 12: simulated air, simulated clocks | any real radio: latency, jitter, loss, airtime, coexistence |

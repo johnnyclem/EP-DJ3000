@@ -7,10 +7,10 @@ attributes from VirtualDJ's official MIDI definition reference, and agree number
 `protocol/epdj3000.json`. What VirtualDJ then *does* with them (detection, deck assignment of two
 units, jog feel, LEDs, audio presets) is a bet until you run [First run](#first-run-ten-minutes).
 
-**Format: confirmed, not guessed.** The file schema comes from VirtualDJ's official wiki
-([sources](#sources)) plus a VirtualDJ developer's own touch-jog example, so no "UNVERIFIED FORMAT"
-fallback is needed. Two places where the docs contradict themselves, and what I chose, are in
-[Doc inconsistencies](#doc-inconsistencies).
+**Format: taken from VirtualDJ's published documentation; never loaded into the app.** The file schema comes from
+VirtualDJ's official wiki ([sources](#sources)) plus a VirtualDJ developer's own touch-jog example. Nothing here shows
+that VirtualDJ accepts these files; the checks only compare them with that documentation and with the contract. Two
+places where the docs contradict themselves, and what I chose, are in [Doc inconsistencies](#doc-inconsistencies).
 
 ## Files
 
@@ -52,11 +52,12 @@ plus its own USB sound card, and the EP-136 does the mixing in hardware.
    reconnect, so start VirtualDJ with both plugged in. The unit's MIDI channel (Deck A = 1, Deck B = 2)
    does not decide the VirtualDJ deck, because the definition accepts either channel: "Deck A" on the
    unit's label is deck 1 in VirtualDJ only if the assignment says so.
-3. **Slide pot as tempo fader.** The unit's default `faderRole` is `CHANNEL_VOLUME` (CC 7 / 39): each unit's pot
-   would drive `level` on its own deck and leave the crossfader alone, but with an external mixer VirtualDJ's own
-   channel level does nothing audible, so the pot would be inert. Set `faderRole` to `PITCH` (config key 11, value 2)
-   and save to get a CDJ-style tempo fader instead. Avoid `CROSSFADER`: it is just as inert here, and two units would
-   both drive the one global crossfader.
+3. **Slide pot as tempo fader.** The unit's default `faderRole` is `PITCH` (CC 25 / 57): each unit's pot drives
+   `pitch` on its own deck, a CDJ-style tempo fader, and nothing needs setting. That is the factory role because
+   it is the one that does something here: with an external mixer VirtualDJ's own channel level and crossfader do
+   nothing audible. `CHANNEL_VOLUME` (CC 7 / 39, `level`) would leave the pot inert, and `CROSSFADER` (CC 23 / 55)
+   is just as inert and, with two units, would have both drive the one global crossfader. They exist for rigs
+   without an external mixer; to change the role see `docs/BRINGUP.md` section 2b.
 4. **Audio.** Needs the DAC fitted (`dacMode` AUTO/ON; changing it reboots the unit). In Settings,
    Audio, pick **SEPARATE DECKS** as the output (the manual's external-mixer procedure), then in the
    Advanced lines set Deck 1 to sound card `EP-DJ3000 Deck A`, channels 1 and 2, and Deck 2 to
@@ -80,8 +81,8 @@ names. Numbers are from `protocol/epdj3000.json`.
 | `CUE` | Note 36 | `cue_stop` | CDJ-style cue; `LED_CUE` follows cue state |
 | `REV` | Note 37 | `reverse` | the verb list says only "play the song backward": whether a press latches or is momentary is not documented, find out on first run. `dump while_pressed` is the documented momentary alternative (reverses while held, then resumes where the track would have been) |
 | `CROSSFADER` | CC 23 (MSB) / 55 (LSB) | `crossfader` | only when `faderRole` = CROSSFADER |
-| `LEVEL` | CC 7 / 39 | `level` | when `faderRole` = CHANNEL_VOLUME, the unit's default |
-| `PITCH` | CC 25 / 57 | `pitch` | only when `faderRole` = PITCH |
+| `LEVEL` | CC 7 / 39 | `level` | only when `faderRole` = CHANNEL_VOLUME |
+| `PITCH` | CC 25 / 57 | `pitch` | when `faderRole` = PITCH, the unit's default |
 | `KNOB` | CC 24 / 56 | `filter` | colour-FX filter, nothing applied at centre; silent if `knobRole` = BPM |
 
 LEDs are not mapped separately: per the definition reference, an LED with `default="CUE"` uses the

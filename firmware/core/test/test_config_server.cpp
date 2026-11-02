@@ -101,15 +101,18 @@ struct Actions : DeviceActions {
 struct Cal : CalibrationHost {
   bool beginResult = true;
   EndStatus endResult = EndStatus::Ok;
-  uint16_t min = 120, max = 3970;
+  uint16_t min = 120, max = 3970;                // the range apply = 1 writes (the host's inset included)
+  uint16_t measuredMin = 100, measuredMax = 4000;  // what the sweep actually saw
   int begins = 0, ends = 0;
   proto::CalKind lastBegin = proto::CalKind::Fader, lastEnd = proto::CalKind::Fader;
   bool begin(proto::CalKind k) override { ++begins; lastBegin = k; return beginResult; }
-  EndStatus end(proto::CalKind k, uint16_t* lo, uint16_t* hi) override {
+  EndStatus end(proto::CalKind k, Range* out) override {
     ++ends;
     lastEnd = k;
-    *lo = min;
-    *hi = max;
+    out->rawMin = min;
+    out->rawMax = max;
+    out->measuredMin = measuredMin;
+    out->measuredMax = measuredMax;
     return endResult;
   }
 };
@@ -656,16 +659,29 @@ EPDJ_TEST(cal_end_apply_writes_the_range_into_the_live_config_and_reports_it) {
   CHECK(r.cal.lastEnd == proto::CalKind::Knob);
 }
 
-EPDJ_TEST(cal_end_without_apply_only_reports) {
+EPDJ_TEST(cal_end_without_apply_reports_the_measured_extremes_not_the_inset_range) {
+  // PROTOCOL.md 3 (CalResult): the values written (with the inset) when applied = 1, otherwise the measured extremes.
   Rig r;
   const uint32_t rev = r.config.revision();
   r.send(0, 0x08, {0, 0});
   proto::CalResult res;
   CHECK(proto::deserialize(r.only().payload.data(), r.only().payload.size(), &res));
   CHECK_EQ(res.applied, 0);
-  CHECK_EQ(res.rawMin, 120);
+  CHECK_EQ(res.rawMin, 100);  // measured, not the 120 that apply would have written
+  CHECK_EQ(res.rawMax, 4000);
   CHECK_EQ(r.config.revision(), rev);
   CHECK_EQ(r.config.get(ConfigKey::FaderRawMin), 40);
+  CHECK_EQ(r.config.get(ConfigKey::FaderRawMax), 4055);
+
+  // The same sweep with apply = 1 reports exactly what it wrote.
+  r.clear();
+  r.send(0, 0x08, {0, 1});
+  CHECK(proto::deserialize(r.only().payload.data(), r.only().payload.size(), &res));
+  CHECK_EQ(res.applied, 1);
+  CHECK_EQ(res.rawMin, 120);
+  CHECK_EQ(res.rawMax, 3970);
+  CHECK_EQ(r.config.get(ConfigKey::FaderRawMin), 120);
+  CHECK_EQ(r.config.get(ConfigKey::FaderRawMax), 3970);
 }
 
 EPDJ_TEST(cal_end_error_mapping) {
@@ -694,6 +710,8 @@ EPDJ_TEST(cal_end_with_unusable_measurement_changes_nothing) {
   Rig r;
   r.cal.min = 10;
   r.cal.max = 5000;  // above the 12-bit range
+  r.cal.measuredMin = 10;
+  r.cal.measuredMax = 5000;
   const uint32_t rev = r.config.revision();
   r.send(0, 0x08, {0, 1});
   r.expectNak(0x08, Err::CalFailed);

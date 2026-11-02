@@ -724,17 +724,18 @@ test("14-bit: LSB-only or MSB-only updates use the stored other half; nothing ap
   assert.equal(engine.take("setParameter").length, 0);
 });
 
-test("the unit's default faderRole CHANNEL_VOLUME (CC 7/39) -> deck volume; PITCH (CC 25/57) -> deck rate; ends map to the control's range", () => {
+test("the unit's default faderRole PITCH (CC 25/57) -> deck rate; CHANNEL_VOLUME (CC 7/39) -> deck volume; ends map to the control's range", () => {
   const { engine, m } = fresh();
-  feed(m, Unit.pair(1, "channelVolume", 0));
-  assert.equal(engine.getValue("[Channel2]", "volume"), 0);
-  feed(m, Unit.pair(1, "channelVolume", 16383));
-  assert.equal(engine.getValue("[Channel2]", "volume"), 1);
   feed(m, Unit.pair(0, "pitch", 0));
   assert.equal(engine.getValue("[Channel1]", "rate"), -1);
   feed(m, Unit.pair(0, "pitch", 16383));
   assert.equal(engine.getValue("[Channel1]", "rate"), 1);
+  feed(m, Unit.pair(1, "channelVolume", 0));
+  assert.equal(engine.getValue("[Channel2]", "volume"), 0);
+  feed(m, Unit.pair(1, "channelVolume", 16383));
+  assert.equal(engine.getValue("[Channel2]", "volume"), 1);
   assert.equal(engine.getValue("[Channel1]", "volume"), 0, "deck 1 volume untouched by deck 2");
+  assert.equal(engine.getValue("[Channel2]", "rate"), 0, "deck 2 rate untouched by deck 1");
 });
 
 test("FADER_ROLE constant redirects the CROSSFADER CC pair 23/55 (volume, rate)", () => {
@@ -830,28 +831,30 @@ test("every deck-targeting control lands on its own deck only", () => {
   assert.deepEqual([...groupsOf(per(1))], ["[Channel2]"]);
 });
 
-test("two units on their own cables, default fader role: each pot cuts only its own deck's volume; the master crossfader is never touched", () => {
-  const engine = makeEngine();
-  const unitA = loadMapping(engine);
-  const unitB = loadMapping(engine);
-  unitA.init();
-  unitB.init();
-  engine.take();
+for (const [pair, control, bottom] of [["pitch", "rate", -1], ["channelVolume", "volume", 0]]) {
+  test(`two units on their own cables, faderRole ${pair === "pitch" ? "PITCH (the default)" : "CHANNEL_VOLUME"}: each pot moves only its own deck's ${control}; the master crossfader is never touched`, () => {
+    const engine = makeEngine();
+    const unitA = loadMapping(engine);
+    const unitB = loadMapping(engine);
+    unitA.init();
+    unitB.init();
+    engine.take();
 
-  // A sweeps up while B sweeps down, interleaved, the way two hands would.
-  for (const v of [0, 4096, 8192, 12288, 16383]) {
-    feed(unitA, Unit.pair(0, "channelVolume", v));
-    feed(unitB, Unit.pair(1, "channelVolume", 16383 - v));
-  }
-  const writes = engine.take();
-  assert.ok(writes.length > 0);
-  assert.deepEqual([...new Set(writes.map((c) => `${c.fn}|${c.args[0]}|${c.args[1]}`))].sort(),
-    ["setParameter|[Channel1]|volume", "setParameter|[Channel2]|volume"]);
-  assert.equal(writes.filter((c) => String(c.args[0]).startsWith("[Master]")).length, 0);
-  assert.equal(engine.getValue("[Channel1]", "volume"), 1);
-  assert.equal(engine.getValue("[Channel2]", "volume"), 0);
-  assert.equal(engine.getValue("[Master]", "crossfader"), 0);
-});
+    // A sweeps up while B sweeps down, interleaved, the way two hands would.
+    for (const v of [0, 4096, 8192, 12288, 16383]) {
+      feed(unitA, Unit.pair(0, pair, v));
+      feed(unitB, Unit.pair(1, pair, 16383 - v));
+    }
+    const writes = engine.take();
+    assert.ok(writes.length > 0);
+    assert.deepEqual([...new Set(writes.map((c) => `${c.fn}|${c.args[0]}|${c.args[1]}`))].sort(),
+      [`setParameter|[Channel1]|${control}`, `setParameter|[Channel2]|${control}`]);
+    assert.equal(writes.filter((c) => String(c.args[0]).startsWith("[Master]")).length, 0);
+    assert.equal(engine.getValue("[Channel1]", control), 1);
+    assert.equal(engine.getValue("[Channel2]", control), bottom);
+    assert.equal(engine.getValue("[Master]", "crossfader"), 0);
+  });
+}
 
 test("linked deck on a second cable: a second script instance sharing the engine drives deck 2 independently", () => {
   const engine = makeEngine();

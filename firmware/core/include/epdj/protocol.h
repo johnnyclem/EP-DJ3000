@@ -252,7 +252,7 @@ constexpr ConfigDesc kConfigTable[kConfigCount] = {
   {ConfigKey::TapPlay, "tapPlay", 0, 1, 1},
   {ConfigKey::TapMaxMs, "tapMaxMs", 60, 500, 180},
   {ConfigKey::TapMoveTicks, "tapMoveTicks", 0, 64, 8},
-  {ConfigKey::FaderRole, "faderRole", 0, 2, 1},
+  {ConfigKey::FaderRole, "faderRole", 0, 2, 2},
   {ConfigKey::FaderRawMin, "faderRawMin", 0, 4095, 40},
   {ConfigKey::FaderRawMax, "faderRawMax", 0, 4095, 4055},
   {ConfigKey::FaderInvert, "faderInvert", 0, 1, 0},

@@ -10,8 +10,8 @@
 //   cue (note 36)          CUE: playing -> back to cue and pause; paused -> set cue, preview while held
 //   rev (note 37)          reverse while held
 //   play (note 39)         platter-tap pulse: toggle play/pause (unless a transport message just said the same thing)
-//   fader                  by faderRole: CHANNEL_VOLUME (the unit's default) -> linear gain; CROSSFADER -> gain
-//                          through `cutCurve`; PITCH -> tempo +-`pitchRange`
+//   fader                  by faderRole: PITCH (the unit's default) -> tempo +-`pitchRange`; CHANNEL_VOLUME -> linear
+//                          gain; CROSSFADER -> gain through `cutCurve`
 //   knob (CC 24)           output volume (with knobRole = BPM the device sends `bpm` instead and the knob is a tempo)
 //   bpm (CC 20/52, 21)     requested tempo; with `trackBpm` known it sets the tempo ratio
 //   transport CC 29, MIDI Start/Continue/Stop, SPP 0   follow a unit that is the transport master (SYNC_MASTER)

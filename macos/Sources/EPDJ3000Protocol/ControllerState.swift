@@ -13,7 +13,8 @@ public struct ControllerState: Equatable, Sendable {
     public private(set) var touched = false
     /// 14-bit value of whichever slide-pot role (`faderRole`) the device is currently sending.
     public private(set) var fader: UInt16 = 0
-    /// Which role the fader value belongs to; nil until the first fader message.
+    /// Which role the fader value belongs to: the one whose CC pair the device sent last (it re-sends the pair when the
+    /// role changes). nil until the first fader message.
     public private(set) var faderRole: FaderRole?
     public private(set) var knob: UInt16 = 0
     public private(set) var buttons: Buttons = []
@@ -109,15 +110,17 @@ public struct ControllerState: Equatable, Sendable {
         case Proto.CC.transport:
             if let t = TransportState(rawValue: value) { transport = t }
         default:
-            guard let u = cc14.feed(channel: channel, controller: controller, value: value) else { return }
+            guard let (u, changed) = cc14.observe(channel: channel, controller: controller, value: value) else { return }
             switch u.control {
+            // The slide pot takes unchanged values too: when faderRole changes the unit re-sends the new role's pair,
+            // and that can be the very value the pair last held. Only the pair in use tells which role the pot has.
             case .crossfader: setFader(u.value, .crossfader)
             case .channelVolume: setFader(u.value, .channelVolume)
             case .pitch: setFader(u.value, .pitch)
             case .knob: knob = u.value
             case .bpm:
                 // 20.0...300.0 is the valid range; anything else is not a tempo.
-                if (Proto.bpmMinX10...Proto.bpmMaxX10).contains(Int(u.value)) { bpmX10 = Int(u.value) }
+                if changed, (Proto.bpmMinX10...Proto.bpmMaxX10).contains(Int(u.value)) { bpmX10 = Int(u.value) }
             }
         }
     }

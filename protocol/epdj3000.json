@@ -702,8 +702,8 @@
         "enum": "FaderRole",
         "min": 0,
         "max": 2,
-        "default": 1,
-        "desc": "What the slide pot controls (changes the CC it sends). Default CHANNEL_VOLUME: each deck cuts its own channel, so two units never fight over one crossfader."
+        "default": 2,
+        "desc": "What the slide pot controls (changes the CC it sends). Default PITCH: the CDJ-style tempo slider, which is audible in every DJ app even with an external mixer, and two units never fight over one control. CHANNEL_VOLUME is a per-deck scratch cut (only audible where the app's deck outputs are post-fader, e.g. Mixxx); CROSSFADER suits a single software mixer."
       },
       {
         "id": 12,

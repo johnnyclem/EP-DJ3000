@@ -18,7 +18,8 @@ routine next to them; prove these first and write the numbers down.
 2. **USB Audio 1.0 with a feedback endpoint on a real host** (step 4, risks 1-3). Try macOS Sound settings first, then
    Linux `aplay`, then Windows.
 3. **ESP-NOW latency, jitter and loss** under the bridge and time sync (step 5). Every figure in `LINK.md` is simulated.
-4. **`REBOOT(bootloader)`**, the only advertised update path other than the UART port (step 2). Never tried.
+4. **`REBOOT(bootloader)`** (step 2), never tried. It is not the supported update path: that is the DevKit's UART port, or
+   BOOT held while pressing reset. Find out whether the PHY really is handed back to the ROM before anyone relies on it.
 5. **Noticing a pulled USB cable without VBUS sense**, which one-cable mode depends on (step 5, risk 9). Decide early
    whether to add the VBUS divider to the pin plan (`WIRING.md`) rather than rely on an untested idle-detect heuristic.
 
@@ -55,9 +56,9 @@ main: ready: caps 0x005A, serial A1xxxxxx, MIDI channel 1
 
 What to look for:
 
-* [ ] `ready` appears and the LED turns on (deck A blue, dim while the platter is untouched). The pin plan puts the
-  WS2812 on GPIO48, which is where DevKitC-1 v1.0 has it; **v1.1 boards have it on GPIO38**, so on those there is no
-  LED until `kStatusLed` in `board_pins.h` is changed (`WIRING.md`).
+* [ ] `ready` appears and the LED turns on (deck A blue, dim while the platter is untouched). The default build drives
+  the WS2812 on GPIO38 (DevKitC-1 v1.1); for a v1.0 board (GPIO48) choose the revision in `menuconfig`
+  (`EPDJ_BOARD_REV`, `WIRING.md`). The boot log prints the pin it drives.
 * [ ] `adc:` reports the measured cost of one conversion. The engine does 2 x oversampling of them every millisecond with
   interrupts off, so the firmware lowers the oversampling (and warns) when that would exceed 400 us. Write the figure down.
 * [ ] `touch:` timed one full scan of the pads at two settings and chose the charge/discharge cycles that make it take
@@ -157,8 +158,9 @@ the bytes. Frames are shown as the bytes a SysEx tool sends, `F0 ... F7`.
 | Fader calibration: finish and apply (CAL_END fader) | `F0 7D 45 44 01 7F 08 00 00 01 77 F7` | `CAL_RESULT` (cmd `48`), or `NAK` (cmd `7F`) with error 9 if the sweep was under 1500 counts |
 | Knob calibration: start | `F0 7D 45 44 01 7F 07 00 01 78 F7` | `ACK` |
 | Knob calibration: finish and apply | `F0 7D 45 44 01 7F 08 00 01 01 76 F7` | `CAL_RESULT` or `NAK` |
-| Slide pot as tempo fader (SET_CONFIG faderRole = PITCH) | `F0 7D 45 44 01 7F 03 00 0B 02 00 00 00 70 F7` | `ACK` |
-| Slide pot as channel volume again (faderRole = 1) | `F0 7D 45 44 01 7F 03 00 0B 01 00 00 00 71 F7` | `ACK` |
+| Slide pot as channel volume (SET_CONFIG faderRole = CHANNEL_VOLUME): a per-deck scratch cut, audible in Mixxx only | `F0 7D 45 44 01 7F 03 00 0B 01 00 00 00 71 F7` | `ACK` |
+| Slide pot as crossfader (faderRole = CROSSFADER): one unit into a single software mixer | `F0 7D 45 44 01 7F 03 00 0B 00 00 00 00 72 F7` | `ACK` |
+| Slide pot as tempo fader (faderRole = PITCH): the factory default, so this is "back to normal" | `F0 7D 45 44 01 7F 03 00 0B 02 00 00 00 70 F7` | `ACK` |
 | Flip the jog direction (jogInvert = 1) | `F0 7D 45 44 01 7F 03 00 04 01 00 00 00 78 F7` | `ACK` |
 | Clock master mode (mode = SYNC_MASTER) | `F0 7D 45 44 01 7F 03 00 02 01 00 00 00 7A F7` | `ACK` |
 | Back to DJ controller (mode = DJ) | `F0 7D 45 44 01 7F 03 00 02 00 00 00 00 7B F7` | `ACK` |
@@ -168,6 +170,13 @@ the bytes. Frames are shown as the bytes a SysEx tool sends, `F0 ... F7`.
 | Blink the LED for 5 s (IDENTIFY) | `F0 7D 45 44 01 7F 0D 00 05 6E F7` | `ACK` |
 | Who is on the radio (LINK_STATUS) | `F0 7D 45 44 01 7F 0B 75 F7` | `LINK` (cmd `4B`) |
 | Make the unit that answers to deck A become deck B (SET_DECK 1) | `F0 7D 45 44 01 00 09 00 01 75 F7` | `ACK`, then the unit restarts as Deck B |
+
+The slide pot's role (`faderRole`, key 11) is **PITCH out of the box** (contract v1.2): CC 25/57, a CDJ-style tempo slider, which
+VirtualDJ, djay Pro and rekordbox act on even behind an external mixer, and which two units never fight over. Change it only
+for a reason: `CHANNEL_VOLUME` (CC 7/39) is a per-deck scratch cut that does anything audible only in Mixxx (its deck outputs
+are post-fader); `CROSSFADER` (CC 23/55) is for one unit into a single software mixer. The change is live; `SAVE_CONFIG`
+keeps it. A unit that saved its config under an earlier contract keeps the role it stored (v1.1 defaulted to
+`CHANNEL_VOLUME`): `LOAD_DEFAULTS` then `SAVE_CONFIG` (it keeps the deck id), or the PITCH frame above, gets it onto the new default.
 
 Replies are `F0 7D 45 44 01 <deck> <cmd> ... F7`: `7E` is an ACK (payload = the command it answers), `7F` a NAK (command,
 then error code: `PROTOCOL.md` has the table). For the calibration frames, the sweep happens between the two frames: move
@@ -215,8 +224,8 @@ with `telemetry()`, work out the thresholds, send them with `set_config(deck, 6,
 
 ## 3. MIDI
 
-* [ ] MIDI monitor on the "Deck" port, channel 1: fader -> CC 7 (+39) (the default `faderRole` is CHANNEL_VOLUME; CC 23
-  (+55) after `faderRole = CROSSFADER`), knob -> CC 24 (+56), CUE -> note 36,
+* [ ] MIDI monitor on the "Deck" port, channel 1: fader -> CC 25 (+57) (the default `faderRole` is PITCH; CC 7 (+39) after
+  `faderRole = CHANNEL_VOLUME`, CC 23 (+55) after `faderRole = CROSSFADER`), knob -> CC 24 (+56), CUE -> note 36,
   REV -> note 37, finger down/up -> note 38, platter motion -> CC 22 around 64.
 * [ ] A quick tap on the platter sends note 39 (play pulse).
 * [ ] The app's built-in player: load a track, scratch with a finger. Direction and feel are the things to judge;
@@ -291,9 +300,10 @@ CUE+REV 5 s on a unit to swap A/B), no USB host needed on it beyond power.
 
 ## 6. DJ software
 
-* [ ] Load the Mixxx mapping first (`drivers/mixxx`), then the others (`drivers/README.md`). The slide pot is a channel
-  volume by default, which does nothing audible in VirtualDJ, djay Pro or rekordbox with an external mixer: set `faderRole`
-  to `PITCH` first (frame below).
+* [ ] Load the Mixxx mapping first (`drivers/mixxx`), then the others (`drivers/README.md`). The slide pot is the tempo
+  fader by default (`faderRole` = PITCH), which works in all four apps. Switch it to `CHANNEL_VOLUME` (a scratch cut, audible in
+  Mixxx only) or `CROSSFADER` (a single software mixer) with the frames in section 2b if you want that instead, and
+  back to PITCH afterwards.
 * [ ] Audio, whichever topology you chose (`ARCHITECTURE.md` section 1). **A**: two cables, route deck 1 to "EP-DJ3000 Deck
   A" and deck 2 to "EP-DJ3000 Deck B", each line out to a mixer channel; whether the app can drive two USB sound cards at
   once is the thing to find out. **B**: units MIDI-only, deck 1 and deck 2 to two outputs of one multi-channel interface.
@@ -323,7 +333,8 @@ CUE+REV 5 s on a unit to swap A/B), no USB host needed on it beyond power.
    next packet arrive (and shows the unpatched file failing). Whether any host sends one is unknown. If audio dies mid-play
    with `usb frames` frozen in the stats line anyway, look at the endpoint, not at this.
 4. **ADC noise.** The S3's ADC is noisy; the fader is oversampled 8x and the engine filters it, but check that a
-   still fader sends nothing (MIDI monitor: no CC 7/39 traffic at rest, CC 23/55 with the crossfader role).
+   still fader sends nothing (MIDI monitor: no CC 25/57 traffic at rest; CC 7/39 with the channel-volume role, CC 23/55
+   with the crossfader role).
 5. **Touch counts and scan period.** Everything about PLATTER.md, plus the `touch:` boot lines (step 1): the scan period decides
    how stale a pad value is, the cycle count decides how coarse it is.
 6. **Flash writes versus the USB interrupt.** The USB interrupt handler runs from flash. `SAVE_CONFIG` and `SET_DECK`

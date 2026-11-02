@@ -20,12 +20,14 @@ status codes in the next section so you can see which kind of evidence stands be
 
 Run all driver tests: `node drivers/test/run-all.mjs`.
 
-> **Do this first with VirtualDJ, djay Pro or rekordbox: set the slide pot to `PITCH`.** A factory unit sends channel
-> volume (CC 7/39), and with an external mixer those three apps do nothing audible with their own channel faders (in
-> rekordbox the `ChannelFader` row is even disabled), so the pot is dead until you change its role. It is one SysEx frame
-> (`SET_CONFIG faderRole = 2`, then `SAVE_CONFIG`), ready to paste in [`docs/BRINGUP.md`](../docs/BRINGUP.md) section 2b, or
-> Settings in the macOS app (which has never been compiled). Only Mixxx gains from the default. A CDJ's slide fader is the
-> tempo fader, so `PITCH` is also the natural role.
+> **The slide pot is a tempo fader out of the box (`faderRole` = `PITCH`, CC 25/57), and that is the role that works in
+> all four apps.** With an external mixer (the headline rig: two decks into the EP-136) VirtualDJ, djay Pro and rekordbox
+> do not make their own channel faders audible, so a pot that sent channel volume would be dead there; a tempo fader is
+> live everywhere, and two units never fight over one control. Two other roles are one SysEx frame away
+> (`SET_CONFIG faderRole`, then `SAVE_CONFIG`; frames in [`docs/BRINGUP.md`](../docs/BRINGUP.md) section 2b, or Settings in
+> the macOS app, which has never been compiled): `CHANNEL_VOLUME` (CC 7/39), a per-deck scratch cut that is audible in
+> Mixxx only, because its deck outputs are post-fader; and `CROSSFADER` (CC 23/55), for a single software mixer and not
+> for two units.
 
 ## What the unit sends by default
 
@@ -37,15 +39,15 @@ fails when it no longer matches the contract.
 | What | Factory default |
 |---|---|
 | MIDI channel | `midiChannel` = AUTO: Deck A on channel 1 (status `0x90` / `0xB0`), Deck B on channel 2 (status `0x91` / `0xB1`) |
-| Slide pot | `faderRole` = `CHANNEL_VOLUME`: CC 7 (MSB) / 39 (LSB), 14-bit. Other roles: `CROSSFADER` CC 23 / 55, `PITCH` CC 25 / 57 |
+| Slide pot | `faderRole` = `PITCH`: CC 25 (MSB) / 57 (LSB), 14-bit. Other roles: `CROSSFADER` CC 23 / 55, `CHANNEL_VOLUME` CC 7 / 39 |
 | Orange knob | `knobRole` = `GENERIC`: CC 24 (MSB) / 56 (LSB), 14-bit |
 | Platter | `platterSource` = `TOUCH_RING`, `jogInvert` = 0: CC 22, relative `64 + delta`, **1024 ticks per revolution**, clockwise positive; touch is Note 38 |
 | Buttons | `cue` Note 36, `rev` Note 37; a platter tap (`tapPlay` = 1) pulses `play` Note 39 |
 | Mode | `mode` = `DJ`: no clock, transport or timecode out, so `bpm`, `bpmNudge`, `tap` and `transport` stay silent |
 <!-- END GENERATED:defaults -->
 
-The default slide-pot role is a per-deck channel volume, so two units never share a crossfader. Each
-mapping binds all three pot roles; what the app does with each is in its README and in the matrix below.
+Each mapping binds all three slide-pot roles, but only the one `faderRole` selects ever carries data. What the app does
+with each is in its README and in the matrix below.
 
 ## Status codes
 
@@ -62,8 +64,8 @@ mapping binds all three pot roles; what the app does with each is in its README 
 
 Unit-side prerequisites for every column: default MIDI channels (`midiChannel` = AUTO, Deck A on
 channel 1, Deck B on channel 2) and the unit calibrated first (the macOS app, or the SysEx frames in
-[`docs/BRINGUP.md`](../docs/BRINGUP.md) section 2b). Mixxx works with the default slide-pot role; for the "two units into
-the EP-136" rig, VirtualDJ, djay and rekordbox need `PITCH` (see [Slide pot in this rig](#slide-pot-in-this-rig)).
+[`docs/BRINGUP.md`](../docs/BRINGUP.md) section 2b). The default slide-pot role (`PITCH`) is live in all four columns, also
+in the "two units into the EP-136" rig; the other two roles are not (see [Slide pot in this rig](#slide-pot-in-this-rig)).
 
 | Feature (what the unit sends) | Mixxx | VirtualDJ | djay Pro | rekordbox |
 |---|---|---|---|---|
@@ -72,7 +74,7 @@ the EP-136" rig, VirtualDJ, djay and rekordbox need `PITCH` (see [Slide pot in t
 | **Cue** (note 36) | **MOCK**. `cue_default`. | **DOCS**. `cue_stop`. | **LEARN**. CUE (community name). | **COMM**. `Cue` row, active. |
 | **Play / pause** (note 39, platter tap) | **MOCK**. Toggles `play`. | **DOCS**. `play_pause`. | **LEARN**. Play/Pause (name in the official manual). | **COMM**. `PlayPause` row, active. |
 | **Reverse** (note 37) | **MOCK**. `reverseroll` while held; `reverse` toggle by setting. | **DOCS**. `reverse`. Whether a press latches or is momentary is not documented. | **LEARN**. Reverse (community name). | **EXP**. `Reverse` row disabled, command name unverified. |
-| **Slide pot** (CC 7/39 by default; 25/57 or 23/55 by `faderRole`; 14-bit) | **MOCK**. Deck volume (default role), deck rate (`PITCH`) or, for `CROSSFADER`, what `FADER_ROLE` says (master crossfader unless changed); 14-bit. | **DOCS**. `level` (default role), `pitch`, `crossfader`; 14-bit by `ccmsb`. | **LEARN**. Line Volume (default role), Tempo or Crossfader. MSB only, so 128 steps. | **COMM**. `TempoSlider` (`PITCH`) and `CrossFader` (`CROSSFADER`) active; `ChannelFader`, the default role's row, is disabled (name unverified), so with a default unit the pot does nothing until you change the role or enable the row. 14-bit LSB handling unverified. |
+| **Slide pot** (CC 25/57 by default; 7/39 or 23/55 by `faderRole`; 14-bit) | **MOCK**. Deck rate (default role `PITCH`), deck volume (`CHANNEL_VOLUME`) or, for `CROSSFADER`, what `FADER_ROLE` says (master crossfader unless changed); 14-bit. | **DOCS**. `pitch` (default role), `level`, `crossfader`; 14-bit by `ccmsb`. | **LEARN**. Tempo (default role), Line Volume or Crossfader. MSB only, so 128 steps. | **COMM**. `TempoSlider` (`PITCH`, the default role) and `CrossFader` (`CROSSFADER`) active; `ChannelFader`, `CHANNEL_VOLUME`'s row, is disabled (name unverified), so with that role the pot does nothing until you enable the row. 14-bit LSB handling unverified. |
 | **Orange knob** (CC 24/56, 14-bit) | **MOCK**. Quick Effect `super1`. | **DOCS**. `filter`. | **LEARN**. Effects > Filter. MSB only. | **COMM**. `Gain`; an arbitrary pick, re-learn to taste. |
 | **LED feedback** (host sends note 36 and 39) | **MOCK**. `cue_indicator` and `play` to notes 36 and 39. | **DOCS**. `<led default="CUE">` follows the button's action state. Unconfirmed. | **LEARN**. MIDI Out per control. Wiring untested. | **COMM**. `output` = `input` on `PlayPause` and `Cue`. |
 | **BPM / transport / clock** (CC 20/52, 21, 29, note 41; out only in SYNC modes) | **MOCK** for unit to host: `bpm`, `bpmNudge`, transport CC, tap (Mixxx 2.5+ only). **NONE** for host to unit: Mixxx drops MIDI clock and the mapping sends no tempo. | **NONE**. Left unmapped. The manual says VirtualDJ can send MIDI clock to a controller; Start/Stop unknown, untested. | **NONE**. | **NONE**. |
@@ -92,7 +94,7 @@ interface (for example the Sidekick's own USB audio, not evaluated), needs only 
 
 | App | Per-deck outputs | Two EP-DJ3000 cards |
 |---|---|---|
-| Mixxx | Preferences > Sound Hardware > Outputs, Deck 1 / Deck 2 (post-fader, so the unit's volume pot is audible; leave the rest of Mixxx's mixer neutral) | Not tested. Two cards have independent clocks. |
+| Mixxx | Preferences > Sound Hardware > Outputs, Deck 1 / Deck 2 (post-fader, so a unit set to `CHANNEL_VOLUME` is audible; leave the rest of Mixxx's mixer neutral) | Not tested. Two cards have independent clocks. |
 | VirtualDJ | Settings > Audio > SEPARATE DECKS, one sound card per line | Manual's example uses one multi-channel card; no official statement found for two different cards. |
 | djay Pro | Mixer mode External, one stereo output per deck | The page describes one interface. Proposed route: a macOS Aggregate Device. Untested; the title of a community thread ("Pre-cueing with multiple sound cards not working", not opened) suggests friction. |
 | rekordbox | Mixer Mode External, six outputs on one device | One audio device. Same Aggregate Device proposal, untested. |
@@ -102,12 +104,15 @@ audio and the units set to `dacMode` OFF (MIDI only).
 
 #### Slide pot in this rig
 
-For VirtualDJ, djay and rekordbox set `faderRole` to `PITCH` (config key 11, value 2) and the pot becomes a CDJ-style tempo
-fader. They hand the mixing to the external mixer, and their READMEs (from the vendors' external-mixer pages) say their own
-crossfader and channel faders do nothing audible then, so the default volume role is inert there. For Mixxx the default role
-(`CHANNEL_VOLUME`) is the one to use: each unit cuts its own deck's volume, Mixxx's Deck outputs are post-fader so it is
-audible, and the software crossfader is left alone. `CROSSFADER` is the role to avoid with two units: both pots would drive
-the one software crossfader.
+The factory role, `PITCH` (CC 25/57), is a CDJ-style tempo fader. It is the one role that does something in all four apps with
+an external mixer, and two units never fight over a tempo slider. The other two are choices you make with a SysEx frame
+(`SET_CONFIG faderRole`, config key 11; `SAVE_CONFIG` keeps it; frames in [`docs/BRINGUP.md`](../docs/BRINGUP.md) section 2b):
+
+| Role | Value | Use it when | Why not the default |
+|---|---|---|---|
+| `PITCH` | 2, **factory default** | any app, any rig | - |
+| `CHANNEL_VOLUME` | 1 | Mixxx: each unit cuts its own deck, which is a scratch cut on the hardware mixer too, because Mixxx's Deck outputs are post-fader | VirtualDJ, djay and rekordbox hand the mixing to the external mixer, and their READMEs (from the vendors' external-mixer pages) say their own channel faders do nothing audible then, so the pot is dead there (rekordbox's `ChannelFader` row is disabled as well) |
+| `CROSSFADER` | 0 | one unit, or the app's own software mixer with no hardware mixer | two units would both drive the one software crossfader, and with an external mixer the crossfader is inert in the three proprietary apps |
 
 ## Cross-driver caveats and open items
 
@@ -119,11 +124,10 @@ the one software crossfader.
   Mixxx depends on it: it sends the cue and play LEDs of both decks to every enabled port, each on its deck's
   channel. VirtualDJ's definition sends LEDs on both channels and each unit acts on its own. djay and rekordbox use
   one channel per unit and do not depend on it.
-* **The play note is feedback only.** Note 39 from the host (velocity above 0 = playing) lights the unit's LED in DJ and
-  SYNC_FOLLOW; it never starts or stops a unit's clock, in any mode. Only the `transport` CC (29) commands a SYNC_MASTER
-  unit, and no mapping sends it, so mirroring the app's play state to the unit is safe whatever mode the unit is in
-  (`docs/PROTOCOL.md` section 2.6). In SYNC_MASTER the firmware currently ignores the note for the LED too (open finding
-  E2E-3, `docs/E2E.md`); a DJ app is not normally used with a unit in that mode.
+* **The play note is feedback only.** Note 39 from the host (velocity above 0 = playing) lights the unit's LED in every
+  mode; it never starts or stops a unit's clock. Only the `transport` CC (29) commands a SYNC_MASTER unit, and no mapping
+  sends it, so mirroring the app's play state to the unit is safe whatever mode the unit is in (`docs/PROTOCOL.md`
+  section 2.6; finding E2E-3 in `docs/E2E.md` was the firmware not doing this in SYNC_MASTER).
 * **Tap-to-play briefly scratches.** The unit cannot know a touch is a tap until it ends, so the touch note arrives
   first. Any mapping that holds the deck on touch stalls it for up to `tapMaxMs` (180 ms by default) before the play
   toggle lands: Mixxx does (mock-verified), VirtualDJ's `touchwheel_touch` is documented to hold the song, so expect
@@ -185,13 +189,14 @@ unit's clock and MTC). No research was done on them.
 
 ## Windows notes
 
-* **MIDI works without a driver.** The unit is USB-MIDI 1.0 class-compliant; Windows 10 and later bind their
-  in-box class driver. Each cable is its own port: Deck (cable 0), TRS MIDI, Linked deck. Historically the in-box
+* **MIDI should need no driver.** The unit is meant to be USB-MIDI 1.0 class-compliant, so Windows 10 and later should bind
+  their in-box class driver (not tried on Windows). Each cable is its own port: Deck (cable 0), TRS MIDI, Linked deck. Historically the in-box
   driver lets one application open a port at a time, so quit one app before starting another (newer Windows MIDI
   Services lifts this on Windows 11; not checked here).
-* **Audio is meant to be class-compliant, but is not low-latency.** The USB audio function is USB Audio Class 1.0, stereo,
-  48 kHz, 16-bit (`docs/PROTOCOL.md` section 1). Windows 10 and later should play it through their in-box USB Audio 1.0
-  driver, and it should show up to the DJ app as an ordinary audio device (WASAPI, MME, DirectSound). Not tried on Windows. **Low-latency audio on Windows
+* **Audio is meant to be class-compliant, but is not low-latency.** The USB audio function is USB Audio Class 1.0 (UAC1, not
+  UAC2: the ESP32-S3 is full-speed only), stereo, 48 kHz, 16-bit (`docs/PROTOCOL.md` section 1). Windows 10 and later should
+  play it through their in-box USB Audio 1.0 driver, and it should show up to the DJ app as an ordinary audio device (WASAPI,
+  MME, DirectSound). Not tried on Windows, or on any other host. **Low-latency audio on Windows
   normally wants an ASIO driver and this unit has none**; writing or licensing one is outside v1. Expect higher
   output latency than on macOS, which matters for scratch monitoring. A generic ASIO layer on top (ASIO4ALL,
   FlexASIO) might help; untested.
@@ -219,7 +224,7 @@ Written and run on Node 22; needs `python3` (override with `PYTHON=...`); `xmlli
 |---|---|---|
 | `tools/gen_protocol.py --check` | `common/epdj3000-protocol.js`, `mixxx/epdj3000-protocol.js` (the generator writes both) and the other generated files are current with `protocol/epdj3000.json` | - |
 | `test/defaults/check.mjs` | The "what the unit sends by default" table above equals a render of the contract; the Mixxx, VirtualDJ, djay and rekordbox READMEs all state the contract's default fader role and its CC pair; broken copies fail | That the firmware sends it (the firmware tests do) |
-| `test/mixxx/run.mjs` (38 tests) | The XML and script load the way Mixxx loads them; every `<status>`/`<midino>` equals the set derived from the contract; each handler behaves correctly against a strict mock engine that rejects any control name not in the Mixxx docs; the generated XML is current and both generated copies of the constants are identical | That real Mixxx accepts it. Scratch feel, soft takeover with a real pot |
+| `test/mixxx/run.mjs` (39 tests) | The XML and script load the way Mixxx loads them; every `<status>`/`<midino>` equals the set derived from the contract; each handler behaves correctly against a strict mock engine that rejects any control name not in the Mixxx docs; the generated XML is current and both generated copies of the constants are identical | That real Mixxx accepts it. Scratch feel, soft takeover with a real pot |
 | `test/virtualdj/check.mjs` (25 tests) | Both XML files are well-formed, use only elements and attributes of the official reference, agree with the contract number for number, use only verbs from a snapshot of the official verb list; deliberately broken copies fail | Anything VirtualDJ does with them |
 | `test/djay-rekordbox/check.mjs` | Both CSVs decoded independently of the generator match the contract (status, data byte, channel, deck column, type, LED); unverified and jog rows stay disabled; the djay and rekordbox READMEs' tables carry the contract numbers; broken copies fail | That rekordbox opens a CSV or djay has the action |
 | `xmllint --noout` on the three XML files | Parses with a second, independent parser | - |
@@ -244,7 +249,7 @@ missing `python3`.
    (`test/mixxx/gen-xml.mjs` and `rekordbox/generate_csv.py` do) so it cannot drift.
 4. **Follow the rules in [`common/README.md`](common/README.md)**: channel is the deck, notes release as Note Off or
    velocity 0, relative CCs are offset-64, 14-bit pairs are MSB first with either half skippable, the slide pot is
-   one of three pairs by `faderRole` (default `CHANNEL_VOLUME`), LED feedback is Note On on notes 36 and 39.
+   one of three pairs by `faderRole` (default `PITCH`), LED feedback is Note On on notes 36 and 39.
    `common/README.md` has a decoder that does these correctly; copy its logic, not your memory of MIDI.
 5. **Account for every contract control.** `jog`, `touch`, `cue`, `rev`, `play`, `tap`, `crossfader`,
    `channelVolume`, `pitch`, `knob`, `bpm`, `bpmNudge`, `transport`: each is bound or listed as unmapped with a

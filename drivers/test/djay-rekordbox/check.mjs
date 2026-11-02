@@ -236,11 +236,14 @@ function checkCommon(md, bad, who) {
     if (!md.includes(unitName(u))) bad.push(`${who}: never names the USB product "${unitName(u)}"`);
     if (!new RegExp(`channel ${channelOf(u) + 1}\\b`, "i").test(md)) bad.push(`${who}: never says channel ${channelOf(u) + 1}`);
   }
+  // The README says how to reach every faderRole: the default needs nothing, the others are one SysEx frame away.
   const role = contract.config.keys.find((k) => k.name === "faderRole");
-  const pitch = contract.enums.FaderRole.find(([n]) => n === "PITCH")[1];
-  const m = /`faderRole` to `PITCH` \(config key (\d+), value (\d+)\)/.exec(md);
-  if (!m) bad.push(`${who}: faderRole advice missing`);
-  else if (+m[1] !== role.id || +m[2] !== pitch) bad.push(`${who}: faderRole key/value ${m[1]}/${m[2]}, contract ${role.id}/${pitch}`);
+  const flat = md.replace(/\s+/g, " ");
+  for (const [name, value] of contract.enums.FaderRole) {
+    const m = new RegExp(`\`${name}\` \\(config key (\\d+), value (\\d+)\\)`).exec(flat);
+    if (!m) bad.push(`${who}: faderRole advice for ${name} missing`);
+    else if (+m[1] !== role.id || +m[2] !== value) bad.push(`${who}: faderRole ${name} key/value ${m[1]}/${m[2]}, contract ${role.id}/${value}`);
+  }
   if (!new RegExp(`\`${contract.midi.relativeCenter} \\+ delta\``).test(md)) {
     bad.push(`${who}: does not state the relative encoding \`${contract.midi.relativeCenter} + delta\``);
   }
@@ -374,7 +377,11 @@ const readmeMutants = [
   ["rekordbox README: wrong cheat-sheet code", validateRekordboxReadme, rbReadme, "`B017` / `B117` |\n| `channelVolume`", "`B018` / `B117` |\n| `channelVolume`", /crossfader cheat-sheet codes/],
   ["rekordbox README: UNTESTED banner removed", validateRekordboxReadme, rbReadme, "UNTESTED in rekordbox", "Tested in rekordbox", /lost its UNTESTED banner/],
   ["rekordbox README: state flipped", validateRekordboxReadme, rbReadme, "| `rev` | Note 37 | `Reverse` / Button | disabled, UNVERIFIED name", "| `rev` | Note 37 | `Reverse` / Button | active", /rev state .* disagrees/],
-  ["rekordbox README: wrong fader key", validateRekordboxReadme, rbReadme, "config key 11, value 2", "config key 12, value 2", /faderRole key\/value/],
+  ["rekordbox README: wrong fader key", validateRekordboxReadme, rbReadme, "config key 11, value 2", "config key 12, value 2", /faderRole PITCH key\/value/],
+  ["rekordbox README: wrong CHANNEL_VOLUME value", validateRekordboxReadme, rbReadme, "`CHANNEL_VOLUME` (config key 11, value 1)", "`CHANNEL_VOLUME` (config key 11, value 3)", /faderRole CHANNEL_VOLUME key\/value/],
+  ["rekordbox README: no advice for CROSSFADER", validateRekordboxReadme, rbReadme, "`CROSSFADER` (config key 11, value 0)", "`CROSSFADER`", /advice for CROSSFADER missing/],
+  ["djay README: wrong fader key", validateDjayReadme, djayReadme, "config key 11, value 2", "config key 12, value 2", /faderRole PITCH key\/value/],
+  ["djay README: wrong CROSSFADER value", validateDjayReadme, djayReadme, "`CROSSFADER`\n   (config key 11, value 0)", "`CROSSFADER`\n   (config key 11, value 1)", /faderRole CROSSFADER key\/value/],
   ["djay README: wrong note number", validateDjayReadme, djayReadme, "| `Note 39` |", "| `Note 40` |", /play learns "Note 40"/],
   ["djay README: wrong LSB", validateDjayReadme, djayReadme, "ignore `CC 57`", "ignore `CC 58`", /pitch should tell the user to ignore CC 57/],
   ["djay README: banner removed", validateDjayReadme, djayReadme, "UNVERIFIED / manual", "verified", /lost its UNVERIFIED/],

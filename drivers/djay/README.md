@@ -35,9 +35,13 @@ controller, so djay offers MIDI Learn for it ([help article][howto]).
 Same idea as `docs/ARCHITECTURE.md` section 1: each unit is a controller plus its own USB sound
 card, and the EP-136 mixes in hardware.
 
-1. **Slide pot as tempo fader.** The unit's default `faderRole` is `CHANNEL_VOLUME` (CC 7 / 39), which the cheat
-   sheet below maps to Line Volume. With an external mixer, djay's crossfader and line faders do nothing audible, so
-   that pot would be inert. Set `faderRole` to `PITCH` (config key 11, value 2) and save to get a tempo fader.
+1. **Slide pot as tempo fader.** Nothing to set. The unit's default `faderRole` is `PITCH` (CC 25 / 57), which the cheat
+   sheet below maps to Tempo. That is the factory role because it is the one that does something in this rig: with an
+   external mixer, djay's crossfader and line faders do nothing audible, so `CHANNEL_VOLUME` (Line Volume) and
+   `CROSSFADER` would leave the pot inert. The other roles are for djay's internal mixer, and are one SysEx frame
+   (`docs/BRINGUP.md` section 2b): set `faderRole` to `CHANNEL_VOLUME` (config key 11, value 1) or to `CROSSFADER`
+   (config key 11, value 0), and back to the default with `faderRole` to `PITCH` (config key 11, value 2);
+   `SAVE_CONFIG` keeps it.
 2. **Mixer mode External.** Official [audio devices page][audio]: in External mode "Audio is routed to
    separate channels" and you assign a **stereo output per deck** (Decks 1-4), plus Sampler, Looper and
    Pre-cueing. Per the [external mixers page][ext], click Apply with the mixer powered on, then
@@ -76,9 +80,9 @@ mappings on a PC or MAC might differ"). The Action menu in your version is autho
 | `rev` | hold REV | `Note 37` | Deck 1 > Reverse | Button (plays backward while held, per the list) | community |
 | `touch` | finger on the platter | `Note 38` | Deck 1 > Jog Wheels > Scratching Mode | Button (jog Plan A) | community |
 | `jog` | drag clockwise | `CC 22` | Deck 1 > Jog Wheels > Scratch (jog Plan A) or Scratch (no touch detection) (Plan B) | Rotary (3Fh/41h); Speed and Reaction by feel | official |
-| `pitch` | sweep the pot (`faderRole` = PITCH) | `CC 25` (MSB), ignore `CC 57` (LSB) | Deck 1 > Tempo | Fader/Knob; Pickup mode on | community |
+| `pitch` | sweep the pot (default `faderRole` = PITCH) | `CC 25` (MSB), ignore `CC 57` (LSB) | Deck 1 > Tempo | Fader/Knob; Pickup mode on | community |
 | `crossfader` | sweep the pot (`faderRole` = CROSSFADER) | `CC 23` (MSB), ignore `CC 55` (LSB) | Mixer > Crossfader | Fader/Knob; internal mixer only | community |
-| `channelVolume` | sweep the pot (default `faderRole` = CHANNEL_VOLUME) | `CC 7` (MSB), ignore `CC 39` (LSB) | Mixer > Deck 1: Line Volume | Fader/Knob; internal mixer only | community |
+| `channelVolume` | sweep the pot (needs `faderRole` = CHANNEL_VOLUME) | `CC 7` (MSB), ignore `CC 39` (LSB) | Mixer > Deck 1: Line Volume | Fader/Knob; internal mixer only | community |
 | `knob` | turn the orange knob | `CC 24` (MSB), ignore `CC 56` (LSB) | Deck 1 > Effects > Filter | Fader/Knob (the list calls Filter a Rotary action; this knob is absolute) | community |
 
 Not mapped: `bpm`, `bpmNudge`, `tap`, `transport`. The unit only sends them in its own clock-master
@@ -117,8 +121,8 @@ to "test each option", and the Reaction slider trades smooth for responsive.
   tempo sliders).
 * **Fader direction.** Wrong way round: djay's **Invert**, or the unit's `faderInvert`.
 * **Two units, one crossfader.** Only if you set both units to `faderRole` = CROSSFADER, then both drive djay's one
-  crossfader. The default CHANNEL_VOLUME gives each unit its own deck's Line Volume; for the external-mixer rig use
-  PITCH.
+  crossfader. The default PITCH gives each unit its own deck's Tempo, which is what the external-mixer rig wants;
+  CHANNEL_VOLUME gives each its own Line Volume, which only matters with djay's internal mixer.
 
 ### Test for the biggest risk: does djay read the magnitude?
 

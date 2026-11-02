@@ -49,7 +49,7 @@ final class BridgeAndPortsE2ETests: E2ETestCase {
             deckB.apply(linked.events.take())
             XCTAssertEqual(deckB.buttons, [.cue])
             XCTAssertTrue(deckB.touched)
-            XCTAssertEqual(deckB.faderRole, .channelVolume)
+            XCTAssertEqual(deckB.faderRole, .pitch, "Deck B's factory slide pot is the tempo fader too (contract v1.2)")
             let expected = (Double(3000 - 40) / Double(4055 - 40) - 0.015) / 0.97 * 16383
             XCTAssertEqual(Double(deckB.fader), expected, accuracy: 30)
 

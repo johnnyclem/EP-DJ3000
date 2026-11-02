@@ -19,7 +19,7 @@ SysEx monitor, a small scratch-capable player, and a two-deck rig view. It speak
 >
 > | Check | Result |
 > |---|---|
-> | `swift build` and `swift test` of `EPDJ3000Protocol`, `EPDJ3000Engine` and `EPDJ3000KitPure` on Linux (Swift 6.0.3) | pass, 300 tests (169 + 80 + 51); also warning-free with `-Xswiftc -strict-concurrency=complete`. `swift test` also lists the 63 `EPDJ3000E2ETests` (the firmware engine as a child process); 62 of them skip when `epdj_engine_sim` is not built |
+> | `swift build` and `swift test` of `EPDJ3000Protocol`, `EPDJ3000Engine` and `EPDJ3000KitPure` on Linux (Swift 6.0.3) | pass, 307 tests (175 + 81 + 51; the Protocol and Engine counts include the 7 added for the slide-pot role fix, finding E2E-2); no warnings from the three library targets with `-Xswiftc -strict-concurrency=complete` (the E2E test target has four `stderr` concurrency warnings, in test code only). `swift test` also lists the 62 `EPDJ3000E2ETests` (the firmware engine as a child process); all of them skip when `epdj_engine_sim` is not built |
 > | The Foundation-only part of the Kit (`Sources/EPDJ3000Kit/Pure/`, the `EPDJ3000KitPure` target: MIDI formatting, log, waveform overview, test signals, config presentation, rig checklist, error text, name matching) | compiled and tested with the real toolchain as part of `swift test` (`EPDJ3000KitPureTests`) |
 > | All Kit and app sources type-checked in Swift 5 language mode, with complete strict-concurrency checking, against **hand-written stand-ins** for CoreMIDI, CoreAudio, AudioToolbox, AVFoundation, Combine, SwiftUI, AppKit and UniformTypeIdentifiers (not part of this repository) | no errors; none in the Kit; 5 warnings in the app, all artefacts of the stand-ins (the `NSSecureCoding` casts that only fail on Linux, and isolation of the stand-in `NSApplicationDelegate` / `App` protocols, whose isolation in the real SDK may differ; on an older SDK the same warnings may appear for real) |
 > | `DeckAudio` / `AudioOutput` device-change handling, run (not just type-checked) on Linux with a stateful `AVAudioEngine` stand-in that stops itself and posts `AVAudioEngineConfigurationChange` on command (not part of this repository) | six scenarios pass: a second change right after a rebuild is restarted after the 0.5 s interval instead of dropped; bursts coalesce into one restart; a notification while the engine still runs rebuilds nothing; `shutdown()` and a later rebuild cancel a pending restart; a change long after the last rebuild is acted on at once. The previous code fails the scenarios that need a restart inside the window (it dropped the second change and left the engine stopped). This exercises our logic only; the stand-in says nothing about when or how often CoreAudio really posts the notification |
@@ -76,8 +76,7 @@ what a message means, what the player does) lives in the two tested libraries.
 and knob, CUE / REV / TOUCH lights, tempo, transport, song position and MIDI time code as the unit reports them. Buttons
 send transport and tempo to the unit (the unit acts on them in sync-master mode; elsewhere they only drive its LEDs).
 The unit's PLAY and CUE LEDs follow the player unless you switch that off. The unit takes the play note as LED feedback
-only and never starts its clock from it; in sync-master mode it does not light the PLAY LED from it (open finding E2E-3,
-`docs/E2E.md`). A tap on a unit in sync-master mode arrives as
+only and never starts its clock from it, in every mode. A tap on a unit in sync-master mode arrives as
 Start/Stop and as the play pulse; the player treats the pair as one tap.
 
 **Calibrate.** A guided wizard over the protocol library's state machines: slide pot sweep, knob sweep, touch ring
@@ -94,8 +93,8 @@ handling the packet).
 **Player.** Drop an audio file (or open one, or load the built-in demo loop or 440 Hz tone, which need no file and no
 DAC). Waveform overview with playhead and cue point; click to seek. Play / pause, stop, CUE (hold) and REV (hold) work from
 the buttons *and* from the unit at the same time; touching the unit's platter holds the record and sliding scratches.
-The pitch fader, knob and slide pot act as in `DeckModel`: the slide pot is a channel volume by default (the unit's
-`faderRole`), or a crossfader-style cut, or the pitch fader. The output picker pins this deck's player to any CoreAudio
+The knob and slide pot act as in `DeckModel`: the slide pot is the pitch (tempo) fader by default (the unit's `faderRole`
+is `PITCH`), or a channel volume, or a crossfader-style cut when the role is changed (a Player-tab picker sets it live). The output picker pins this deck's player to any CoreAudio
 output, including the deck's own USB audio device, which is the end-to-end audio test. With no unit connected the *On-screen
 deck* works with the buttons and a platter you drag with the mouse.
 
@@ -188,7 +187,7 @@ decoded track is held in memory). DRM-protected files are refused by macOS.
 
 ## Tests
 
-`swift test` runs the Protocol, Engine and KitPure tests on any OS (300 tests on Linux with Swift 6.0.3; the full run reports 363 because it also lists the 63 end-to-end tests, 62 of which skip until `tools/e2e.sh` has built the firmware simulator, see [`docs/E2E.md`](../docs/E2E.md)). The Kit's
+`swift test` runs the Protocol, Engine and KitPure tests on any OS (307 tests on Linux with Swift 6.0.3; the full run reports 369 because it also lists the 62 end-to-end tests, which skip until `tools/e2e.sh` has built the firmware simulator, see [`docs/E2E.md`](../docs/E2E.md)); `tools/check-all.sh swift e2e-swift` runs both halves. The Kit's
 Foundation-only code (`Sources/EPDJ3000Kit/Pure/`) is the `EPDJ3000KitPure` target, tested by `EPDJ3000KitPureTests`;
 `Package.swift` declares the Kit and the app only on macOS, so nothing that imports CoreMIDI, AVFoundation or SwiftUI is
 tested here. `DeviceClientTests` talk to `FakeDevice`, an in-memory unit written from `docs/PROTOCOL.md` section 3 and

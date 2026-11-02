@@ -178,12 +178,24 @@ final class TelemetryCalibrationE2ETests: E2ETestCase {
             try await world.run(ms: 100)
             let measured = try await c.calAutoEnd(.knob, apply: false)
             XCTAssertEqual(measured.applied, 0)
-            // PROTOCOL.md: with apply = 0 the result carries "the measured extremes". The firmware returns them inset by 1 %.
-            knownIssue("E2E-1", "CAL_END apply=0 returns the 1%-inset range (\(measured.rawMin)...\(measured.rawMax)), not the measured 100...3900",
-                       holds: abs(Double(measured.rawMin) - 100) <= 4 && abs(Double(measured.rawMax) - 3900) <= 4)
-            XCTAssertEqual(Double(measured.rawMin), 138, accuracy: 4, "inset range, as the firmware actually reports it")
-            XCTAssertEqual(Double(measured.rawMax), 3862, accuracy: 4)
+            // PROTOCOL.md 3: with apply = 0 the result carries "the measured extremes", not the 1 % inset range apply writes.
+            XCTAssertEqual(Double(measured.rawMin), 100, accuracy: 4, "measured, not inset")
+            XCTAssertEqual(Double(measured.rawMax), 3900, accuracy: 4)
+            try await expectEqual(try await c.getConfig(.knobRawMin), ConfigTable.desc(.knobRawMin).defaultValue)
             try await expectEqual(try await c.getConfig(.knobRawMax), ConfigTable.desc(.knobRawMax).defaultValue)
+
+            // The same sweep with apply = 1 reports, and writes, the range moved in by 1 % of the 3800-count span.
+            try await c.calAutoBegin(.knob)
+            _ = try await world.command("knob u=0 raw=100")
+            try await world.run(ms: 100)
+            try await world.ramp("knob", from: 100, to: 3900, ms: 500)
+            try await world.run(ms: 100)
+            let applied = try await c.calAutoEnd(.knob, apply: true)
+            XCTAssertEqual(applied.applied, 1)
+            XCTAssertEqual(Double(applied.rawMin), 138, accuracy: 4, "inset range")
+            XCTAssertEqual(Double(applied.rawMax), 3862, accuracy: 4)
+            try await expectEqual(try await c.getConfig(.knobRawMin), Int32(applied.rawMin), "CalResult carries what was written")
+            try await expectEqual(try await c.getConfig(.knobRawMax), Int32(applied.rawMax))
         }
     }
 
@@ -204,7 +216,7 @@ final class TelemetryCalibrationE2ETests: E2ETestCase {
             try await world.run(ms: 200)
             for t in c.telemetry.take() { host.feed(t) }
             XCTAssertEqual(host.phase, .rangeReached)
-            let deviceResult = try await c.client.calAutoEnd(.fader, apply: false)
+            let deviceResult = try await c.client.calAutoEnd(.fader, apply: true)  // apply = 1 reports the inset range, like the host
             let hostResult = try host.finish()
             XCTAssertEqual(hostResult.invert, true, "raw fell as the control moved to its high end")
             XCTAssertEqual(Double(hostResult.rawMin), 300, accuracy: 6)

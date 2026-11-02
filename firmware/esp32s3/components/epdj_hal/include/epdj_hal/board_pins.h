@@ -1,8 +1,10 @@
 // Pin plan for the EP-DJ3000 on an ESP32-S3-DevKitC-1 (hardware/WIRING.md has the same table with the
 // reasons). The static_asserts below make a bad edit a compile error: no GPIO is used twice and none lands on
-// a pin the module needs for itself.
+// a pin the module needs for itself. They hold for both board revisions of the status LED.
 #pragma once
 #include <cstddef>
+
+#include "sdkconfig.h"
 
 namespace epdj {
 namespace pins {
@@ -35,8 +37,15 @@ constexpr int kI2cScl = 47;
 constexpr int kTrsTx = 40;
 constexpr int kTrsRx = 41;
 
-// ---- status LED: the WS2812 on DevKitC-1 v1.0 (v1.1 moved it to GPIO38: change this one line) ----
+// ---- status LED: the on-board WS2812. v1.1 boards have it on GPIO38, v1.0 on GPIO48 (Kconfig EPDJ_BOARD_REV,
+// default v1.1). For another board, replace this constant. ----
+#ifdef CONFIG_EPDJ_BOARD_DEVKITC_1_V1_0
 constexpr int kStatusLed = 48;
+constexpr const char* kBoardRev = "DevKitC-1 v1.0";
+#else
+constexpr int kStatusLed = 38;
+constexpr const char* kBoardRev = "DevKitC-1 v1.1";
+#endif
 
 // ------------------------------------------------------------------------------------------------------
 // Compile-time checks

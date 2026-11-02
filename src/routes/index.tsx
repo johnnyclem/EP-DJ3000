@@ -46,7 +46,8 @@ function Home() {
         platter is centered, with 6 mm of deck on each side. The knob sits above it.
         It is 16 mm thick, the same as a K.O. II and a Sidekick, so the cases sit flush.
         The deck is not engraved. Type tore out of the first print. The top 45 mm
-        is a blank plate over the battery bay, meant to be silkscreened.
+        is a blank plate over the battery bay, meant to be silkscreened. A thin slot
+        in it takes a 0.91 inch 128×32 screen.
         Pin holes are 16, 25, 48, 216 and 224 mm from the fader end, 8 mm off the
         bottom, on both long sides.
       </p>

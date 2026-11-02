@@ -90,6 +90,14 @@ plate_ledge = 4.2;
 // Two M2s in the ledge on the platter side of the bay.
 plate_screws = [[22, 191], [48, 191]];
 
+// 0.91" SSD1306, 128x32, yellow over blue. Not the 0.96" (that one is 128x64).
+// Active area is 22.38 x 5.58. The window shows the pixels and a hair of black glass.
+// The 36 x 12 mm module tapes to the underside of the plate, pins bent down into the bay.
+oled_w = 23.2;
+oled_h = 6.4;
+oled_cx = 31;   // plate-local, left of the knob
+oled_cy = 30;
+
 encoder_pad_top = 6.2;
 encoder_pad_w = 26;
 encoder_pad_d = 20;
@@ -483,6 +491,9 @@ module faceplate() {
             translate([p[0] - plate_x0, p[1] - plate_y0, -eps])
                 cylinder(d = 2.2, h = plate_t + 2 * eps, $fn = 16);
         }
+        // OLED aperture. Sharp rectangle, no bezel. Yellow band faces the jack end.
+        translate([oled_cx - oled_w / 2, oled_cy - oled_h / 2, -eps])
+            cube([oled_w, oled_h, plate_t + 2 * eps]);
     }
 }
 

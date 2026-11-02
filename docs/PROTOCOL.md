@@ -1,4 +1,4 @@
-# EP-DJ3000 wire protocol (v1)
+# EP-DJ3000 wire protocol (contract v1.1)
 
 The contract between the **firmware**, the **macOS app** and the **DJ-software
 mappings**. The machine-readable source of truth is
@@ -11,6 +11,16 @@ reproduce those vectors.
 
 Normative words: **MUST**, **SHOULD**, **MAY** as in RFC 2119.
 
+**Revision.** This is contract revision 1.1; the wire version byte (`Info.protocolVersion`, SysEx `ver`) is still 1. 1.1
+renamed `Peer.reserved` to `Peer.status` (a `PeerStatus` bit field), added the `linkGroup` config key, made
+`CHANNEL_VOLUME` the default `faderRole`, put the USB identity in the contract, and settled the `deckId`, `LOAD_DEFAULTS`,
+`GET_CONFIG`-dump and play-note rules below. The revision label exists only in these documents, not in the JSON.
+
+**Known deviations of the current firmware from this text** (the text is the intent; each is an open finding with a
+reproducer in [`E2E.md`](E2E.md)): **E2E-1**, `CAL_END` with `apply = 0` returns the extremes inset by 1 %, like `apply = 1`
+(section 3, `CalResult`); **E2E-3**, in `SYNC_MASTER` the inbound `play` note does not light the play LED (section 2.6).
+Remove this paragraph when both are fixed.
+
 ## 1. USB topology
 
 The unit is a USB **composite** device (full speed, ESP32-S3 native USB):
@@ -20,9 +30,9 @@ The unit is a USB **composite** device (full speed, ESP32-S3 native USB):
 | MIDI | USB-MIDI 1.0 streaming, **3 cables** each way | always |
 | Audio out | USB Audio Class 1.0, stereo, 48 kHz, 16-bit, asynchronous with a feedback endpoint (3 bytes, 10.14 samples per frame), mute and volume | only when a DAC is present (`dacMode` AUTO finds one, or ON) |
 
-Class-compliant means no driver on macOS, iPadOS, Linux or Windows (Windows
-needs a vendor ASIO driver for low-latency audio; MIDI works natively). Audio is
-UAC1 rather than UAC2 because the ESP32-S3 is a full-speed device: see
+Both functions are meant to be class-compliant, i.e. to need no driver on macOS, iPadOS, Linux or Windows; **that has not
+been tested on any host** (Windows would need a vendor ASIO driver for low-latency audio; its in-box drivers cover MIDI and
+plain playback). Audio is UAC1 rather than UAC2 because the ESP32-S3 is a full-speed device: see
 [`ARCHITECTURE.md`](ARCHITECTURE.md) decision 5.
 Descriptor changes need re-enumeration, so `dacMode` takes effect after reboot.
 Product string: `EP-DJ3000 Deck A` / `EP-DJ3000 Deck B` (from `deckId`); the serial
@@ -144,6 +154,8 @@ Transport state (`TransportState`): STOPPED, PLAYING, PAUSED.
 * The `transport` CC (0/1/2) is the **command**: in SYNC_MASTER it drives the local transport; elsewhere it only updates the mirrored state.
   The `play` note with velocity > 0 is **feedback only, in every mode** (the host telling the unit its deck is playing, for the LED);
   it never starts the unit's clock, so a DJ app can mirror its play state to the unit regardless of mode.
+  *Known deviation (E2E-3, open):* in `SYNC_MASTER` the firmware drops the note instead of lighting the LED, which keeps showing
+  the unit's own transport; DJ and `SYNC_FOLLOW` behave as described.
 * `bpm` / `bpmNudge` / `tap` set tempo (SYNC_MASTER applies it; otherwise it is stored for display).
 * Tempo is clamped to `bpmMinX10..bpmMaxX10`. Tap tempo averages the last 4 intervals and resets after a 2 s gap.
 
@@ -241,7 +253,9 @@ Enums and bit fields:
 
 Payload structs. `Telemetry.jogTotal` is the cumulative sum of the jog ticks the unit has emitted, **after** `jogInvert` is applied,
 wrapping as an `i32`. `CalResult.rawMin/rawMax` are the values written to the config (with the 1% inset) when `applied = 1`, otherwise the
-measured extremes. `Peer.status` bit 0 (`PeerStatus.CONFLICT`) means two units claim the same deck id.
+measured extremes (*known deviation, E2E-1, open:* the firmware insets them by 1 % also when `applied = 0`, so a host that
+displays "measured range" shows slightly narrower numbers). `Peer.status` bit 0 (`PeerStatus.CONFLICT`) means two units claim
+the same deck id.
 
 <!-- BEGIN GENERATED:structs -->
 | Struct | Bytes | Fields (little-endian, packed) |
@@ -318,10 +332,12 @@ Each unit may link to its peer over **ESP-NOW** (no router, no pairing menus). S
 * **Bridge**: a unit with **no USB host** forwards its cable-0 MIDI to a peer that has one; the peer emits it on **cable 2** (channel preserved, so Deck B stays on channel 2) and relays host feedback (notes/CCs received on cable 2) back. Jog is forwarded as a cumulative 16-bit counter so lost radio packets never lose motion.
 * The bridge forwards **Note and CC only**: system real-time (clock/start/stop/MTC), program change and SysEx are not bridged, so a bridged
   deck cannot follow host MIDI clock and cannot be configured over the link (plug it in directly to calibrate).
-* Radio MIDI is best-effort, target latency <= 5 ms typical. Config/transport messages use sequence numbers and retries.
+* Radio MIDI is best-effort, with a design target of <= 5 ms typical latency. That figure comes from the simulated link
+  (`LINK.md` section 12); it has never been measured on a radio. Config/transport messages use sequence numbers and retries.
 
 ## 5. Conformance
 
 Every implementation MUST pass `protocol/test-vectors.json`: 8->7 packing, checksum/frames, struct serialization,
 14-bit and relative encodings, USB-MIDI event packets, MTC quarter-frames/full-frame, and clock periods.
-`python3 tools/gen_protocol.py --check && python3 tools/gen_vectors.py --check` MUST pass in CI.
+`python3 tools/gen_protocol.py --check && python3 tools/gen_vectors.py --check` MUST pass before a contract change is merged.
+Nothing runs it automatically yet (the repo has no CI configuration), so run it by hand.

@@ -7,6 +7,8 @@
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "output_pump.h"
+#include "tick_pacing.h"
 
 namespace epdj {
 namespace app {
@@ -18,79 +20,44 @@ const char* TAG = "engine";
 constexpr unsigned kMaxUsbPerIteration = 32;
 constexpr unsigned kMaxTrsPerIteration = 16;
 constexpr unsigned kMaxLinkPerIteration = 8;
-constexpr unsigned kMaxOutPerIteration = 64;
-constexpr uint64_t kUsbGiveUpUs = 100000;  // a host that stops reading must not wedge the TRS and radio output behind it
 constexpr uint64_t kLedPeriodUs = 20000;
-constexpr size_t kMaxUsbPackets = (OutEvent::kMaxBytes + 2) / 3;
+static_assert(sizeof(TickType_t) == sizeof(uint32_t), "tick_pacing.h assumes 32-bit ticks");
 
 LoopStats g_stats;
 TaskHandle_t g_taskHandle = nullptr;
 
-// One output event the engine produced, possibly half delivered: the USB endpoint FIFO can be full, in which
-// case the event stays "in hand" and is retried on the next iteration (README: "keep one event in hand").
-struct InHand {
-  bool valid = false;
-  OutEvent ev;
-  bool otherDone = false;  // TRS and radio parts are sent exactly once
-  size_t usbSent = 0;
-  uint64_t sinceUs = 0;
+// The platform side of OutputPump (output_pump.h has the delivery policy).
+struct EngineIo {
+  Runtime& rt;
+
+  bool popOut(OutEvent* ev) { return rt.engine->popOut(ev); }
+  bool trsReady() const { return rt.trs != nullptr; }
+  void trsWrite(const uint8_t* d, size_t n) { rt.trs->write(d, n); }
+  bool radioReady() const { return rt.radioOn; }
+  void radioSend(const uint8_t* d, size_t n) { radio::send(d, n); }
+  bool usbHostActive() const { return usb_dev::hostActive(); }
+  bool usbWrite(const uint8_t pkt[4]) { return usb_dev::writePacket(pkt); }
+  void countUsbStall() { g_stats.usbStalls.fetch_add(1, std::memory_order_relaxed); }
+  void countUsbDrop() { g_stats.usbDrops.fetch_add(1, std::memory_order_relaxed); }
 };
-
-// Delivers `h`. True = finished (or abandoned), false = USB is busy, try again next iteration.
-bool deliver(Runtime& rt, InHand& h, uint64_t now) {
-  OutEvent& ev = h.ev;
-  if (!h.otherDone) {
-    h.otherDone = true;
-    if ((ev.portMask & proto::clockPorts::kTrs) != 0 && rt.trs != nullptr) rt.trs->write(ev.data, ev.len);
-    if (ev.kind == OutEvent::Kind::Link && (ev.portMask & proto::clockPorts::kLink) != 0 && rt.radioOn) {
-      radio::send(ev.data, ev.len);  // a refused send is just packet loss, which the link layer tolerates
-    }
-  }
-  if ((ev.portMask & proto::clockPorts::kUsb) == 0 ||
-      (ev.kind != OutEvent::Kind::Message && ev.kind != OutEvent::Kind::SysEx)) {
-    return true;
-  }
-  midi::UsbPacket pkts[kMaxUsbPackets];
-  const size_t n = encodeUsb(ev, pkts, kMaxUsbPackets);
-  while (h.usbSent < n) {
-    uint8_t raw[4];
-    pkts[h.usbSent].toBytes(raw);
-    if (!usb_dev::writePacket(raw)) {
-      if (!usb_dev::mounted() || now - h.sinceUs > kUsbGiveUpUs) {
-        g_stats.usbDrops.fetch_add(1, std::memory_order_relaxed);
-        return true;  // no host, or it stopped reading: drop the rest of this event
-      }
-      g_stats.usbStalls.fetch_add(1, std::memory_order_relaxed);
-      return false;
-    }
-    ++h.usbSent;
-  }
-  return true;
-}
-
-void drainOutputs(Runtime& rt, InHand& h, uint64_t now) {
-  for (unsigned i = 0; i < kMaxOutPerIteration; ++i) {
-    if (!h.valid) {
-      if (!rt.engine->popOut(&h.ev)) return;
-      h.valid = true;
-      h.otherDone = false;
-      h.usbSent = 0;
-      h.sinceUs = now;
-    }
-    if (!deliver(rt, h, now)) return;
-    h.valid = false;
-  }
-}
 
 void engineLoop(Runtime* rt) {
   Engine& engine = *rt->engine;
-  InHand inHand;
+  EngineIo io{*rt};
+  OutputPump<EngineIo> pump(io);
   uint64_t lastLedUs = 0;
   uint64_t prevT0 = 0;
   TickType_t lastWake = xTaskGetTickCount();
 
   for (;;) {
     // One tick = 1 ms (CONFIG_FREERTOS_HZ = 1000): exact cadence over time, a few microseconds of wake-up jitter.
+    // After an overrun, drop the lost ticks instead of running flat out to catch up (tick_pacing.h): the task
+    // always sleeps, so the TinyUSB task, IDLE1 and the watchdog keep running.
+    const TickType_t tickNow = xTaskGetTickCount();
+    if (shouldDropLostTicks(tickNow, lastWake)) {
+      lastWake = tickNow;
+      g_stats.tickResyncs.fetch_add(1, std::memory_order_relaxed);
+    }
     vTaskDelayUntil(&lastWake, 1);
     const uint64_t t0 = hal::nowUs();
     if (prevT0 != 0 && t0 - prevT0 > 1500) g_stats.lateWakeups.fetch_add(1, std::memory_order_relaxed);  // a tick went missing (preempted, or cache off)
@@ -128,13 +95,13 @@ void engineLoop(Runtime* rt) {
     }
     in.cue = rt->buttons->cue();
     in.rev = rt->buttons->rev();
-    in.usbMounted = usb_dev::mounted();
+    in.usbMounted = usb_dev::hostActive();
     in.audioStreaming = usb_dev::audioStreaming();
     in.dacPresent = rt->dacPresent;
     engine.step(in);
 
     // ---- 3. everything the engine wants to send ----
-    drainOutputs(*rt, inHand, in.nowUs);
+    pump.drain(in.nowUs);
     if (rt->led != nullptr && in.nowUs - lastLedUs >= kLedPeriodUs) {
       lastLedUs = in.nowUs;
       rt->led->show(engine.led(), in.nowUs);

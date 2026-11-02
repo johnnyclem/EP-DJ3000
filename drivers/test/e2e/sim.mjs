@@ -35,6 +35,7 @@ export class Sim {
   #events = [];
   #stderr = "";
   #exited = null;
+  #exitCode = null;
   /** Everything the units sent since `start()`: {t, u, k, ports, cable, bytes, usb}. */
   log = [];
 
@@ -52,6 +53,7 @@ export class Sim {
     this.#child = spawn(bin, [], { stdio: ["pipe", "pipe", "pipe"] });
     this.#child.stderr.on("data", (d) => { this.#stderr += d; });
     this.#child.on("exit", (code, signal) => {
+      this.#exitCode = signal ?? code;
       this.#exited = `exited (${signal ?? code})${this.#stderr ? `\n${this.#stderr}` : ""}`;
       if (this.#pending) this.#pending.reject(new Error(`simulator ${this.#exited}`));
     });
@@ -94,10 +96,13 @@ export class Sim {
   midi(u, port, bytes) { return this.cmd(`midi u=${u} port=${port} hex=${toHex(bytes)}`); }
   status(u = 0) { return this.cmd(`status u=${u}`).then((r) => r.done); }
 
+  /** Quits the simulator; throws if it died or exited non-zero (a sanitizer report on stderr is included). */
   async close() {
-    if (this.#exited) return;
-    this.#child.stdin.end("quit\n");
-    await new Promise((r) => this.#child.once("exit", r));
+    if (!this.#exited) {
+      this.#child.stdin.end("quit\n");
+      await new Promise((r) => this.#child.once("exit", r));
+    }
+    if (this.#exitCode !== 0) throw new Error(`simulator ${this.#exited}`);
   }
 }
 
@@ -156,3 +161,57 @@ export const CONFIG_KEYS = (() => {
   for (const k of contract.config.keys) keys[k.name] = k.id;
   return keys;
 })();
+
+// ---- wire rules that must hold for everything any unit ever sends (PROTOCOL.md 2 and 3) ---------------------------------
+
+const PAIRS = [
+  [P.cc.channelVolumeMsb, P.cc.channelVolumeLsb], [P.cc.crossfaderMsb, P.cc.crossfaderLsb], [P.cc.pitchMsb, P.cc.pitchLsb],
+  [P.cc.knobMsb, P.cc.knobLsb], [P.cc.bpmMsb, P.cc.bpmLsb],
+];
+
+/**
+ * Checks a simulator log against the contract's wire rules and returns the violations (empty = all hold):
+ *  - a unit's own 14-bit pairs go MSB before LSB within one engine tick (the radio bridge is skipped: it may deliver two
+ *    updates in one tick);
+ *  - relative jog values are never 0 or 64, and a channel gets at most one jog message per 2 ms;
+ *  - note-ons of the unit's controls have velocity 127, and a note is never turned on twice or off twice in a row;
+ *  - every data byte is below 0x80, every SysEx frame is a well-formed EP-DJ3000 frame (checksum and 8->7 packing).
+ */
+export function wireRuleViolations(log) {
+  const bad = [];
+  const add = (ev, why) => { if (bad.length < 10) bad.push(`t=${ev.t} unit ${ev.u} cable ${ev.cable} ${toHex(ev.bytes)}: ${why}`); };
+  const lastJog = new Map(), noteOn = new Map(), lastPairHalf = new Map();
+  for (const ev of log) {
+    if (ev.k === "sysex" && ev.bytes[1] === P.sysex.header[0]) {
+      try { parseSysex(ev.bytes); } catch (e) { add(ev, `malformed EP-DJ3000 SysEx (${e.message})`); }
+    }
+    // Cable 1 is the TRS jack passing external gear through; its traffic is not the unit's own.
+    if (ev.k !== "msg" || !(ev.ports & 1) || ev.cable === 1 || ev.bytes.length !== 3 || ev.bytes[0] >= 0xf0) continue;
+    const [status, d1, d2] = ev.bytes;
+    if (d1 > 0x7f || d2 > 0x7f) add(ev, "data byte >= 0x80");
+    const ch = status & 0x0f, type = status & 0xf0, key = `${ev.u}:${ev.cable}:${ch}`;
+    if (type === 0xb0 && d1 === P.cc.jog) {
+      if (d2 === 0 || d2 === 64) add(ev, `jog value ${d2} must never be sent`);
+      const prev = lastJog.get(key);
+      if (prev !== undefined && ev.t - prev < 2000) add(ev, `jog messages ${ev.t - prev} us apart (>= 2000)`);
+      lastJog.set(key, ev.t);
+    }
+    if (type === 0xb0 && ev.cable !== 2) {
+      for (const [msb, lsb] of PAIRS) {
+        if (d1 !== msb && d1 !== lsb) continue;
+        const pk = `${key}:${msb}`;
+        const last = lastPairHalf.get(pk);
+        if (d1 === msb && last && last.t === ev.t && last.half === "lsb") add(ev, "MSB after LSB in one tick");
+        lastPairHalf.set(pk, { t: ev.t, half: d1 === msb ? "msb" : "lsb" });
+      }
+    }
+    if (type === 0x90 || type === 0x80) {
+      const nk = `${key}:${d1}`;
+      const on = type === 0x90 && d2 > 0;
+      if (on && [P.note.cue, P.note.rev, P.note.touch, P.note.play, P.note.tap].includes(d1) && d2 !== 127) add(ev, `control note-on velocity ${d2}`);
+      if (noteOn.get(nk) === on) add(ev, on ? "note turned on twice" : "note turned off twice");
+      noteOn.set(nk, on);
+    }
+  }
+  return bad;
+}

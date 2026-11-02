@@ -1,8 +1,10 @@
 #include "device_platform.h"
 
 #include "epdj_audio/audio_out.h"
+#include "epdj_usb/usb_device.h"
 #include "esp_log.h"
 #include "esp_system.h"
+#include "esp_rom_sys.h"
 #include "esp_timer.h"
 #include "sdkconfig.h"
 #include "soc/rtc_cntl_reg.h"
@@ -17,8 +19,11 @@ constexpr uint64_t kRestartDelayUs = 200000;
 
 void restartNow(void* arg) {
   if (arg != nullptr) {
-    // ROM bootloader on the next reset: the same trick esptool's "usb reset" uses, and the only route into
-    // download mode on a board whose BOOT button is inside the enclosure.
+    // ROM bootloader on the next reset: the same flag the IDF's own USB console uses. The ROM talks over
+    // USB-Serial-JTAG, so the native port must be handed back to it first; the pause lets the host see the
+    // device go away before the chip resets.
+    usb_dev::releaseForRomDownload();
+    esp_rom_delay_us(50000);
     REG_WRITE(RTC_CNTL_OPTION1_REG, RTC_CNTL_FORCE_DOWNLOAD_BOOT);
   }
   esp_restart();

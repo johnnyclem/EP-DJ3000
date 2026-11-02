@@ -35,6 +35,8 @@ public final class DeckAudio: ObservableObject {
     private var loadTask: Task<Void, Never>?
     private var loadGeneration = 0
     private var lastRebuild = 0.0
+    private var pendingRestart: Task<Void, Never>?
+    private static let minRebuildInterval = 0.5
 
     public init() {}
 
@@ -117,12 +119,17 @@ public final class DeckAudio: ObservableObject {
 
     public func shutdown() {
         loadTask?.cancel()
+        pendingRestart?.cancel()
+        pendingRestart = nil
         engine?.stop()
         engine = nil
         isEngineRunning = false
     }
 
     private func rebuildEngine() {
+        // A pending restart was timed from the previous rebuild; this one starts a new interval.
+        pendingRestart?.cancel()
+        pendingRestart = nil
         engine?.stop()
         engine = nil
         lastRebuild = HostClock.now()
@@ -146,9 +153,22 @@ public final class DeckAudio: ObservableObject {
     }
 
     private func engineConfigurationChanged() {
-        // The hardware changed under a running engine (unplugged device, sample-rate switch). Rebuilding is the
-        // recovery; the time check keeps a flapping device from turning that into a loop.
-        guard HostClock.now() - lastRebuild > 0.5 else { return }
-        rebuildEngine()
+        // The hardware changed under a running engine (unplugged device, sample-rate switch). AVAudioEngine has
+        // stopped itself by the time it posts this, so every notification must end in a restart: dropping one leaves
+        // the deck silent. Rebuilds are at least minRebuildInterval apart so a flapping device cannot spin; a
+        // notification that arrives sooner (typically the replacement engine stopping too) schedules one restart for
+        // when the interval is up. That restart is a no-op if the engine is running by then (a stale notification).
+        let wait = Self.minRebuildInterval - (HostClock.now() - lastRebuild)
+        guard wait > 0 else {
+            rebuildEngine()
+            return
+        }
+        guard pendingRestart == nil else { return }
+        pendingRestart = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(wait * 1e9))
+            guard !Task.isCancelled, let self else { return }
+            self.pendingRestart = nil
+            self.ensureEngine()
+        }
     }
 }

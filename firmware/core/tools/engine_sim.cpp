@@ -16,6 +16,7 @@
 //   {"e":"done",...}    the command finished; `t` is the virtual time afterwards
 //   {"e":"error","msg":"..."}  the command was not understood or failed (nothing else is sent for it)
 // Commands are listed in docs/E2E.md and in `commandHelp` below.
+#include <algorithm>
 #include <cmath>
 #include <cstdarg>
 #include <cstdint>
@@ -47,12 +48,19 @@ std::string g_out;
 
 void emit(const char* fmt, ...) __attribute__((format(printf, 1, 2)));
 void emit(const char* fmt, ...) {
-  char buf[1024];
   va_list ap;
   va_start(ap, fmt);
-  const int n = std::vsnprintf(buf, sizeof buf, fmt, ap);
+  va_list again;
+  va_copy(again, ap);
+  const int n = std::vsnprintf(nullptr, 0, fmt, ap);
   va_end(ap);
-  if (n > 0) g_out.append(buf, std::min(static_cast<size_t>(n), sizeof buf - 1));
+  if (n > 0) {
+    std::string line(static_cast<size_t>(n) + 1, '\0');
+    std::vsnprintf(&line[0], line.size(), fmt, again);
+    line.resize(static_cast<size_t>(n));
+    g_out += line;
+  }
+  va_end(again);
   g_out.push_back('\n');
 }
 

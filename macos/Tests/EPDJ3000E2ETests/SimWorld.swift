@@ -26,6 +26,9 @@ final class SimClock: DeviceClock, @unchecked Sendable {
 
     var sleeperCount: Int { lock.withLock { sleepers.count } }
 
+    /// Virtual time at which the next sleeper wants to wake, if any.
+    var earliestDeadline: Double? { lock.withLock { sleepers.map(\.deadline).min() } }
+
     private func reserve(_ seconds: Double) -> (id: Int, deadline: Double) {
         lock.withLock {
             nextId += 1
@@ -74,20 +77,28 @@ final class SimClock: DeviceClock, @unchecked Sendable {
 final class Recorder<T: Sendable>: @unchecked Sendable {
     private let lock = NSLock()
     private var items: [T] = []
+    private var received = 0
     private var task: Task<Void, Never>?
 
     init(_ stream: AsyncStream<T>) {
         task = Task { [weak self] in
             for await v in stream {
                 guard let self else { return }
-                self.lock.withLock { self.items.append(v) }
+                self.lock.withLock {
+                    self.items.append(v)
+                    self.received += 1
+                }
             }
         }
     }
 
     deinit { task?.cancel() }
 
+    /// Items collected and not yet taken.
     var count: Int { lock.withLock { items.count } }
+
+    /// Items received since the recorder started, whatever has been taken.
+    var total: Int { lock.withLock { received } }
 
     var values: [T] { lock.withLock { items } }
 
@@ -173,10 +184,10 @@ final class SimClient: @unchecked Sendable {
     /// Waits (real time, bounded) until the client has handed out every telemetry frame and event the unit sent.
     func settle(file: StaticString = #filePath, line: UInt = #line) async {
         let deadline = Date().addingTimeInterval(5)
-        while telemetry.count < transport.telemetryFrames || events.count < transport.eventMessages {
+        while telemetry.total < transport.telemetryFrames || events.total < transport.eventMessages {
             if Date() > deadline {
-                XCTFail("client did not consume everything the unit sent: telemetry \(telemetry.count)/\(transport.telemetryFrames), "
-                    + "events \(events.count)/\(transport.eventMessages)", file: file, line: line)
+                XCTFail("client did not consume everything the unit sent: telemetry \(telemetry.total)/\(transport.telemetryFrames), "
+                    + "events \(events.total)/\(transport.eventMessages)", file: file, line: line)
                 return
             }
             try? await Task.sleep(nanoseconds: 100_000)
@@ -186,12 +197,21 @@ final class SimClient: @unchecked Sendable {
 
 // MARK: - world
 
+/// When a test last talked to the simulator, in real time.
+final class LastActivity: @unchecked Sendable {
+    private let lock = NSLock()
+    private var last = Date()
+    func touch() { lock.withLock { last = Date() } }
+    var idleSeconds: Double { lock.withLock { Date().timeIntervalSince(last) } }
+}
+
 final class SimWorld: @unchecked Sendable {
     let process: SimProcess
     let clock = SimClock()
     private var clients: [SimClient] = []
-    private var transports: [Int: SimTransport] = [:]
     private(set) var virtualSeconds = 0.0
+    private let lastActivity = LastActivity()
+    private var idlePump: Task<Void, Never>?
 
     /// The touch ring learns its baseline for 250 ms and settles for 3 s (touch_ring.h).
     static let settleMs = 3600
@@ -205,14 +225,27 @@ final class SimWorld: @unchecked Sendable {
         return world
     }
 
-    private init(process: SimProcess) { self.process = process }
+    private init(process: SimProcess) {
+        self.process = process
+        process.activityHook = { [lastActivity] in lastActivity.touch() }
+        // A request the unit never answers waits for a virtual timeout that only moves when a test moves time. If the whole
+        // test sits idle in real time, let the timeout happen so a missing reply is a failure, not a hang.
+        idlePump = Task { [clock, lastActivity] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 300_000_000)
+                if lastActivity.idleSeconds > 1.0, let deadline = clock.earliestDeadline { clock.advance(to: deadline) }
+            }
+        }
+    }
 
     func close(file: StaticString = #filePath, line: UInt = #line) {
+        idlePump?.cancel()
         for c in clients { Task { await c.client.close() } }
         process.shutdown(file: file, line: line)
     }
 
     private func advanceClock(to micros: UInt64) {
+        lastActivity.touch()
         virtualSeconds = Double(micros) / 1_000_000
         if clock.advance(to: virtualSeconds) > 0 {
             // woken sleepers (a keep-alive, a timeout) are tasks: give them a moment to put their request in the pipe
@@ -222,18 +255,11 @@ final class SimWorld: @unchecked Sendable {
 
     // MARK: clients
 
-    func transport(unit: Int = 0, cable: Int = 0) -> SimTransport {
-        let key = unit * 16 + cable
-        if let t = transports[key] { return t }
-        let t = SimTransport(process: process, unit: unit, cable: cable)
-        transports[key] = t
-        return t
-    }
-
-    /// A real DeviceClient on the virtual clock. `deck` is the address requests carry (127 = any).
+    /// A real DeviceClient on the virtual clock, with its own transport (a transport has a single consumer).
+    /// `deck` is the address requests carry (127 = any).
     func client(unit: Int = 0, cable: Int = 0, deck: UInt8 = Proto.SysEx.deckAny, timeout: Double = 1.0,
                 streamRefreshInterval: Double = 2.0) -> SimClient {
-        let transport = transport(unit: unit, cable: cable)
+        let transport = SimTransport(process: process, unit: unit, cable: cable)
         let c = DeviceClient(transport: transport, deck: deck, clock: clock, timeout: timeout, streamRefreshInterval: streamRefreshInterval)
         let sc = SimClient(client: c, transport: transport)
         clients.append(sc)
@@ -292,6 +318,15 @@ final class SimWorld: @unchecked Sendable {
         try await run(ms: afterMs)
     }
 
+    /// Waits (real time, bounded) until `count` tasks are asleep on the virtual clock, e.g. a request waiting for its timeout.
+    func waitForSleepers(_ count: Int = 1, file: StaticString = #filePath, line: UInt = #line) async {
+        let deadline = Date().addingTimeInterval(5)
+        while clock.sleeperCount < count {
+            if Date() > deadline { return XCTFail("nothing went to sleep on the virtual clock", file: file, line: line) }
+            try? await Task.sleep(nanoseconds: 100_000)
+        }
+    }
+
     func status(unit: Int = 0) async throws -> SimDone {
         try await command("status u=\(unit)").done
     }
@@ -300,6 +335,86 @@ final class SimWorld: @unchecked Sendable {
     @discardableResult
     func midi(_ bytes: [UInt8], unit: Int = 0, port: String = "0") async throws -> SimReply {
         try await command("midi u=\(unit) port=\(port) hex=\(SimProcess.hex(bytes))")
+    }
+
+    private static let controlNotes: Set<UInt8> = [Proto.Note.cue, Proto.Note.rev, Proto.Note.touch, Proto.Note.play, Proto.Note.tap]
+    private static let pairs: [(msb: UInt8, lsb: UInt8)] = Control14.allCases.map { ($0.msb, $0.lsb) }
+
+    /// Wire rules that must hold for everything any unit ever sent (PROTOCOL.md 2 and 3); empty = they all hold:
+    /// a unit's own 14-bit pairs go MSB before LSB within one engine tick (the radio bridge is skipped, it may deliver
+    /// two updates in one tick), jog values are never 0 or 64 and come at most every 2 ms per channel, control notes
+    /// go on with velocity 127 and are never turned on or off twice in a row, and every EP-DJ3000 SysEx frame decodes
+    /// strictly with the Swift codec (checksum, version, 8->7 packing).
+    func wireRuleViolations() -> [String] {
+        var bad = [String]()
+        func add(_ e: SimEvent, _ why: String) {
+            if bad.count < 10 { bad.append("t=\(e.t) unit \(e.unit) cable \(e.cable) \(SimProcess.hex(e.bytes)): \(why)") }
+        }
+        var lastJog = [String: UInt64]()
+        var noteOn = [String: Bool]()
+        var lastHalf = [String: (t: UInt64, isLsb: Bool)]()
+        for e in process.log {
+            if e.kind == "sysex", e.bytes.count > 3, Array(e.bytes[1...3]) == SysExCodec.header {
+                do { _ = try SysExFrame.decode(e.bytes) } catch { add(e, "SysEx does not decode: \(error)") }
+            }
+            // Cable 1 is the TRS jack passing external gear through; its traffic is not the unit's own.
+            guard e.kind == "msg", e.ports & 1 != 0, e.cable != 1, e.bytes.count == 3, e.bytes[0] < 0xF0 else { continue }
+            let status = e.bytes[0], d1 = e.bytes[1], d2 = e.bytes[2]
+            if d1 > 0x7F || d2 > 0x7F { add(e, "data byte >= 0x80") }
+            let key = "\(e.unit):\(e.cable):\(status & 0x0F)"
+            switch status & 0xF0 {
+            case 0xB0:
+                if d1 == Proto.CC.jog {
+                    if d2 == 0 || d2 == 64 { add(e, "jog value \(d2) must never be sent") }
+                    if let prev = lastJog[key], e.t - prev < 2000 { add(e, "jog messages \(e.t - prev) us apart (>= 2000)") }
+                    lastJog[key] = e.t
+                }
+                guard e.cable != 2, let pair = Self.pairs.first(where: { $0.msb == d1 || $0.lsb == d1 }) else { break }
+                let pk = "\(key):\(pair.msb)"
+                if d1 == pair.msb, let last = lastHalf[pk], last.t == e.t, last.isLsb { add(e, "MSB after LSB in one tick") }
+                lastHalf[pk] = (e.t, d1 == pair.lsb)
+            case 0x90, 0x80:
+                let on = status & 0xF0 == 0x90 && d2 > 0
+                if on, Self.controlNotes.contains(d1), d2 != 127 { add(e, "control note-on velocity \(d2)") }
+                let nk = "\(key):\(d1)"
+                if noteOn[nk] == on { add(e, on ? "note turned on twice" : "note turned off twice") }
+                noteOn[nk] = on
+            default:
+                break
+            }
+        }
+        return bad
+    }
+
+    /// The MIDI messages a unit sent on a cable since log index `index`, parsed with the Swift library, with their virtual time.
+    func midiEvents(unit: Int = 0, cable: Int = 0, from index: Int = 0) -> [(t: UInt64, event: MidiEvent)] {
+        var out = [(t: UInt64, event: MidiEvent)]()
+        for e in events(unit: unit, cable: cable, from: index) where e.kind == "msg" || e.kind == "sysex" {
+            var parser = MidiStreamParser()
+            for ev in parser.feed(e.bytes) { out.append((e.t, ev)) }
+        }
+        return out
+    }
+
+    private static let faderControllers: Set<UInt8> = [
+        Proto.CC.channelVolumeMsb, Proto.CC.channelVolumeLsb, Proto.CC.crossfaderMsb, Proto.CC.crossfaderLsb,
+        Proto.CC.pitchMsb, Proto.CC.pitchLsb,
+    ]
+
+    /// Every value the slide pot's 14-bit control passed through, in the order a receiver sees it, for messages from log
+    /// index `mark` on. The whole log is folded so the half a unit skipped as unchanged is known.
+    func faderValues(unit: Int = 0, channel: UInt8 = 0, since mark: Int = 0) -> [Int] {
+        var state = ControllerState(channel: channel)
+        var values = [Int]()
+        for (i, e) in process.log.enumerated() where e.unit == unit && e.ports & 1 != 0 && e.cable == 0 && e.kind == "msg" {
+            var parser = MidiStreamParser()
+            for ev in parser.feed(e.bytes) {
+                state.apply(ev)
+                guard i >= mark, case let .controlChange(_, cc, _) = ev, Self.faderControllers.contains(cc) else { continue }
+                values.append(Int(state.fader))
+            }
+        }
+        return values
     }
 
     /// Every USB-bound output whose 4-byte packets (built by the firmware's encodeUsb) do not decode, with the Swift
@@ -331,9 +446,24 @@ final class SimWorld: @unchecked Sendable {
 // MARK: - test case base
 
 class E2ETestCase: XCTestCase {
+    private var watchdog: DispatchWorkItem?
+
     override func setUp() async throws {
         continueAfterFailure = false
         if SimBinary.path() == nil { throw XCTSkip("epdj_engine_sim is not built; run tools/e2e.sh (or set EPDJ_ENGINE_SIM)") }
+        // Virtual time only moves when a test moves it, so a test that waits for the wrong thing would hang forever.
+        let name = self.name
+        let item = DispatchWorkItem {
+            fputs("E2E WATCHDOG: \(name) did not finish within 120 s; aborting the run\n", stderr)
+            exit(70)
+        }
+        watchdog = item
+        DispatchQueue.global().asyncAfter(deadline: .now() + 120, execute: item)
+    }
+
+    override func tearDown() async throws {
+        watchdog?.cancel()
+        watchdog = nil
     }
 
     /// Runs `body` against a fresh simulator and fails if the simulator or its sanitizers complain.
@@ -348,6 +478,7 @@ class E2ETestCase: XCTestCase {
             throw error
         }
         XCTAssertEqual(world.framingDisagreements(), [], "firmware encodeUsb and Swift UsbMidi.decode disagree", file: file, line: line)
+        XCTAssertEqual(world.wireRuleViolations(), [], "the firmware broke a wire rule of PROTOCOL.md", file: file, line: line)
     }
 }
 
@@ -357,4 +488,21 @@ func expectEqual<T: Equatable>(_ expression: @autoclosure () async throws -> T, 
                                line: UInt = #line) async rethrows {
     let value = try await expression()
     XCTAssertEqual(value, expected(), message(), file: file, line: line)
+}
+
+/// A disagreement between two implementations that is understood, reported (docs/E2E.md) and owned by someone else.
+/// While `holds` is false the test notes it and carries on; once it holds the test FAILS, so the marker gets promoted
+/// to a plain assertion instead of rotting.
+func knownIssue(_ id: String, _ what: String, holds: Bool, file: StaticString = #filePath, line: UInt = #line) {
+    if holds {
+        XCTFail("known issue \(id) (\(what)) no longer reproduces: turn it into a plain assertion and remove it from docs/E2E.md",
+                file: file, line: line)
+    } else {
+        fputs("KNOWN ISSUE \(id): \(what)\n", stderr)
+    }
+}
+
+/// Numbers worth reading in the test log (they are also summarised in docs/E2E.md), printed, never asserted.
+func observe(_ message: String) {
+    fputs("OBSERVATION: \(message)\n", stderr)
 }

@@ -10,6 +10,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/queue.h"
 #include "sdkconfig.h"
+#include "soc/rtc_cntl_reg.h"
+#include "soc/soc.h"
 #include "tinyusb.h"
 #include "tusb.h"
 #include "usb_internal.h"
@@ -20,6 +22,12 @@ namespace usb_dev {
 namespace {
 
 const char* TAG = "usb";
+
+// Never 0, which g_suspendedAtUs uses for "not suspended".
+uint64_t nowUs() {
+  const uint64_t t = static_cast<uint64_t>(esp_timer_get_time());
+  return t != 0 ? t : 1;
+}
 
 // The descriptor builder and the TinyUSB audio configuration must agree on the isochronous packet size.
 #if CONFIG_EPDJ_USB_AUDIO
@@ -45,7 +53,7 @@ QueueHandle_t g_rxQ = nullptr;
 bool g_audioEnabled = false;
 
 std::atomic<bool> g_mounted{false};
-std::atomic<bool> g_suspended{false};
+std::atomic<uint64_t> g_suspendedAtUs{0};  // esp_timer time the bus went idle; 0 = not suspended
 std::atomic<uint32_t> g_rxPackets{0}, g_rxDropped{0}, g_txPackets{0}, g_txRejected{0};
 
 // TinyUSB task context.
@@ -53,7 +61,11 @@ void onEvent(tinyusb_event_t* ev, void*) {
   switch (ev->id) {
     case TINYUSB_EVENT_ATTACHED:
       g_mounted.store(true, std::memory_order_release);
-      g_suspended.store(false, std::memory_order_relaxed);
+      g_suspendedAtUs.store(0, std::memory_order_relaxed);
+      // A fresh configuration puts every interface back on alternate setting 0, but a bus reset (a replug, a host
+      // reboot, a port reset) reaches the audio driver without any callback, so a stream that was running before
+      // would still be flagged as streaming.
+      detail::audioOnDetach();
       ESP_LOGI(TAG, "mounted by host");
       break;
     case TINYUSB_EVENT_DETACHED:
@@ -62,10 +74,12 @@ void onEvent(tinyusb_event_t* ev, void*) {
       ESP_LOGI(TAG, "unmounted");
       break;
     case TINYUSB_EVENT_SUSPENDED:
-      g_suspended.store(true, std::memory_order_relaxed);
+      g_suspendedAtUs.store(nowUs(), std::memory_order_relaxed);
+      ESP_LOGI(TAG, "bus idle (suspended, or the cable was pulled)");
       break;
     case TINYUSB_EVENT_RESUMED:
-      g_suspended.store(false, std::memory_order_relaxed);
+      g_suspendedAtUs.store(0, std::memory_order_relaxed);
+      ESP_LOGI(TAG, "bus active again");
       break;
   }
 }
@@ -100,6 +114,9 @@ bool start(const Params& p) {
   tinyusb_config_t cfg = {};
   cfg.port = TINYUSB_PORT_FULL_SPEED_0;
   cfg.phy.skip_setup = false;
+  // Bus powered, no VBUS sense pin: the PHY then reports VBUS as always present, so TinyUSB never gets a
+  // DCD_EVENT_UNPLUGGED and a pulled cable shows up only as the bus going idle (hostActive()). A real unplug
+  // signal needs a 5 V -> 3.3 V divider on a spare GPIO with self_powered = true and vbus_monitor_io set.
   cfg.phy.self_powered = false;
   cfg.phy.vbus_monitor_io = -1;
   cfg.task.size = 4096;
@@ -127,14 +144,27 @@ bool start(const Params& p) {
 }
 
 bool mounted() { return g_mounted.load(std::memory_order_acquire); }
-bool suspended() { return g_suspended.load(std::memory_order_relaxed); }
+bool suspended() { return g_suspendedAtUs.load(std::memory_order_relaxed) != 0; }
+bool hostActive() {
+  if (!mounted()) return false;
+  const uint64_t since = g_suspendedAtUs.load(std::memory_order_relaxed);
+  return since == 0 || nowUs() - since < kSuspendDebounceUs;
+}
 bool audioEnabled() { return g_audioEnabled; }
 bool audioStreaming() { return detail::audioIsStreaming(); }
+
+void releaseForRomDownload() {
+  const esp_err_t err = tinyusb_driver_uninstall();
+  if (err != ESP_OK) ESP_LOGW(TAG, "tinyusb_driver_uninstall: %s", esp_err_to_name(err));
+  // Back to the reset values: the PHY belongs to USB-Serial-JTAG (the "hardware chooses" setting).
+  CLEAR_PERI_REG_MASK(RTC_CNTL_USB_CONF_REG, RTC_CNTL_SW_HW_USB_PHY_SEL | RTC_CNTL_SW_USB_PHY_SEL);
+  g_mounted.store(false, std::memory_order_release);
+}
 
 bool popRx(RxPacket* out) { return g_rxQ != nullptr && xQueueReceive(g_rxQ, out, 0) == pdTRUE; }
 
 bool writePacket(const uint8_t pkt[4]) {
-  if (!mounted() || !tud_midi_n_mounted(0) || !tud_midi_n_packet_write(0, pkt)) {
+  if (!hostActive() || !tud_midi_n_mounted(0) || !tud_midi_n_packet_write(0, pkt)) {
     g_txRejected.fetch_add(1, std::memory_order_relaxed);
     return false;
   }

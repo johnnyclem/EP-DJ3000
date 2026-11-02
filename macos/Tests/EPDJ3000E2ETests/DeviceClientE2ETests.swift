@@ -32,6 +32,7 @@ final class DeviceClientE2ETests: E2ETestCase {
             async let attempt: Result<Info, Error> = {
                 do { return .success(try await wrong.client.getInfo()) } catch { return .failure(error) }
             }()
+            await world.waitForSleepers()  // the request is out and its timeout is armed
             try await world.run(ms: 1500)
             guard case let .failure(error) = await attempt else { return XCTFail("a Deck A request was answered by Deck B") }
             XCTAssertEqual(error as? DeviceError, .timeout(.getInfo))
@@ -180,7 +181,12 @@ final class DeviceClientE2ETests: E2ETestCase {
         try await withWorld("units=1 dac=1") { world in
             let c = world.client().client
             try await c.identify(seconds: 2)
-            try await world.run(ms: 100)
+            var lit = Set<Bool>()
+            for _ in 0..<20 {  // 2 Hz blink: on and off both show up within a second
+                try await world.run(ms: 50)
+                lit.insert(try await world.status().led.bool("identify"))
+            }
+            XCTAssertEqual(lit, [true, false], "IDENTIFY blinks the status LED")
             try await c.testTone(on: true, freqHz: 1000, attenDb: 6)
             try await c.testTone(on: false)
             do {

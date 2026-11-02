@@ -8,7 +8,7 @@
 import assert from "node:assert/strict";
 
 import { loadScript, makeEngine, P, Rig } from "./mixxx-host.mjs";
-import { CONFIG_KEYS, parseSysex, setConfig, Sim, simBinary, sysexFrame } from "./sim.mjs";
+import { CONFIG_KEYS, parseSysex, setConfig, Sim, simBinary, sysexFrame, wireRuleViolations } from "./sim.mjs";
 
 if (!simBinary()) {
   console.log("SKIP  epdj_engine_sim is not built (tools/e2e.sh builds it); Node end-to-end tests not run");
@@ -40,7 +40,9 @@ async function world({ init = "units=1", ports = [[0, 0]], settle = true, slice 
 async function withWorld(opts, fn) {
   const w = await world(opts);
   try {
-    return await fn(w);
+    const result = await fn(w);
+    assert.deepEqual(wireRuleViolations(w.sim.log), [], "the firmware broke a wire rule");
+    return result;
   } finally {
     await w.sim.close();
   }
@@ -259,6 +261,24 @@ test("fader sweep (default faderRole = CHANNEL_VOLUME): full 0..1 range, monoton
   });
 });
 
+test("a real fader movement is on the wire within 2 ms (PROTOCOL.md 2.4), MSB before LSB, and a one-count wiggle is not", async () => {
+  await withWorld({}, async ({ sim, rig }) => {
+    await rig.cmd("fader raw=1000 noise=0");
+    await rig.run(300);
+    const tChange = (await sim.status(0)).t;
+    await rig.cmd("fader raw=3000 noise=0");
+    await rig.run(10);
+    const burst = rig.messages().filter((m) => m.t >= tChange && (m.bytes[1] === P.cc.channelVolumeMsb || m.bytes[1] === P.cc.channelVolumeLsb));
+    assert.ok(burst.length >= 2, "the step produced a pair");
+    const latencyUs = burst[0].t - tChange;
+    observe(`fader step of 2000 counts: first CC ${latencyUs} us after the ADC changed`);
+    assert.ok(latencyUs <= 2000, `latency ${latencyUs} us`);
+    assert.equal(burst[0].bytes[1], P.cc.channelVolumeMsb, "MSB first");
+    assert.equal(burst[1].bytes[1], P.cc.channelVolumeLsb, "then LSB");
+    assert.equal(burst[0].t, burst[1].t, "in the same engine tick");
+  });
+});
+
 test("a still fader does not chatter: +-3 counts of ADC noise sends nothing for 5 s", async () => {
   await withWorld({}, async ({ rig }) => {
     await rig.cmd("fader raw=1500 noise=3");
@@ -472,6 +492,19 @@ test("one-cable bridge (Deck B has no USB host): its scratch arrives on Deck A's
     assert.equal(sum(deckB.map((c) => c.interval)), viaCable2);
     assert.equal(viaCable2, unitB, "the cumulative jog counter makes the bridge lossless for motion");
     assert.ok(Math.abs(unitB - 1024) < 60);
+
+    // Deck B's fader as the bridge re-emits it on cable 2: last value wins, and Mixxx ends on the value the spec computes
+    await rig.cmd("fader u=1 raw=500 noise=0");
+    await rig.run(100);
+    const mark = rig.heard.length;
+    await rig.ramp("fader", 500, 3900, 1200, { unit: 1 });
+    await rig.run(300);
+    const pair = rig.heard.slice(mark).filter((e) => e.u === 0 && e.cable === 2 && e.bytes.length === 3 && e.bytes[0] === 0xb1 &&
+      (e.bytes[1] === P.cc.channelVolumeMsb || e.bytes[1] === P.cc.channelVolumeLsb));
+    assert.ok(pair.length > 10, "Deck B's fader reached cable 2");
+    const finalPair = pairTrace(rig, { unit: 0, cable: 2, ch: 1, msb: P.cc.channelVolumeMsb, lsb: P.cc.channelVolumeLsb }).pop().value;
+    assert.ok(Math.abs(finalPair - expectedFader14(3900)) <= 45, `bridged fader ${finalPair} vs spec ${expectedFader14(3900)}`);
+    assert.equal(engine.getValue("[Channel2]", "volume"), finalPair / 16383, "and Mixxx's Deck 2 volume is that value");
 
     // LEDs go back the other way: Mixxx -> cable 2 -> radio -> Deck B
     engine.mixxxSet("[Channel2]", "cue_indicator", 1);

@@ -10,7 +10,10 @@ class TouchPads {
   static constexpr unsigned kMax = 8;
 
   // Starts the hardware scan of `count` pads (1..8) on board_pins::kTouchFirst... Returns false if the
-  // driver refuses. Takes ~100 ms: the first measurements after init are not valid.
+  // driver refuses. With EPDJ_TOUCH_SCAN_TARGET_US set (and 2+ pads) it also tunes the measurement length until
+  // one scan of all pads takes about that long (touch_range.h), which is what makes every pad carry a new value
+  // on each 1 ms engine read. Takes 0.3 to 0.6 s: the first measurements after init are not valid, and the
+  // scan is timed at two settings.
   bool begin(unsigned count);
   unsigned count() const { return count_; }
 
@@ -20,16 +23,17 @@ class TouchPads {
 
   // Right shift applied to the hardware count so that it fits 16 bits with 2x headroom (fixed at begin()).
   unsigned shift() const { return shift_; }
-  // Share of the last reads in which at least one pad had a new value, 0..100. Well below 100 means the
-  // hardware scan is slower than the 1 kHz read rate (lower EPDJ_TOUCH_CHARGE_DISCHARGE_TIMES).
-  unsigned freshPercent() const { return fresh_; }
+  // Charge/discharge cycles per pad in use, and the duration of one scan of all pads measured at begin() with
+  // nothing touching the platter (0 = not measurable: a single pad, or the scan register did not move). While a
+  // finger is down the touched pad's measurement, and so the scan, is a little longer.
+  unsigned cycles() const { return cycles_; }
+  unsigned scanPeriodUs() const { return scanUs_; }
 
  private:
   unsigned count_ = 0;
   unsigned shift_ = 0;
-  unsigned fresh_ = 100;
-  uint16_t last_[kMax] = {};
-  uint32_t reads_ = 0, changed_ = 0;
+  unsigned cycles_ = 0;
+  unsigned scanUs_ = 0;
 };
 
 }  // namespace hal

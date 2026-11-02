@@ -125,6 +125,9 @@ host MIDI clock in v1. Cable 1 (TRS) is not bridged. Host feedback relayed back 
 particular the `play` note (velocity > 0) is LED feedback only and never starts or stops that deck's clock;
 only the `transport` CC commands a clock master (PROTOCOL.md section 2.6).
 
+The bridge carries MIDI only. A bridged deck has **no USB audio stream** (its DAC is silent), cannot be configured over the
+link (SysEx is not bridged), and the macOS app only monitors cable 2, so it cannot play with or calibrate a bridged deck.
+
 When a route ends for any reason (peer timeout, reboot, host plugged in, `linkBridge` changed), the
 receiver emits Note Off for every note still held on behalf of the peer, so a lost link cannot leave a note
 stuck at the host.

@@ -1,6 +1,7 @@
 #include "epdj_hal/adc_inputs.h"
 
 #include "epdj_hal/board_pins.h"
+#include "epdj_hal/time.h"
 #include "esp_log.h"
 #include "sdkconfig.h"
 
@@ -32,17 +33,36 @@ bool AdcInputs::begin() {
     ESP_LOGE(TAG, "adc_oneshot_config_channel failed");
     return false;
   }
+  // Time the conversions (both channels, alternating) instead of assuming a cost: the engine task makes
+  // 2 * oversample of them every millisecond.
+  constexpr int kProbe = 32;
+  oversample_ = 1;
+  const uint64_t t0 = nowUs();
+  for (int i = 0; i < kProbe; ++i) {
+    int v = 0;
+    adc_oneshot_read(unit_, (i & 1) ? chKnob_ : chFader_, &v);
+  }
+  const uint64_t elapsed = nowUs() - t0;
+  conversionUs_ = static_cast<unsigned>((elapsed + kProbe / 2) / kProbe);
+  unsigned n = conversionUs_ > 0 ? kBudgetUs / (2 * conversionUs_) : CONFIG_EPDJ_ADC_OVERSAMPLE;
+  if (n > CONFIG_EPDJ_ADC_OVERSAMPLE) n = CONFIG_EPDJ_ADC_OVERSAMPLE;
+  if (n < 1) n = 1;
+  oversample_ = n;
   lastFader_ = sample(chFader_, &lastFader_);
   lastKnob_ = sample(chKnob_, &lastKnob_);
-  ESP_LOGI(TAG, "fader GPIO%d raw %u, knob GPIO%d raw %u (x%d oversampling)", pins::kFader, lastFader_,
-           pins::kKnob, lastKnob_, CONFIG_EPDJ_ADC_OVERSAMPLE);
+  ESP_LOGI(TAG, "fader GPIO%d raw %u, knob GPIO%d raw %u; %u us per conversion, x%u oversampling (%u us per ms)", pins::kFader,
+           lastFader_, pins::kKnob, lastKnob_, conversionUs_, oversample_, 2 * oversample_ * conversionUs_);
+  if (n < CONFIG_EPDJ_ADC_OVERSAMPLE) {
+    ESP_LOGW(TAG, "conversions are slow: oversampling lowered from %d to %u to stay within %u us per ms",
+             CONFIG_EPDJ_ADC_OVERSAMPLE, oversample_, kBudgetUs);
+  }
   return true;
 }
 
 uint16_t AdcInputs::sample(adc_channel_t ch, uint16_t* last) {
   uint32_t sum = 0;
   int good = 0;
-  for (int i = 0; i < CONFIG_EPDJ_ADC_OVERSAMPLE; ++i) {
+  for (unsigned i = 0; i < oversample_; ++i) {
     int v = 0;
     if (adc_oneshot_read(unit_, ch, &v) == ESP_OK) {
       sum += static_cast<uint32_t>(v);

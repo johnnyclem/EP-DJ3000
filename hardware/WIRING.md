@@ -7,6 +7,10 @@ which refuses to compile if a pin is used twice or lands on a reserved one. Chan
 Target: **ESP32-S3-DevKitC-1** (any ESP32-S3 module with native USB on GPIO19/20 works with the same GPIO numbers).
 The board's two USB-C ports: **USB** (native, GPIO19/20) goes to the DJ computer and carries MIDI and audio;
 **UART** (CP210x on UART0) is only for flashing and the log. Both can be connected at once.
+VBUS from the native port is **not sensed** by any GPIO, so the firmware cannot tell a pulled USB cable from a quiet bus
+except by the bus going idle (`docs/BRINGUP.md` step 5 and risk 9). If that proves too slow or unreliable, add a divider from the
+connector's VBUS (5 V) to a spare GPIO, e.g. 100 k to VBUS and 150 k to GND (about 3.0 V, 3.15 V at 5.25 V; check the real value
+with a multimeter), and set `self_powered` / `vbus_monitor_io` in `usb_device.cpp`. Not built, not on the pin table.
 
 ## Pin table
 
@@ -88,7 +92,12 @@ only if every sample reads low, so a loose or noisy strap means "no DAC" (the bo
 
 **Line out:** from the DAC board's L, R and GND to a 3.5 mm TRS jack, with 100 Ω in series with each output and a
 100 pF to ground after it if the cable picks up noise. The EP-136's inputs are line level. Keep the line-out jack
-physically far from the MIDI jack and the touch wires.
+physically far from the MIDI jack and the touch wires. **The line-out jack and the MIDI jack are both 3.5 mm TRS and the
+MIDI ring carries 3.3 V through 33 Ω: label them or use a different connector for one of them**, or a swapped cable puts
+DC on a mixer input.
+
+`dacMode = AUTO` (the default) means "the strap is fitted". It does not detect a DAC: the optional I2C codec probe
+(`EPDJ_DAC_PROBE_I2C`) is compiled out by default and the PCM5102A has no I2C anyway.
 
 **Bit clock accuracy:** BCK = 48 kHz x 32 = 1.536 MHz is derived from the S3's 160 MHz PLL with a fractional
 divider. It is not exactly 48 kHz; the USB feedback loop absorbs the difference (that is what it is for).
@@ -149,10 +158,13 @@ Per `field-jog/README.md`: AS5600 breakout under the platter, diametric 6 x 2.5 
 Most breakouts carry 4.7 kΩ pull-ups; the firmware also enables the S3's weak internal ones, which is enough to
 keep an unpopulated bus quiet but not for 400 kHz on its own. At boot the firmware probes address 0x36; if it
 answers, `Info.caps` reports AS5600 and the macOS app can suggest it. The first-boot platter source comes from
-`idf.py menuconfig` -> EP-DJ3000 -> Platter and sensors (`EPDJ_PLATTER_*`); it is a normal config key afterwards.
+`idf.py menuconfig` (under PlatformIO: `pio run -d firmware/esp32s3 -t menuconfig`) -> EP-DJ3000 -> Platter and sensors
+(`EPDJ_PLATTER_*`); it is a normal config key afterwards.
 
 In AS5600 mode wire **only pad GPIO4** (sector 0) to the platter as the hold pad (set `EPDJ_TOUCH_PAD_COUNT = 1`):
-the engine repeats a single pad to get touch/hold and tap detection, and takes rotation from the encoder.
+the engine repeats a single pad to get touch/hold and tap detection, and takes rotation from the encoder. **A platter
+that rotates cannot be wired to that pad with a plain wire**: it needs a slip contact, spring pin or brush, which is not
+designed (`PLATTER.md`, "If the platter should spin").
 
 ## Touch pads
 
@@ -161,7 +173,7 @@ shielding, and what counts to expect.
 
 ## Status LED
 
-One WS2812 (GRB, 800 kHz) on GPIO48. Colours: deck A blue, deck B orange; dim while the platter is untouched;
+One WS2812 (GRB, 800 kHz) on GPIO48 (DevKitC-1 v1.0; v1.1 has it on GPIO38, see the pin table). Colours: deck A blue, deck B orange; dim while the platter is untouched;
 slow blink while searching for the other deck; alternates with red on a deck-id conflict; white flash on the
 beat in clock modes; white blink for `IDENTIFY`; amber/red while CUE+REV is held toward the mode-change/deck-swap
 thresholds. `ledBrightness` scales it.

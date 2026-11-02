@@ -13,7 +13,7 @@ var targets: [Target] = [
     .testTarget(name: "EPDJ3000EngineTests", dependencies: ["EPDJ3000Engine", "EPDJ3000Protocol"]),
     .testTarget(name: "EPDJ3000KitPureTests", dependencies: ["EPDJ3000KitPure", "EPDJ3000Protocol"]),
     // The real firmware Engine (firmware/core/tools/engine_sim.cpp, built by tools/e2e.sh) as a child process; skipped when it is not built.
-    .testTarget(name: "EPDJ3000E2ETests", dependencies: ["EPDJ3000Engine", "EPDJ3000Protocol"]),
+    .testTarget(name: "EPDJ3000E2ETests", dependencies: ["EPDJ3000Engine", "EPDJ3000KitPure", "EPDJ3000Protocol"]),
 ]
 
 #if os(macOS)

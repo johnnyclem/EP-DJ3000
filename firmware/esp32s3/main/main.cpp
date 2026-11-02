@@ -25,12 +25,19 @@
  *                             radio      Wi-Fi task, ESP-NOW recv callback   -> radio::pop
  *     output of the engine  USB: tud_midi_n_packet_write straight from the engine task (TinyUSB serialises endpoint
  *                           access with a priority-inheriting mutex; the pattern its own FreeRTOS examples use). A full
- *                           FIFO keeps ONE event in hand and retries next tick; after 100 ms it is dropped.
+ *                           FIFO keeps ONE event in hand and retries next tick; after 100 ms it is dropped, and from then
+ *                           on USB is "stalled": later events are dropped on their first refused packet instead of each
+ *                           waiting 100 ms, so a host that does not read the port never slows TRS or the radio (output_pump.h).
  *                           TRS: UART TX ring, never blocks (drops when full). Radio: radio::send -> tx queue -> link task.
  *     USB audio             USB interrupt -> lock-free SPSC ring (no float, no locks) -> audio task. Feedback goes back
  *                           as one 32-bit store (tud_audio_n_fb_set). Float is used only in tasks: the S3 does not allow
  *                           FPU instructions in interrupts.
  *     engine <-> audio      atomics only (test tone request, volume, streaming flag).
+ *
+ *   Pacing: the engine task sleeps until the next 1 ms tick every iteration; after an overrun of more than two ticks
+ *   the lost ticks are dropped rather than caught up (tick_pacing.h), so it can never run without sleeping and starve the
+ *   TinyUSB task (same core, lower priority), IDLE1 or the watchdog. ADC conversions run with interrupts off; AdcInputs
+ *   times them at boot and keeps the engine's share of each millisecond under 400 us.
  *
  *   Priority inversion: the engine task is the highest application priority but waits on nothing a lower task can hold
  *   except TinyUSB's endpoint mutex (inheritance, critical sections of microseconds). Every queue operation it makes is

@@ -9,6 +9,9 @@
 #   default: the copy esp_tinyusb brings in (run `pio run` or `idf.py build` once so it is downloaded)
 # EPDJ_USB_DESC_SRC=<file> checks another copy of usb_desc.cpp instead of the real one (used to prove the checks
 # fail on a mutated builder).
+# The audio class driver is compiled the way the firmware build compiles it: with the zero-length-packet patch of
+# components/epdj_usb/tinyusb_audio_patch.cmake. EPDJ_TINYUSB_UNPATCHED=1 uses TinyUSB's file as shipped (the
+# zero-length-packet check then fails: that is the upstream behaviour the patch exists for).
 set -e
 here=$(cd "$(dirname "$0")" && pwd)
 root=$(cd "$here/../../../.." && pwd)
@@ -28,11 +31,16 @@ g++ -std=c++17 -Wall -Wextra -Wno-unused-parameter -Wno-missing-field-initialize
 "$out/crosscheck" || rc=1
 
 echo "== TinyUSB's audio class driver on those descriptors and this firmware's callbacks"
+audio_src=$tusb/class/audio/audio_device.c
+if [ -z "$EPDJ_TINYUSB_UNPATCHED" ]; then
+  audio_src=$out/audio_device_patched.c
+  cmake -DEPDJ_IN="$tusb/class/audio/audio_device.c" -DEPDJ_OUT="$audio_src" -P "$comp/epdj_usb/tinyusb_audio_patch.cmake"
+fi
 inc="-I$here/host -I$here -I$tusb -I$esp_tusb/include -I$comp/epdj_usb/tusb_override -I$root/firmware/core/include \
  -I$comp/epdj_usb/include -I$comp/epdj_usb/src -I$comp/epdj_audio/include"
 defs='-DCFG_TUSB_CONFIG_FILE="host_driver_config.h"'
 # shellcheck disable=SC2086
-gcc -std=gnu11 -Wall -Wno-unused-parameter $defs $inc -c "$tusb/class/audio/audio_device.c" -o "$out/audio_device.o"
+gcc -std=gnu11 -Wall -Wno-unused-parameter $defs $inc -c "$audio_src" -o "$out/audio_device.o"
 # shellcheck disable=SC2086
 gcc -std=gnu11 -Wall -Wno-unused-parameter $defs $inc -c "$tusb/common/tusb_fifo.c" -o "$out/tusb_fifo.o"
 # shellcheck disable=SC2086

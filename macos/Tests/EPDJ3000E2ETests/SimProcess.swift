@@ -97,7 +97,12 @@ final class SimProcess: @unchecked Sendable {
     private var exitMessage: String?
     private var stderrText = ""
     private let ready = DispatchSemaphore(value: 0)
+    private let exited = DispatchSemaphore(value: 0)
+    private var terminationStatus: Int32 = -1
+    private var didExit = false
     private var onEvent: [(SimEvent) -> Void] = []
+    /// Called for every command, from whichever task sends it.
+    var activityHook: (() -> Void)?
 
     private var logStorage: [SimEvent] = []
 
@@ -113,6 +118,13 @@ final class SimProcess: @unchecked Sendable {
         process.standardInput = toChild
         process.standardOutput = fromChild
         process.standardError = errFromChild
+        process.terminationHandler = { [self] p in
+            lock.withLock {
+                terminationStatus = p.terminationStatus
+                didExit = true
+            }
+            exited.signal()
+        }
         try process.run()
 
         let reader = Thread { [self] in readLoop() }
@@ -151,7 +163,8 @@ final class SimProcess: @unchecked Sendable {
     /// Sends one command line and returns when the simulator has answered it. Safe to call concurrently:
     /// the simulator processes lines in order and answers in order.
     func command(_ line: String) async throws -> SimReply {
-        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<SimReply, Error>) in
+        activityHook?()
+        return try await withCheckedThrowingContinuation { (cont: CheckedContinuation<SimReply, Error>) in
             lock.lock()
             if let m = exitMessage {
                 lock.unlock()
@@ -177,16 +190,20 @@ final class SimProcess: @unchecked Sendable {
 
     /// Ends the child and reports (as test failures) a non-zero exit, which is how ASan/UBSan/LSan findings surface.
     func shutdown(file: StaticString = #filePath, line: UInt = #line) {
-        guard process.isRunning else { return }
+        guard !lock.withLock({ didExit }) else { return }
         try? toChild.fileHandleForWriting.write(contentsOf: Data("quit\n".utf8))
-        process.waitUntilExit()
-        if process.terminationStatus != 0 {
-            XCTFail("simulator exited with status \(process.terminationStatus)\n\(stderrOutput)", file: file, line: line)
+        if exited.wait(timeout: .now() + 10) == .timedOut {
+            process.terminate()
+            return XCTFail("simulator did not quit within 10 s", file: file, line: line)
+        }
+        let status = lock.withLock { terminationStatus }
+        if status != 0 {
+            XCTFail("simulator exited with status \(status)\n\(stderrOutput)", file: file, line: line)
         }
     }
 
     private func terminate() {
-        if process.isRunning {
+        if !lock.withLock({ didExit }) {
             try? toChild.fileHandleForWriting.write(contentsOf: Data("quit\n".utf8))
             process.terminate()
         }
@@ -206,9 +223,10 @@ final class SimProcess: @unchecked Sendable {
                 handle(line: lineData)
             }
         }
-        process.waitUntilExit()
+        _ = exited.wait(timeout: .now() + 5)
+        exited.signal()  // shutdown() may be waiting for the same event
         lock.lock()
-        let message = "status \(process.terminationStatus)\n\(stderrText)"
+        let message = "status \(terminationStatus)\n\(stderrText)"
         exitMessage = message
         let waiting = pending
         pending = []

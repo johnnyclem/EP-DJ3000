@@ -369,14 +369,31 @@ int main() {
   CHECK(hostSet(kClassEpOut, kSetCur, kSamplingFreq << 8, kEpAudioOut, {0x44, 0xAC, 0x00}) == false, "SET_CUR 44100: must stall");
   std::printf("ok   mute / volume (cur, min, max, res) / sampling frequency answered; bad channel, control, unit, length stall\n");
 
-  // ---- a zero-length OUT packet (what BRINGUP.md risk 3 is about) ----
-  g_xfers.clear();
-  const bool zlp = audiod_xfer_isr(0, kEpAudioOut, XFER_RESULT_SUCCESS, 0);
-  const bool rearmed = lastXfer(kEpAudioOut) != nullptr;
-  std::printf("info zero-length OUT packet: driver returns %s and %s the endpoint%s\n", zlp ? "true" : "false",
-              rearmed ? "re-arms" : "does NOT re-arm",
-              rearmed ? "" : " (stream stays dead until the host re-selects the interface)");
-
+  // ---- a zero-length OUT packet (BRINGUP.md risk 3) ----
+  // An isochronous endpoint may carry empty packets. TinyUSB as shipped returns from audiod_rx_xfer_isr() before it
+  // re-arms the endpoint, which ends the stream until the host re-selects the interface; the firmware build
+  // compiles a patched copy of the driver (components/epdj_usb/tinyusb_audio_patch.cmake) that run.sh uses here too.
+  {
+    const int failedBefore = g_failed;
+    g_xfers.clear();
+    audio_out::g_ao.pcm.clear();
+    const uint32_t framesBefore = usb_dev::detail::g_audioFrames;
+    const bool zlp = audiod_xfer_isr(0, kEpAudioOut, XFER_RESULT_SUCCESS, 0);
+    CHECK(zlp, "zero-length OUT packet: driver returned false");
+    CHECK(lastXfer(kEpAudioOut) != nullptr, "zero-length OUT packet: endpoint NOT re-armed, the stream stays dead until the host re-selects the interface");
+    CHECK(audio_out::g_ao.pcm.empty() && usb_dev::detail::g_audioFrames == framesBefore, "zero-length OUT packet pushed audio");
+    // ...and the next real packet still gets through.
+    const Xfer* armed = lastXfer(kEpAudioOut);
+    if (armed != nullptr) {
+      int16_t src[96];
+      for (size_t i = 0; i < 96; ++i) src[i] = static_cast<int16_t>(-500 + 7 * i);
+      std::memcpy(armed->buf, src, sizeof src);
+      CHECK(audiod_xfer_isr(0, kEpAudioOut, XFER_RESULT_SUCCESS, 192), "packet after the empty one refused");
+      CHECK(audio_out::g_ao.pcm.size() == 96 && std::memcmp(audio_out::g_ao.pcm.data(), src, sizeof src) == 0,
+            "packet after the empty one did not arrive intact (%zu samples)", audio_out::g_ao.pcm.size());
+    }
+    std::printf("%s a zero-length OUT packet re-arms the endpoint and the stream carries on\n", g_failed == failedBefore ? "ok  " : "FAIL");
+  }
 
   // ---- MIDI: the MIDI driver takes the MIDI function; a whole GET_CONFIG dump fits its TX FIFO ----
   midid_init();

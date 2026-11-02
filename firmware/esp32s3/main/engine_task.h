@@ -44,8 +44,9 @@ struct LoopStats {
   std::atomic<uint32_t> overruns{0};         // iterations that took longer than 1 ms
   std::atomic<uint32_t> maxIterationUs{0};   // since the diagnostics task last cleared it
   std::atomic<uint32_t> lateWakeups{0};      // iterations that began more than 1.5 ms after the previous one
-  std::atomic<uint32_t> usbStalls{0};        // output events held back because the USB FIFO was full
-  std::atomic<uint32_t> usbDrops{0};         // output events given up on (host stopped reading)
+  std::atomic<uint32_t> tickResyncs{0};      // times the schedule was this far behind (tick_pacing.h) and ticks were dropped
+  std::atomic<uint32_t> usbStalls{0};        // iterations an output event was held back because the USB FIFO was full
+  std::atomic<uint32_t> usbDrops{0};         // output events given up on (no host, or it stopped reading)
   std::atomic<uint16_t> fader{0}, knob{0}, angle{0};
   std::atomic<uint16_t> touchRaw[8] = {};
   std::atomic<bool> angleValid{false};

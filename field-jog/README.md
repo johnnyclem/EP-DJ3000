@@ -76,6 +76,17 @@ Under the plate is a bay beside the board. A flat LiPo fits next to the
 display module. There is no
 cell holder. The long-side pin holes are unchanged.
 
+## Controls
+
+Not a CDJ. The buttons worth taking from one:
+
+- **PLAY** and **CUE** are 16 mm round caps, stacked on the lower left, beside the scratch fader. They sit on tactiles. No pocket around them.
+- **IN** and **OUT** are 10 mm round caps above those, each with a 3 mm LED. Firmware toggles the LED. The button is momentary. The LED is the latch you can see.
+- **REV** stays, smaller, on the lower right. Scratch reverse is not a CDJ button and it is not getting dropped.
+- There is no tempo fader. A 64 mm pitch slider does not belong on an 88 mm deck. Tempo is the knob at the top right.
+
+The center slot is still the loose scratch fader, not a pitch control.
+
 ## Technic pins
 
 Five holes on the left edge, five on the right. Round LEGO Technic pin

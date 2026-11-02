@@ -45,8 +45,18 @@ const PIECES: Piece[] = [
     file: "button.stl",
     color: BLACK,
     poses: [
-      { position: [17, 58, 19.15], rotation: [Math.PI, 0, 0] },
-      { position: [71, 58, 19.15], rotation: [Math.PI, 0, 0] },
+      { position: [17, 36, 23], rotation: [Math.PI, 0, 0] },
+      { position: [17, 60, 23], rotation: [Math.PI, 0, 0] },
+    ],
+  },
+  {
+    id: "loop",
+    file: "loop.stl",
+    color: BLACK,
+    poses: [
+      { position: [17, 86, 21.2], rotation: [Math.PI, 0, 0] },
+      { position: [17, 102, 21.2], rotation: [Math.PI, 0, 0] },
+      { position: [71, 48, 21.2], rotation: [Math.PI, 0, 0] },
     ],
   },
   { id: "plus", file: "plus.stl", color: ORANGE, poses: [{ position: [44, 148, 18.4] }] },

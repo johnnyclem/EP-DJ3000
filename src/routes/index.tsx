@@ -47,7 +47,8 @@ function Home() {
         It is 16 mm thick, the same as a K.O. II and a Sidekick, so the cases sit flush.
         The deck is not engraved. Type tore out of the first print. The top 45 mm
         is a blank plate over the battery bay, meant to be silkscreened. A thin slot
-        in it takes a 0.91 inch 128×32 screen.
+        in it takes a 0.91 inch 128×32 screen. Cue and play are round, lower left.
+        Loop in and out sit above them, each with an LED. Tempo is the knob, not a fader.
         Pin holes are 16, 25, 48, 216 and 224 mm from the fader end, 8 mm off the
         bottom, on both long sides.
       </p>

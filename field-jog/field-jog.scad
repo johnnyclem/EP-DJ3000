@@ -107,11 +107,24 @@ pico_l = 51;
 pico_x0 = W / 2 - pico_w / 2;
 pico_y0 = H - wall - pico_l - 1.2;
 
-btn_y = 58;
-btn_x1 = 17;
-btn_x2 = W - 17;
-btn_well = 13.2;
-btn_hole = 6.0;
+// Transport, lower left, clear of the scratch fader. Round caps, no wells.
+play_x = 17;
+play_y = 36;
+cue_x = 17;
+cue_y = 60;
+play_d = 16;
+play_h = 7.0;
+// IN / OUT sit above CUE, still left of the fader. REV stays small, lower right.
+in_x = 17;
+in_y = 86;
+out_x = 17;
+out_y = 102;
+loop_d = 10;
+loop_h = 5.2;
+led_d = 3.1;
+rev_x = 71;
+rev_y = 48;
+stem_past = 2.4;      // how far the stem pokes through the skin onto a tactile
 
 hall_x = fader_cx + 13;
 hall_z_top = 7.0;
@@ -306,13 +319,14 @@ module top_plate() {
         translate([fader_cx, 0, tray_h - eps])
             y_round_slot(fader_slot_w, fader_y0, fader_y0 + fader_slot_l, 0, skin + 2 * eps);
 
-        // buttons: shallow well + stem hole
-        for (bx = [btn_x1, btn_x2]) {
-            translate([bx - btn_well / 2, btn_y - btn_well / 2, body_h - 1.5])
-                cube([btn_well, btn_well, 1.5 + eps]);
-            translate([bx, btn_y, tray_h - eps])
-                cylinder(d = btn_hole, h = skin + 2 * eps, $fn = 28);
-        }
+        // Stem holes only. No square wells: a shallow pocket tears the top skin.
+        for (p = [[play_x, play_y], [cue_x, cue_y], [in_x, in_y], [out_x, out_y], [rev_x, rev_y]])
+            translate([p[0], p[1], tray_h - eps])
+                cylinder(d = 5.2, h = skin + 2 * eps, $fn = 28);
+        // 3 mm LED next to each loop button.
+        for (p = [[in_x + 11, in_y], [out_x + 11, out_y]])
+            translate([p[0], p[1], tray_h - eps])
+                cylinder(d = led_d, h = skin + 2 * eps, $fn = 20);
 
         // pot / knob bushing
         translate([knob_x, knob_y, tray_h - eps])
@@ -456,13 +470,22 @@ module knob() {
     }
 }
 
-module button() {
+module round_cap(d, h) {
     hull() {
-        translate([-5.7, -5.7, 0]) cube([11.4, 11.4, 2.2]);
-        translate([-5.0, -5.0, 2.2]) cube([10.0, 10.0, 2.2]);
+        cylinder(d = d, h = 1.2, $fn = 64);
+        translate([0, 0, h - 1.4]) cylinder(d = d - 1.4, h = 1.4, $fn = 64);
     }
-    translate([-2.15, -2.15, 4.2])
-        cube([4.3, 4.3, 5.2]);
+    translate([0, 0, h - eps])
+        cylinder(d = 4.4, h = skin + stem_past, $fn = 24);
+}
+
+module button() { round_cap(play_d, play_h); }
+module loop_button() { round_cap(loop_d, loop_h); }
+
+module cap_placed(x, y, d, h) {
+    translate([x, y, body_h + h])
+        rotate([180, 0, 0])
+            round_cap(d, h);
 }
 
 module orange_bar() {
@@ -497,14 +520,6 @@ module faceplate() {
     }
 }
 
-module button_placed(x, y) {
-    // Cap is 4.4 tall in the print model and the stem grows off the top of it.
-    // Flip so the stem enters the deck and the cap sits in the well.
-    translate([x, y, body_h + 4.4 - 1.25])
-        rotate([180, 0, 0])
-            button();
-}
-
 module foot() {
     cylinder(d = foot_d - 0.3, h = 1.5, $fn = 32);
 }
@@ -524,9 +539,16 @@ module assembly_solids() {
         translate([knob_x, knob_y, body_h])
             knob();
     color([0.12, 0.12, 0.13]) {
-        button_placed(btn_x1, btn_y);
-        button_placed(btn_x2, btn_y);
+        cap_placed(play_x, play_y, play_d, play_h);
+        cap_placed(cue_x, cue_y, play_d, play_h);
+        cap_placed(in_x, in_y, loop_d, loop_h);
+        cap_placed(out_x, out_y, loop_d, loop_h);
+        cap_placed(rev_x, rev_y, loop_d, loop_h);
     }
+    color([0.93, 0.40, 0.09])
+        for (p = [[in_x + 11, in_y], [out_x + 11, out_y]])
+            translate([p[0], p[1], body_h - 0.4])
+                cylinder(d = 2.6, h = 1.1, $fn = 20);
     color([0.94, 0.94, 0.92])
         translate([plate_x0, plate_y0, body_h - plate_t])
             faceplate();
@@ -578,6 +600,8 @@ if (part == "all") {
     knob();
 } else if (part == "button") {
     button();
+} else if (part == "loop") {
+    loop_button();
 } else if (part == "plus") {
     plus_mark();
 } else if (part == "faceplate") {

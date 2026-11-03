@@ -1,26 +1,23 @@
 # FIELD JOG
 
-> **This folder is the original Field Jog shell and its Pro Micro sketch, redrawn to 16 mm.** The original was drawn for a
-> Pro Micro or Pico, an AS5600 under a bearing platter and a hall-sensor loose fader; the owner's other tool has since redrawn
-> the shell 16 mm thick, with the 683ZZ in a sleeve hanging below the deck, a battery bay under a removable faceplate, a jack
-> row on the top edge (MIDI in, MIDI out, USB, line in, line out) and a headphone jack on the fader end.
+> **This folder is the original Field Jog shell and Pro Micro sketch, redrawn to 16 mm by the owner's other tool for a headerless
+> ESP32-S3-DevKitC-1** (shell commit 15417b6: the 683ZZ in a sleeve under the deck, a battery bay under a removable faceplate, a
+> jack row on the top edge, a headphone jack on the fader end, five round caps).
 >
-> **The ESP32-S3 deck** (`firmware/`, `macos/`, `drivers/`, `docs/`; start at the [root README](../README.md)) uses this
-> shell's free-spinning AS5600 bearing platter by default (`platterSource = AS5600`: the 683ZZ bearing, an M3 axle and a
-> diametric magnet over an AS5600; a segmented touch-ring platter is kept only as an experimental option). Its MIDI map is its
-> own (`docs/PROTOCOL.md`; jog stays CC 22, CUE/REV stay notes 36/37, the knob stays CC 24).
+> **The ESP32-S3 deck is what runs in it:** `firmware/`, `macos/`, `drivers/` and `docs/` at the repo root; start at the
+> [root README](../README.md). Its MIDI map is its own ([`docs/PROTOCOL.md`](../docs/PROTOCOL.md)); its platter is the
+> free-spinning AS5600 one drawn here.
 >
-> **What does not match the ESP32-S3 deck (as of the shell at `main` b06055e):** the bay is now drawn for an **ESP32-Audio-Kit
-> V2.2** PCB (82 x 73 mm). That board is a classic ESP32 (AI-Thinker ESP32-A1S: a codec, microSD and a CP2102 UART bridge) with
-> **no USB device mode**, so it cannot run this repo's USB MIDI + USB audio firmware, which targets the ESP32-S3: see the BOARD
-> CONFLICT in the [root README](../README.md#known-open-issues). The fader slot is for the hall-sensor block with no slide-pot
-> mount; the line-in and headphone jacks, the SSD1306 display and microSD playback have no firmware here; nothing is drawn for
-> the hold pad's contact to the spinning platter; and **the AS5600 stack-up does not close** (the board seat leaves 1.9 mm under
-> the magnet zone, and the BOM's M3 x 12 axle is too long): [`hardware/README.md`](../hardware/README.md).
+> **What still does not match** (table: [`hardware/README.md`](../hardware/README.md#shell-controls-vs-firmware)): no slide-pot
+> mount (the fader slot is for the hall-sensor block), no firmware for PLAY / LOOP IN / LOOP OUT, the two LEDs, the OLED, line in or
+> the headphone jack, no hold-pad contact drawn, and the UART port is reachable only with the deck open (the window shows the
+> native USB port). The AS5600 stack-up margin is thin
+> ([cross-check](../hardware/README.md#stack-up-cross-check-on-paper-shell-15417b6-nothing-measured)). Nothing has been printed,
+> fitted or run.
 >
 > `firmware/field_jog.ino` is the old MIDI-only Pro Micro build, not the ESP32-S3 firmware. `firmware/rp2040/` is a separate
-> experiment from the owner's other tool (USB Audio, no MIDI), **not covered by this repo's tests** and not part of its
-> contract. The Technic-pin hole positions below are the original author's and have not been checked against real EP hardware.
+> experiment (USB Audio, no MIDI), **not covered by this repo's tests**. The Technic-pin hole positions below are the original
+> author's and have not been checked against real EP hardware.
 
 A scratch deck shell that sits in the same row as a Teenage Engineering
 EP-133 K.O. II and an EP-136 K.O. Sidekick.

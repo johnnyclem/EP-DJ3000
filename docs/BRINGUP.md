@@ -52,8 +52,9 @@ routine next to them; prove these first and write the numbers down.
 2. **USB Audio 1.0 with a feedback endpoint on a real host** (step 4, risks 1-3). Try macOS Sound settings first, then
    Linux `aplay`, then Windows.
 3. **ESP-NOW latency, jitter and loss** under the bridge and time sync (step 5). Every figure in `LINK.md` is simulated.
-4. **`REBOOT(bootloader)`** (step 2), never tried. It is not the supported update path: that is the DevKit's UART port, or
-   BOOT held while pressing reset. Find out whether the PHY really is handed back to the ROM before anyone relies on it.
+4. **`REBOOT(bootloader)`** (step 2c), never tried on a chip. The shell's window reaches only the native USB port, so for a
+   closed deck this command (or opening the deck for BOOT + RESET) is the only way to update the firmware. Find out whether the
+   PHY really is handed back to the ROM **before the deck is closed for good**.
 5. **Noticing a pulled USB cable without VBUS sense**, which one-cable mode depends on (step 5, risk 9). Decide early
    whether to add the VBUS divider to the pin plan (`WIRING.md`) rather than rely on an untested idle-detect heuristic.
 
@@ -61,9 +62,11 @@ routine next to them; prove these first and write the numbers down.
 
 * [ ] Continuity: no short 3V3-GND; the hold pad wire (GPIO4) open to GND; CUE/REV open until pressed.
 * [ ] AS5600 breakout: SDA to GPIO21, SCL to GPIO47, 3V3, GND ([`WIRING.md`](../hardware/WIRING.md)); its 3.3 V / 5 V strap or
-  jumper on **3.3 V**; the diametric magnet on the end of the axle, 1 to 3 mm from the chip (`field-jog/README.md`; **in the 16 mm
-  shell as drawn that gap does not exist and the M3 x 12 axle is too long**: [`hardware/README.md`](../hardware/README.md)); the
-  platter turns freely without scraping.
+  jumper on **3.3 V**; the diametric magnet on the end of the axle, 1 to 3 mm from the chip (`field-jog/README.md`; in the 16 mm shell, commit
+  15417b6 lowered the pad to 3.5 mm and moved the BOM to an M3x6, but the margin is thin on paper, so have an M3x5 too:
+  [`hardware/README.md`](../hardware/README.md), "Stack-up cross-check". The judge is the boot log's `magnet detected`: for
+  `magnet too strong` try the shorter M3x5, for `magnet too weak` the M3x6 or a tape shim under the breakout); the platter
+  turns freely without scraping.
 * [ ] Hold pad: the pad wire (GPIO4) reaches the platter one of the two ways `PLATTER.md` lists, both untried. A spring or brush
   contact on the axle (option b): continuity from the platter's touch surface to the pad wire **with the platter still, then
   turned slowly by hand** (a multimeter across the contact: steady, no flicker). Capacitive coupling to a stationary pad
@@ -75,7 +78,8 @@ routine next to them; prove these first and write the numbers down.
 ## 1. Flash and watch the log
 
 Connect the DevKit's **UART** port, flash, open the monitor at **921600** baud (`pio device monitor` is preset;
-`idf.py monitor` follows the build's console baud rate).
+`idf.py monitor` follows the build's console baud rate). **In the shell, do this first flash with the deck open**: the window
+reaches only the native USB port, and the UART port stays inside. Do not close the deck until section 2c has passed.
 
 Expected, in this order (the numbers are illustrations, not measurements: nothing has run on a chip; yours will differ). The
 platter line is the one that matters first; the firmware prints the platter source, whether the AS5600 answered, its magnet
@@ -219,10 +223,8 @@ usb: mounted by host
   watching a second terminal with the TRS MIDI output (or the other deck's log): TRS and the link must keep their full rate.
   The `usb:` line shows `drops` climbing and `tx stalls` stopping at about 100 (one give-up window); open a MIDI monitor
   afterwards and note how much stale traffic it receives at first (up to 256 packets sit in the FIFO).
-* [ ] **`REBOOT(bootloader)`** (app: Settings -> Reboot to bootloader). Never tried on a chip. Expected: the Mac's "EP-DJ3000"
-  disappears, then a "USB JTAG/serial debug unit" (303a:1001) appears and `esptool --before no-reset --port <it> chip-id`
-  answers. If the Mac sees nothing, the PHY was not handed back (`usb_dev::releaseForRomDownload`): use the UART port or
-  BOOT + reset to flash, and tell the owner. Also try it on a unit with a DAC (audio function mounted).
+* [ ] **`REBOOT(bootloader)`** (app: Settings -> Reboot to bootloader): never tried on a chip; its own step, section 2c, to
+  be passed before the deck is closed for good.
 * [ ] A flash write happens on `SAVE_CONFIG`: expect a brief hiccup in the engine tick (a `late wake-up` in the
   stats line is normal at that moment).
 
@@ -329,6 +331,29 @@ Typical use, for step 2 of this file, by hand:
   `touchOnPermille` = 50% of the rise and `touchOffPermille` = 60% of that, neither under 3 times the noise
   (`set_config(deck, 6, on)` and `set_config(deck, 7, off)`), then `SAVE_CONFIG`. It is slower than the app's wizard and has
   the same result. Then do the spinning-platter check of step 2 above, which no wizard does.
+
+## 2c. Prove REBOOT(bootloader) before closing the deck
+
+**Why this is a step of its own.** Once the firmware runs, the native USB port is a MIDI/audio device, not the ROM's download
+interface, and the shell's window exposes only that port (the UART port stays inside). After the first flash over UART, a closed
+deck can be updated only by this command or by opening it for BOOT + RESET. The command is implemented (an ACK, then 200 ms
+later the USB stack is stopped, the chip's USB pins are handed back to the ROM, the force-download flag is set and the chip
+restarts: `main/device_platform.cpp`, `usb_dev::releaseForRomDownload`) and has **never been tried on a chip**.
+
+* [ ] Deck still open, native USB port connected to the host, the unit running (`usb: mounted by host`), the UART port in the
+  log monitor.
+* [ ] Send `REBOOT(bootloader)`: the app's Settings -> Reboot to bootloader, or the frame `F0 7D 45 44 01 7F 0A 00 01 75 F7`
+  (`PROTOCOL.md` section 3: command 0x0A, mode 1; built with the snippet in section 2b and, unlike the table's frames, **not**
+  fed to the simulator). The UART log prints `reboot requested (ROM bootloader)`.
+* [ ] The unit's MIDI device disappears from the host and a "USB JTAG/serial debug unit" (303a:1001) appears;
+  `esptool --before no-reset --port <it> chip-id` answers.
+* [ ] Flash an image through that port (the build's upload command is in `firmware/esp32s3/README.md`) and watch the UART log
+  reach `ready` again; the host lists the MIDI device again.
+* [ ] Repeat on a unit with a DAC (the audio function mounted).
+
+**PASS:** every box above ticks. **FAIL:** nothing appears, it appears but the flash fails, or the old firmware comes back: the
+PHY was not handed back to the ROM. Then do not rely on it: a closed deck needs the UART port or BOOT + RESET, so either redraw the
+window to expose the UART port too (`hardware/README.md`) or plan to open the deck for every update, and tell the owner.
 
 ## 3. MIDI
 
@@ -487,15 +512,16 @@ numbers because other documents point at them.
     the pitch. Look at the `touch=[...]` count in the `diag:` line while turning the platter, at note 38 in the MIDI monitor
     (step 2's spinning-platter check), and at `touchOnPermille` / `touchOffPermille`. If no contact works, `TOUCH_RING`
     (Appendix A) is the kept alternative, with its own unproven signal.
-12. **The filtered ANGLE register is a bet, and the shell does not leave room for the chip.** By default the firmware writes the
+12. **The filtered ANGLE register is a bet, and the shell leaves little room for the chip.** By default the firmware writes the
     chip's CONF (`0x1C00`: 16x slow filter, fast threshold setting 7 = 10 LSB, hysteresis and watchdog off, the original Field Jog
     firmware's settings) and reads ANGLE (`0x0E`). Not established by anything read while writing this: that the filters leave
     RAW ANGLE (`0x0C`) alone, how much lag the slow filter adds (excerpts say about 2 ms), and how noisy the chip is at rest; ANGLE is
     also scaled by ZPOS/MPOS/MANG, so a chip someone burned gives fewer than 1024 ticks a lap. The A/B: build with
     `EPDJ_AS5600_FILTERED_ANGLE` on and off, and compare the idle `angle=` jitter in the `sens:` line (platter still, peak to peak
     over several seconds) and a fast scratch. The simulated answer (`firmware/core/README.md`) is that the filter wins at rest if the
-    real chip is noisy and costs only lag if it is not. Separately, the 16 mm shell as drawn leaves 1.9 mm for the breakout and the air
-    gap, which cannot fit: `hardware/README.md` has the arithmetic and the one-line SCAD fix, and the M3 x 12 axle is too long.
+    real chip is noisy and costs only lag if it is not. Separately, the 16 mm shell (15417b6) lowered the pad to 3.5 mm and the BOM to an M3x6, but on paper
+    the magnet gap is -0.1 to +0.7 mm for an M3x6 and +0.9 to +1.7 mm for an M3x5, depending on where the bolt head seats:
+    `hardware/README.md` ("Stack-up cross-check") has the arithmetic, and only the boot log's magnet status can settle it.
 13. **A long touch followed by a hand lifted off a spinning platter.** After a touch of more than 7 s the pad's release is only
     believed once the platter has made no tick for 80 ms (so a dropout of the pad's signal in the middle of a long scratch does not
     end scratch mode). The price is by design: let go of a platter that is still turning, after such a touch, and note 38 stays on

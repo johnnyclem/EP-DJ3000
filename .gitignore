@@ -10,3 +10,7 @@ firmware/**/build*/
 macos/.build/
 macos/*.app
 *.o
+
+# Python bytecode (written by tools/gen_*.py --check)
+__pycache__/
+*.pyc

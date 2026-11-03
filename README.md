@@ -18,10 +18,12 @@ Not a Teenage Engineering product and not affiliated with them.
 >   unknown left. The experimental conductive-PLA ring has never produced a real signal either.
 > * The macOS app has **never been compiled against the Apple SDKs** (only against hand-written stand-ins).
 > * No DJ-app mapping has been **loaded into the real app**, Mixxx included.
-> * There is **no enclosure** for this design. The owner redrew the Field Jog shell to 16 mm with a jack row, battery bay and
->   faceplate; it keeps the platter mechanics (bearing, M3 axle, magnet, AS5600 pad), but its bay (Pico-sized until commit `e04c912`, an ESP32-Audio-Kit lip since `b06055e`: see the BOARD CONFLICT under Known open issues) and hall-fader
->   slot do not fit this design, and nothing draws a contact from the spinning platter to the hold pad
->   ([`hardware/README.md`](hardware/README.md)).
+> * There is **no finished enclosure** for this design, and the shell has never been printed or fitted. The owner redrew the Field
+>   Jog shell to 16 mm (jack row, battery bay, faceplate); shell commit `15417b6` seats a headerless ESP32-S3-DevKitC-1 and
+>   lowers the AS5600 pad to 3.5 mm. Still wrong for this deck: the hall-fader slot has no slide-pot mount, PLAY / LOOP IN /
+>   LOOP OUT, their LEDs, the OLED, line in and the headphone jack have no firmware, the AS5600 stack-up margin is thin, and
+>   nothing draws a contact from the spinning platter to the hold pad ([`hardware/README.md`](hardware/README.md),
+>   "Shell controls vs firmware").
 
 ```
    DJ software  (Mixxx, VirtualDJ, djay Pro, rekordbox)
@@ -44,7 +46,7 @@ Not a Teenage Engineering product and not affiliated with them.
 | `drivers/` | Mixxx, VirtualDJ, djay Pro, rekordbox mappings and the compatibility matrix |
 | `hardware/` | Wiring, BOM, platter guidance, what is not drawn yet |
 | `docs/` | `PROTOCOL`, `ARCHITECTURE`, `LINK`, `BRINGUP`, `E2E`, `REFERENCE-ORIGINAL-FIRMWARE` |
-| `field-jog/` | The Field Jog shell and Pro Micro sketch, redrawn by the owner to 16 mm (jack row, battery bay, faceplate). Its platter mechanics are the ground truth for the AS5600 platter; its Pico-sized bay and hall-fader slot do not fit the rest. `firmware/rp2040/` there is a separate experiment (open question below). |
+| `field-jog/` | The Field Jog shell and Pro Micro sketch, redrawn by the owner to 16 mm (jack row, battery bay, faceplate, a lip for a headerless ESP32-S3-DevKitC-1 since `15417b6`). Its platter mechanics are the ground truth for the AS5600 platter; several of its controls have no firmware (table in [`hardware/README.md`](hardware/README.md#shell-controls-vs-firmware)). `firmware/rp2040/` there is a separate experiment (open question below). |
 | `src/ server/ public/ scripts/ .grok/ migrations/` and the root `package.json`, `vite.config.ts`, `vercel.json`, `AGENTS.md`, ... | The **unrelated** Field Jog 3D web viewer. Not part of the firmware. |
 
 ## What is new (contract v1.4)
@@ -88,7 +90,7 @@ under [Known open issues](#known-open-issues).
 | Platter angle (AS5600, the default) | firmware core: exact integer jog and `jogInvert` with a simulated angle, the `jogUntouched` policy; host-side encoder check, direction and hold-pad wizards on Linux against an in-memory unit; the Decks-tab platter angle as pure logic | an AS5600 on a real I2C bus, the 1 to 3 mm magnet gap, a real spin, the log's magnet status, the chip's filter settings and filtered-angle register |
 | Hold pad on the spinning platter | firmware core: touch, hold and tap from one simulated pad; the sticky release; the wizard's thresholds on simulated readings | **everything**: a contact across the rotating joint, signal to noise, dropouts while it turns (and whether the sticky release covers them), whether a hand registers at all |
 | Touch ring (experimental) | simulated ring (clean 40 per-mille bump, uniform noise) | everything about a real conductive-PLA ring: signal-to-noise, sector size, finger coverage |
-| Enclosure | nothing (the redrawn 16 mm shell has not been printed or fitted for this design) | everything |
+| Enclosure | nothing (the redrawn 16 mm shell, `15417b6`, has not been printed or fitted) | everything, starting with the AS5600 stack-up, which is thin on paper |
 | CI | none (no `.github/`). `tools/check-all.sh` runs every portable check locally | - |
 
 DJ-app support at a glance (full matrix, evidence grades and caveats: [`drivers/README.md`](drivers/README.md)). Only open-source
@@ -119,7 +121,7 @@ copy of the firmware tree, except the macOS app row, which could not be.
 | **Everything portable, one command** | `tools/check-all.sh` (options: `--list`, a subset such as `tools/check-all.sh drivers swift`, `--build-dir`, `--swift-scratch`, `--no-sanitize`, `--strict`; `--help`). Runs the checks behind the rows marked (*) below, as six steps (the end-to-end row is two), and prints a PASS / FAIL / SKIP table. A step whose tool is missing (python3, node, cmake and a C++ compiler, swift) is SKIPPED, shown as such and never counted as a pass | all six steps PASS in about two minutes on a warm Swift build; it does not run the ESP32-S3 build or host checks, which need PlatformIO |
 | Contract drift (*) | `python3 tools/gen_protocol.py --check && python3 tools/gen_vectors.py --check` | `protocol artifacts up to date`, `test vectors up to date` |
 | Firmware core (*) | `firmware/core/run_tests.sh --sanitize` (needs cmake and a C++17 compiler; builds in `firmware/core/build-san`; a few minutes) | 29 of 29 tests pass |
-| ESP32-S3 build | `pio run -d firmware/esp32s3` (needs PlatformIO; the first run downloads the toolchain and `esp_tinyusb`) | builds, no warnings. Flash over the DevKit's **UART** port with `-t upload`, then follow [`docs/BRINGUP.md`](docs/BRINGUP.md) |
+| ESP32-S3 build | `pio run -d firmware/esp32s3` (needs PlatformIO; the first run downloads the toolchain and `esp_tinyusb`) | builds, no warnings. Flash over the DevKit's **UART** port (in the shell: with the deck open) with `-t upload`, then follow [`docs/BRINGUP.md`](docs/BRINGUP.md) |
 | ESP32-S3 host checks | `sh firmware/esp32s3/tools/host_checks/run.sh` and `sh firmware/esp32s3/tools/crosscheck_usb_desc/run.sh` (the second needs one `pio run` first for the `esp_tinyusb` download) | 31 host tests, 0 failed; 64 checks (the USB-descriptor cross-check, last run before v1.4 and not re-run) |
 | Swift libraries (*) | `cd macos && swift test` (any OS, Swift 5.9+) | 433 tests listed, 75 skipped (they need the simulator below), 0 failed; `check-all.sh` runs the other 358 and leaves the 75 to its two e2e steps |
 | macOS app | `cd macos && swift run EPDJ3000App`, or `scripts/make-app.sh` then `open EP-DJ3000.app` (macOS 13+, Xcode 15+) | **not run: never compiled.** Fallback with no app: [`docs/BRINGUP.md`](docs/BRINGUP.md) section 2b |
@@ -152,7 +154,8 @@ First try: **B with Mixxx** (Deck 1 / Deck 2 outputs).
 * **Deck B.** Hold CUE + REV for 5 s to swap Deck A/B (saves and reboots), or build the second unit with `EPDJ_FIRST_BOOT_DECK_B`
   (`pio run -d firmware/esp32s3 -t menuconfig`).
 * **Two USB-C cables** on the DevKitC-1: UART to flash and read the log, the native USB port to the computer. After the first flash the
-  native port is a MIDI device, not a serial port.
+  native port is a MIDI device, not a serial port. In the shell only the native port reaches the window
+  ([Known open issues](#known-open-issues), flashing).
 * **Audio needs the strap.** `dacMode` AUTO means a jumper from GPIO14 to GND is fitted; there is no automatic DAC detection by default.
   No strap, no USB audio.
 * **LED.** The default build drives the DevKitC-1 v1.1 WS2812 on GPIO38; for a v1.0 board (GPIO48) pick the revision in `menuconfig` (`EPDJ_BOARD_REV`).
@@ -172,7 +175,8 @@ First try: **B with Mixxx** (Deck 1 / Deck 2 outputs).
 ## First things to prove on hardware, in order
 
 1. **The AS5600 answers and its magnet status is "detected".** The boot log's platter line says whether the chip answered
-   and how the magnet looks; the app's *Encoder check* spins the platter and says what to fix if the angle does not follow.
+   and how the magnet looks (in the shell it also judges the magnet gap: bring an M3x5 and an M3x6); the app's *Encoder check*
+   spins the platter and says what to fix if the angle does not follow.
 2. **Direction.** Spin clockwise; `jogTotal` must rise, otherwise flip `jogInvert` (the app's *Platter direction* step).
 3. **A hold pad actually detects a hand on the spinning platter.** This is the biggest remaining unknown: the hold sensing has
    to cross a rotating joint (capacitive coupling to a fixed pad, or a spring or brush on the axle; neither tried:
@@ -180,7 +184,9 @@ First try: **B with Mixxx** (Deck 1 / Deck 2 outputs).
    with the platter still, then turning, and write down the signal and the dropouts.
 4. USB Audio 1.0 with its feedback endpoint on a real host (macOS first, then Linux, then Windows).
 5. ESP-NOW latency and loss under the bridge and time sync.
-6. `REBOOT(bootloader)` over USB. Never tried; the supported update paths are the DevKit's UART port and BOOT + reset.
+6. `REBOOT(bootloader)` over USB, as soon as USB enumerates and **before the deck is closed for good**
+   ([`docs/BRINGUP.md`](docs/BRINGUP.md) section 2c). Never tried on a chip; in the shell it is the only update path through the
+   window, the alternatives being the UART port or BOOT + reset with the deck open.
 7. Detecting a pulled USB cable without VBUS sense (one-cable mode depends on it).
 
 The touch signal-to-noise experiment on real conductive PLA, which used to be step 1, only matters **if you return to the
@@ -190,9 +196,9 @@ ring** (`platterSource = TOUCH_RING`, [`docs/BRINGUP.md`](docs/BRINGUP.md) appen
 
 | Decision | Current default | Note |
 |---|---|---|
-| Board and firmware path | ESP32-S3-DevKitC-1; the pin plan (`board_pins.h`) is invented for it, 21 GPIOs | no smaller board has been checked against it. **The owner's latest shell redraw is built around an ESP32-Audio-Kit V2.2 (a classic ESP32, which has no USB device mode), which this firmware cannot run on: see the BOARD CONFLICT in [Known open issues](#known-open-issues)** |
+| Board and firmware path | ESP32-S3-DevKitC-1, **decided by the owner** ("selected s3-dev-kit"); headerless in the shell since `15417b6`. The pin plan (`board_pins.h`) is written for it, 21 GPIOs | RESOLVED: the Audio Kit lip was dropped (classic ESP32, no USB device mode). The pin plan was checked on paper against Espressif's header tables: every planned pin is on a header and none is reserved ([`hardware/WIRING.md`](hardware/WIRING.md#checked-against-espressifs-header-tables)); not checked on a board. No smaller board has been checked against it |
 | Platter | **AS5600 for now** (`platterSource = AS5600`, contract v1.3): free-spinning platter on a 683ZZ bearing, diametric magnet over an AS5600, one touch pad for hold and tap | the owner's call, "for now". The fixed conductive-PLA sector ring (`TOUCH_RING`) is kept as an experimental option, code, tests and docs included. Open: the rotating contact from the platter to the hold pad is undesigned |
-| Enclosure | none for this design | the owner's redrawn 16 mm shell (jack row, battery bay, faceplate) keeps the platter well, bearing sleeve and AS5600 pad; its bay (Pico-sized until `e04c912`, an ESP32-Audio-Kit lip since `b06055e`; see the BOARD CONFLICT) and hall-fader slot do not fit this design, its line-in and headphone jacks have no firmware support, and there is no hold-pad contact. Check the AS5600 pad height on the first assembly ([`hardware/README.md`](hardware/README.md)) |
+| Enclosure | none finished | the owner's redrawn 16 mm shell (`15417b6`) seats a headerless DevKitC-1 and keeps the platter well, bearing sleeve and a 3.5 mm AS5600 pad with an M3x6 axle (margin thin: buy an M3x5 too); its hall-fader slot has no slide-pot mount, several controls and jacks have no firmware, and there is no hold-pad contact ([`hardware/README.md`](hardware/README.md)) |
 | Untouched platter jog | `jogUntouched` = `AUTO` (contract v1.4): sent until the hold pad has registered a touch since power-up, then not sent | `REPORT` always sends it (a nudge), `SUPPRESS` never does. The unit cannot measure that the pad works, only that it has reported a touch (a phantom touch counts too); the proof is not stored, it restarts at every reboot and when `platterSource` changes |
 | Slide-pot default | `PITCH`, the tempo slider (contract v1.2; v1.1 had `CHANNEL_VOLUME`) | works in all four apps behind an external mixer, and two units never fight over one control. `CHANNEL_VOLUME` (audible in Mixxx only) and `CROSSFADER` stay selectable |
 | USB audio class | UAC1 (the S3 is full-speed only) | meant to bind the in-box driver on macOS, Linux and Windows 10+, untried on any host; Windows wants ASIO for low latency |
@@ -209,34 +215,27 @@ ring** (`platterSource = TOUCH_RING`, [`docs/BRINGUP.md`](docs/BRINGUP.md) appen
 * ADC conversions run with interrupts off (up to 400 us per ms) on the core that also serves USB; unmeasured.
 * No CI configuration; `tools/check-all.sh` is the by-hand equivalent for everything portable.
 * A bridged deck (one-cable mode) cannot be used, shown or calibrated from the Mac app.
-* **The redrawn shell is 16 mm and still not an enclosure for this deck.** The owner's other tool redrew `field-jog/` (jack row
-  for MIDI in, MIDI out, USB, line in and line out, a headphone jack, a battery bay under a removable faceplate). Still wrong for
-  us: the fader slot is for a hall-sensor block with no slide-pot mount (and is now only 40 mm long), the line-in and headphone
-  jacks have no firmware behind them, the 0.91" SSD1306 display and microSD playback described in `field-jog/README.md` have no
-  firmware here either, and nothing carries the hold pad's contact. **The AS5600 stack-up does not close in this shell:**
-  `hardware/README.md` has the arithmetic for the 16 mm SCAD (1.9 mm between the board seat and the magnet zone, and the BOM's
-  M3 x 12 axle puts the magnet in the floor); it was computed from the SCAD as of `main` at commit `e04c912`, so re-check it
-  if the shell changes again.
-* **BOARD CONFLICT for the owner (blocks the shell and the firmware from meeting).** The shell's current SCAD and
-  `field-jog/README.md` (from the owner's other tool, `main` at `b06055e`) say "the brain is an ESP32-Audio-Kit V2.2", an 82 x 73 mm
-  board, with its six keys as the deck's pads, a microSD card, headphones and a 0.91" OLED, while the same README says
-  all of that "stays on the ESP32-S3 that already runs MIDI, the link, and USB audio". Those cannot both be true. The
-  ESP32-Audio-Kit V2.2 is AI-Thinker's ESP32-A1S: a **classic ESP32** with an ES8388 or AC101 codec, a CP2102 USB-UART bridge
-  and a microSD slot (see the sources in the review notes). Classic ESP32 has **no USB device peripheral**, so it cannot be a
-  class-compliant USB MIDI or USB audio device, which is what this repo's firmware (ESP32-S3, TinyUSB) does. On that board you
-  would get BLE-MIDI, TRS MIDI and standalone playback, but **no USB MIDI and no USB sound card**. Options: (a) an ESP32-S3 plus
-  separate codec/SD/headphone parts (the firmware here runs on it), (b) the Audio Kit and give up USB MIDI/audio (a different
-  firmware), (c) an ESP32-S3 board that has the codec and SD built in (none checked against the pin plan), (d) two boards. Please
-  pick; nothing in this repo has been changed to follow either direction. The standalone-playback features (SD, headphone amp,
-  OLED, varispeed) are not implemented in this repo's firmware under any option.
-* **OPEN QUESTION for the owner: which board and firmware path do you intend, this ESP32-S3 deck or the RP2040 experiment?**
-  `field-jog/firmware/rp2040/` (from the owner's other tool) is a different stack: an RP2040 Pico-footprint board that
-  **synthesizes audio on the device** (a loop whose rate follows the platter, sent to the host as a USB Audio Class 1 *input*
-  named "Field Jog" and out of a UART for an optional DAC) and **speaks no MIDI**. This repo's deck is a **MIDI controller
-  plus USB audio output** (the host plays into the deck's DAC): jog, touch, buttons and faders go to DJ software. They share the
-  platter mechanics, the AS5600 and the Pico-footprint bay; the firmware, the host interface and the contract are different. This
-  repo neither builds nor tests the RP2040 code. Which one the shell is for decides the board, the bay and the firmware; we have
-  not touched the RP2040 side.
+* **The redrawn shell is 16 mm and still not a finished enclosure for this deck** (read at shell commit `15417b6`, where the
+  owner's other tool seated a headerless ESP32-S3-DevKitC-1 and lowered the AS5600 pad to 3.5 mm). It draws what the firmware does
+  not do: no PLAY, LOOP IN or LOOP OUT button, no LEDs, no OLED driver, no line in, no headphone amp, no SD playback, no battery
+  path, and a fader slot for a hall-sensor block with no slide-pot mount; nothing carries the hold pad's contact. Per control,
+  with the smallest next step and a proposal (not implemented): the
+  [Shell controls vs firmware](hardware/README.md#shell-controls-vs-firmware) table.
+* **The AS5600 stack-up is thin, not settled.** Paper arithmetic from the SCAD (bolt head and breakout heights are from memory):
+  with an M3x6 the magnet-to-chip gap is -0.1 mm (touching) if the bolt head rests on the bearing race and +0.7 mm if it is
+  pressed against the pocket ceiling; with an M3x5 it is +0.9 or +1.7 mm, and the second puts the magnet 0.1 mm into the sleeve
+  ledge. The AS5600 wants roughly 1 to 3 mm. Paper cannot settle it: buy both bolts, test-fit with the real breakout and let the
+  boot log's magnet status judge ([cross-check](hardware/README.md#stack-up-cross-check-on-paper-shell-15417b6-nothing-measured)).
+* **Flashing and updating through the shell's window.** The window exposes only the native USB port; the UART port stays inside.
+  Our firmware turns the native port into a MIDI/audio device, which is not the ROM download interface. So: flash over the UART
+  port with the deck open; later updates through the window depend on the app's `REBOOT(bootloader)` command
+  ([`docs/PROTOCOL.md`](docs/PROTOCOL.md); implemented, **never tested on a chip**) or on BOOT + RESET with the deck open. Prove
+  `REBOOT(bootloader)` before closing the deck for good ([`docs/BRINGUP.md`](docs/BRINGUP.md) section 2c).
+* **Board: RESOLVED.** ESP32-S3-DevKitC-1, headerless, which the firmware already targets. The ESP32-Audio-Kit V2.2 (a classic
+  ESP32 with no USB device mode, so no USB MIDI and no USB sound card) was dropped in `15417b6`.
+* **OPEN QUESTION for the owner: keep, archive or port the RP2040 experiment?** `field-jog/firmware/rp2040/` (from the owner's
+  other tool) is a separate stack: an RP2040 that synthesizes audio on the device and speaks no MIDI. This repo neither builds nor
+  tests it. With the board decided, the ESP32-S3 deck is the main path.
 * The chip's filter settings and filtered-angle read, the sticky release and the untouched-jog policy are written from the
   original author's description and tested in simulation; none has met a real AS5600 or a real hold pad. The pad proof in
   `AUTO` (untouched jog is sent until the pad's first touch since power-up) is our own addition, not the original's: it is

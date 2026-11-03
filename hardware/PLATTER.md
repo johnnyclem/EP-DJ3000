@@ -8,15 +8,16 @@ down, and is not the path to follow now.
 Two things are verified by tests in simulation only (`firmware/core`, `docs/E2E.md`): the firmware turns AS5600 angles into
 jog (1024 ticks per revolution, exact) and turns a pad reading into touch/tap. Two things are **not validated by anyone**:
 that a conductive-PLA platter that spins can give a usable hold signal (this file lists two ways to try, both untested),
-and that the mechanics below produce the 1 to 3 mm magnet gap (the check against the current 16 mm SCAD is in
-[`README.md`](README.md): **as drawn the stack-up leaves no room for the breakout**, and has a one-line fix).
+and that the mechanics below produce the 1 to 3 mm magnet gap (the paper check against the 16 mm SCAD at shell commit 15417b6 is in
+[`README.md`](README.md#stack-up-cross-check-on-paper-shell-15417b6-nothing-measured): the margin is thin and paper cannot settle it;
+buy an M3x5 and an M3x6 and let the boot log's magnet status judge).
 
 ## The default build
 
 ```
                  conductive-PLA platter (76 mm disc, 3.8 mm)          spins on the 683ZZ
                  +----------------------------------------+
-                 |  M3x12 button-head axle, head in the   |   hold pad: ONE touch pad, GPIO4,
+                 |  M3x6  button-head axle, head in the   |   hold pad: ONE touch pad, GPIO4,
                  |  platter's pocket, shank down through  |   reaches the platter by capacitive coupling
                  |  the bearing                           |   or a brush (options a and b below)
                  +--------------------+-------------------+
@@ -27,8 +28,9 @@ and that the mechanics below produce the 1 to 3 mm magnet gap (the check against
 ```
 
 Mechanics are `field-jog/field-jog.scad` and `field-jog/README.md`; nothing is invented here. From the README: **one 683ZZ
-bearing (3 x 7 x 3 mm) pressed into the deck, one M3 x 12 button-head screw as the axle** (head in a pocket on the
-underside of the platter, shank pointing down through the bearing, a dot of threadlocker so it spins with the platter),
+bearing (3 x 7 x 3 mm) pressed into the deck, one M3 x 6 button-head screw as the axle** (head in a pocket on the
+underside of the platter, shank pointing down through the bearing, a dot of threadlocker so it spins with the platter; the list
+said M3 x 12 before shell commit 15417b6),
 **one 6 x 2.5 mm diametric magnet glued to the shank's end**, and **the AS5600 breakout screwed to the pad under the
 platter, chip up, 1 to 3 mm from the magnet** (tape shims if the gap is wrong). The magnet must be **diametrically**
 magnetised (north and south on opposite sides of the round face, not on the two flat faces): an axial magnet gives the

@@ -1,7 +1,7 @@
 # EP-DJ3000 bill of materials: what changes from the Field Jog
 
 Baseline: the BOM in [`field-jog/README.md`](../field-jog/README.md) (Pro Micro/Pico + AS5600 + bearing + magnetic
-loose crossfader), for the shell as **redrawn to 16 mm**. This lists only the **delta**. Nothing here has been ordered or fitted;
+loose crossfader), for the shell as **redrawn to 16 mm** (read at shell commit 15417b6). This lists only the **delta**. Nothing here has been ordered or fitted;
 part choices are suggestions, and the mechanical consequences for the printed shell are called out because they are not small
 (`README.md` has the full list of what is not drawn, and which of the jack holes the design wires).
 
@@ -10,17 +10,17 @@ part choices are suggestions, and the mechanical consequences for the printed sh
 | Part | Qty | Notes |
 |---|---|---|
 | 683ZZ bearing, 3 x 7 x 3 mm | 1 | pressed into the deck, as in the Field Jog README |
-| M3 button-head screw | 1 | the axle; head in the platter's pocket, shank down through the bearing. **The Field Jog list says M3 x 12; in the 16 mm shell that puts the magnet in the floor.** About M3 x 5 or x 6 is what the stack-up in [`README.md`](README.md) wants (the head height used there is from memory): choose it together with the AS5600 pad height |
+| M3 button-head screw | 1 | the axle; head in the platter's pocket, shank down through the bearing. Shell commit 15417b6 moved the shell's list from M3 x 12 to **M3 x 6** and lowered the AS5600 pad to 3.5 mm. The margin is thin on paper (a gap of -0.1 to +0.7 mm depending on where the head seats; the head height used is from memory), so **buy an M3 x 5 as well as an M3 x 6** and test-fit: [cross-check in `README.md`](README.md#stack-up-cross-check-on-paper-shell-15417b6-nothing-measured) |
 | 6 x 2.5 mm **diametric** magnet | 1 | glued to the shank's end. **Diametrically** magnetised (poles on opposite sides of the round face); an axial magnet (poles on the flat faces) gives the AS5600 nothing to measure. Field Jog's own list says "diametric" for the AS5600 and "axial is fine" for the fader lock: do not mix the two up |
-| AS5600 breakout | 1 | I2C, address 0x36 (not an AS5600L). **Check its 3.3 V / 5 V strap before powering it from 3V3**: many are strapped for 5 V (`WIRING.md`). Solder wires, no tall pin headers; two M2 holes 16 mm apart on the SCAD pad, so the breakout's own holes must match that spacing (measure yours). **Measure its PCB and chip height**: the stack-up in [`README.md`](README.md) needs `encoder_pad_top` set from them |
+| AS5600 breakout | 1 | I2C, address 0x36 (not an AS5600L). **Check its 3.3 V / 5 V strap before powering it from 3V3**: many are strapped for 5 V (`WIRING.md`). Solder wires, no tall pin headers; two M2 holes 16 mm apart on the SCAD pad, so the breakout's own holes must match that spacing (measure yours). **Measure its PCB and chip height**: the 3.5 mm pad assumes a 1.6 mm board plus a 1.5 mm chip (both from memory); a thicker module needs `encoder_pad_top` lowered |
 | M2 screws | 2 | the AS5600 board to its pad |
-| 2 x 6 x 6 mm tactile switches, vertical 9 mm 10 k pot for the knob | 2, 1 | CUE/REV and the orange knob, as in the Field Jog |
+| 2 x 6 x 6 mm tactile switches, vertical 9 mm 10 k pot for the knob | 2, 1 | CUE/REV and the orange knob, as in the Field Jog. The shell has three more stems (PLAY, LOOP IN, LOOP OUT) that nothing reads: see below |
 
 ## Replaced
 
 | Field Jog | EP-DJ3000 | Notes |
 |---|---|---|
-| Raspberry Pi Pico or Pro Micro | **ESP32-S3 board with native USB**: ESP32-S3-DevKitC-1 for bring-up | The pin plan is in GPIO numbers, so any S3 board that exposes all 21 of GPIO1, 2, 4-17, 21, 38, 40, 41, 47 works (GPIO48 instead of 38 on a DevKitC-1 v1.0). **The shell's controller bay is sized for a Pico (21 x 51 mm). A DevKitC-1 is about 70 x 25 mm and does not fit.** Bring up on the bench. No smaller S3 board has been checked against the pin plan (many small ones break out far fewer pins), so for an enclosure either commit to the DevKitC-1 and draw the shell around it, or pick a board and rework `board_pins.h`: see [`README.md`](README.md). |
+| Raspberry Pi Pico or Pro Micro | **ESP32-S3-DevKitC-1, headerless** (the owner's choice; the firmware targets it) | The pin plan is in GPIO numbers: 21 of them (GPIO1, 2, 4-17, 21, 38, 40, 41, 47; GPIO48 instead of 38 on a v1.0 board), all on the DevKitC-1's headers (checked on paper in `WIRING.md`). The shell's lip (15417b6) is about 70 x 25.5 mm for a **headerless** board: factory pin headers do not fit the 16 mm shell, so buy a board without headers or clip them, and measure yours. No other S3 board has been checked against the pin plan (many small ones break out far fewer pins). |
 | 2x hall sensors + magnet in a loose fader block | **1x slide potentiometer**, 10 kΩ linear, ~45-60 mm travel | The shell does cut an 8 x 64 mm slot (for the loose fader's magnet stem, with hall posts), which a slide pot could reuse. **Missing: a mounting pad for the pot and a lever/cap adapter.** Not drawn. |
 | Platter printed in (black) PLA | The same `platter.stl` printed in **conductive PLA** | Still the platter, now with two jobs: it spins, and it has to carry the finger's hold signal to a fixed touch pad. Not wired to the pad directly (it rotates); `PLATTER.md` lists the two ways to try, both unvalidated. |
 
@@ -49,14 +49,16 @@ part choices are suggestions, and the mechanical consequences for the printed sh
 
 ## In the shell, not in this design (no part is listed because nothing supports them)
 
-The redrawn shell has holes and space for more than the firmware does anything with (`README.md`, "What the redrawn shell's new
-features have in the firmware and the wiring"). There is deliberately **no bill-of-materials line** for:
+The redrawn shell has holes and space for more than the firmware does anything with (`README.md`, "Shell controls vs firmware").
+There is deliberately **no bill-of-materials line** for:
 
 | Drawn in the shell | Why there is no part |
 |---|---|
 | a **line in** jack (top edge) | the PCM5102A is output-only; a line input needs an ADC or an I2S codec, firmware and a USB audio input path |
 | a **headphone** jack (fader end) | a headphone amplifier and a cue/monitor mix are not designed |
 | a flat **LiPo** in the battery bay | no cell holder, charger, protection, power path, switch or battery sense is designed; the unit is bus powered |
+| the **PLAY, LOOP IN, LOOP OUT** caps and the two LEDs beside the loop caps | no firmware reads the buttons or drives the LEDs; a proposal is in `README.md` (not implemented). Leave the stems unfitted |
+| the 0.91" **SSD1306 OLED** | no driver and nothing in the contract to show |
 
 ## Only for the experimental touch ring (not the current path)
 
@@ -73,7 +75,8 @@ The ring has no bearing, magnet or encoder: a ring build drops the 683ZZ, the ax
 
 * USB-C cable, data capable, to the DJ computer (native port). A second cable to the DevKit's UART port is only for
   flashing/logging, but you need it for as long as you are developing: once the firmware runs, the native port belongs
-  to TinyUSB.
+  to TinyUSB. In the shell only the native port reaches the window, so the UART cable needs the deck open
+  (`README.md`, builder trap 7).
 * For two decks there are two audio topologies (`docs/ARCHITECTURE.md` section 1), and the parts differ:
   * **A, a sound card per deck**: two complete units with a DAC and a line-out jack each, **each with its own USB data
     cable to the computer**, each line out into one mixer channel. A deck on a USB charger has no USB audio stream, so

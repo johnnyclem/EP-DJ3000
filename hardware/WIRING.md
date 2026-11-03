@@ -27,25 +27,52 @@ with a multimeter), and set `self_powered` / `vbus_monitor_io` in `usb_device.cp
 | 16 | I2S WS (LRCK) | to PCM5102A LCK |
 | 17 | I2S DOUT | to PCM5102A DIN |
 | 21 | I2C SDA | **AS5600** (the default platter's encoder; also the optional codec probe) |
-| 47 | I2C SCL | same. In the VDD_SPI power domain: see the note below. |
+| 47 | I2C SCL | same. In the VDD_SPI power domain: see the header-table check below. |
 | 40 | TRS MIDI TX | UART1, 31250 baud, through the output stage below |
 | 41 | TRS MIDI RX | UART1, from the optocoupler |
 | 38 (v1.1) or 48 (v1.0) | Status LED | the DevKitC-1's on-board WS2812. **v1.1 boards, the current ones, have it on GPIO38; v1.0 on GPIO48.** Pick the revision in `menuconfig` (EP-DJ3000 > board revision, `EPDJ_BOARD_REV`); the default is v1.1. A wrong choice leaves the LED dark and nothing else changes. |
 
 Why these: fader and knob are on ADC1 because ADC2 cannot be used while the radio is on. GPIO4..11 are the S3's
 touch pads 4..11 (contiguous, away from the strapping pins). Left alone on purpose: GPIO0 (BOOT/strapping),
-GPIO3 and 45/46 (strapping), GPIO19/20 (USB), GPIO26..37 (SPI flash and octal PSRAM/flash on R8 modules),
-GPIO43/44 (UART0 log).
+GPIO3 and 45/46 (strapping), GPIO19/20 (USB), GPIO35..37 (octal flash/PSRAM on octal modules; GPIO22..34 are not on the
+DevKitC-1's headers at all, and `board_pins.h` reserves 26..37 regardless), GPIO43/44 (UART0 log).
 
-Notes on the pins that are used: GPIO39-42 are the S3's external-JTAG pins (GPIO40/41 carry TRS MIDI here); they
-are plain GPIO unless you debug with an external probe, and the built-in USB-Serial/JTAG is not affected.
-GPIO47 (I2C SCL), and GPIO48 on a v1.0 board (status LED), sit in the module's VDD_SPI power domain: fine on the usual
-3.3 V modules (N4/N8/N16, R2/R8), but a module variant with 1.8 V flash (the "V" parts, e.g. N32R8V) would drive them at
-1.8 V. From memory of the datasheet, **verify for your module** before relying on I2C or the LED there. The v1.1 LED pin,
-GPIO38, is not one of them as far as I remember the datasheet: the same advice applies.
+## Checked against Espressif's header tables
 
-Unused pins you could take for something later: GPIO18, 39, 42, and whichever of GPIO38 / 48 the status LED is not on
-(check your module: some boards put an LED or a flash/PSRAM line on them).
+The pin plan was checked on paper, not on a board, against the J1 and J3 header tables of Espressif's
+[ESP32-S3-DevKitC-1 user guide (v1.0)](https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32s3/esp32-s3-devkitc-1/user_guide_v1.0.html).
+The headers expose GPIO 0-21 and 35-48; **GPIO 22-34 are not broken out.** Every planned pin is on a header:
+
+| Function | GPIO | On a header | Note |
+|---|---|---|---|
+| Fader, knob wipers | 1, 2 | yes | ADC1_CH0, ADC1_CH1 |
+| Hold pad | 4 | yes | TOUCH4 |
+| CUE, REV | 12, 13 | yes | |
+| DAC-present strap | 14 | yes | |
+| I2S BCK, WS, DOUT | 15, 16, 17 | yes | |
+| AS5600 SDA, SCL | 21, 47 | yes | 47 is in the flash/PSRAM supply domain (caveat 2) |
+| TRS MIDI TX, RX | 40, 41 | yes | JTAG pins (caveat 1) |
+| Status LED | 38 (v1.1) or 48 (v1.0) | yes | the guide lists the RGB LED on GPIO48 for v1.0; 48 is in the supply domain too |
+
+None of them is USB (GPIO19 D-, GPIO20 D+), the UART0 console (GPIO43, 44), a strapping pin (GPIO0, 3, 45, 46) or one of the
+octal flash/PSRAM pins (GPIO35, 36, 37, which the guide says are used internally on octal modules).
+
+**Still free and not special:** GPIO18, 39, 42, and GPIO5-11. GPIO5-11 are the experimental touch ring's sectors 1-7: idle with
+the AS5600 platter, taken if the ring is used.
+
+Two caveats:
+
+1. **GPIO39-42 are the JTAG pins.** They are plain GPIO unless an external JTAG probe is used (the built-in USB-Serial/JTAG is
+   not affected). We use 40 and 41 for TRS MIDI.
+2. **GPIO47 and 48 are in the flash/PSRAM supply domain.** Fine on 3.3 V WROOM-1 modules, but that is from memory of the
+   datasheet: check your module variant in its datasheet, and avoid 1.8 V modules (the "V" parts such as N32R8V would drive
+   I2C SCL and the v1.0 LED at 1.8 V). GPIO38, the v1.1 LED pin, is not in that domain as far as I remember: the same advice
+   applies.
+
+Ports and BOOT, from the same guide: the board has two USB ports. **UART** is the USB-to-UART bridge (CP2102-type), the default
+for flashing and logs. **USB** is the ESP32-S3's native full-speed OTG port, the one this firmware uses as the MIDI/audio
+device. Download mode: hold BOOT, then press RESET. (The v1.0 guide calls the UART connector Micro-USB; the USB-C connectors
+named elsewhere in this repo are what v1.1 boards have, from memory: look at your board.)
 
 ## Power
 
@@ -152,10 +179,11 @@ the loop current (~5 mA, measured across the 33 Ω resistor), and the 31250 baud
 
 ## AS5600 (the default platter: free-spinning on a bearing)
 
-Mechanics are `field-jog/README.md` and `field-jog/field-jog.scad`: 683ZZ bearing, an M3 axle (the BOM's M3 x 12 is too long for the
-16 mm shell: [`README.md`](README.md)), a 6 x 2.5 mm **diametric** magnet on the shank's end, the AS5600 breakout on the pad under the
-platter, chip up, **1 to 3 mm** from the magnet (`PLATTER.md`, `README.md`). **As drawn the SCAD leaves 1.9 mm between the board seat
-and the magnet zone, which a breakout cannot fit: the stack-up is computed in [`README.md`](README.md) and has a one-line fix.**
+Mechanics are `field-jog/README.md` and `field-jog/field-jog.scad`: 683ZZ bearing, an M3x6 axle, a 6 x 2.5 mm **diametric** magnet
+on the shank's end, the AS5600 breakout on the pad under the platter, chip up, **1 to 3 mm** from the magnet (`PLATTER.md`). Shell
+commit 15417b6 lowered the pad to 3.5 mm and moved the BOM from M3x12 to M3x6. **The margin is thin:** on paper the gap is -0.1 to
++0.7 mm for an M3x6 and +0.9 to +1.7 mm for an M3x5, depending on where the bolt head seats, so buy both and let the boot log's
+magnet status judge ([the cross-check in `README.md`](README.md#stack-up-cross-check-on-paper-shell-15417b6-nothing-measured)).
 
 | AS5600 breakout | Connect to | Note |
 |---|---|---|
@@ -187,7 +215,7 @@ firmware cannot tell**: the boot line says `answered at 0x36` either way.
   unpopulated bus quiet but are far too weak for 400 kHz. Breakouts usually carry 4.7 k (some 10 k) to VCC; if yours has
   none, add 4.7 k from SDA and from SCL to 3V3. One set of pull-ups is enough; do not add more in parallel.
 * Keep the two wires short (well under 20 cm), together, and away from the hold-pad wire and from the DAC and MIDI wiring.
-* GPIO47 (SCL) is in the module's VDD_SPI power domain: see the note under the pin table.
+* GPIO47 (SCL) is in the module's VDD_SPI power domain: see caveat 2 under "Checked against Espressif's header tables".
 
 **Hold pad (GPIO4).** One thin wire, as short as you can make it (target under 10 cm), from the hold pad to GPIO4, optionally
 with 330 ohm to 1 k in series at the chip end, away from the I2C, DAC and MIDI wiring. What the other end of that wire

@@ -65,24 +65,29 @@ used (section 3).
 | `drivers/` | DJ-software mappings (Mixxx, VirtualDJ, djay Pro, rekordbox) |
 | `hardware/` | Wiring, BOM, platter guidance (the AS5600 platter and the experimental conductive-PLA ring), what is not drawn yet |
 | `docs/` | This file, `PROTOCOL.md`, `LINK.md`, `BRINGUP.md`, `E2E.md`, `REFERENCE-ORIGINAL-FIRMWARE.md` |
-| `field-jog/` | The Field Jog shell (SCAD, STLs) and its Pro Micro sketch, redrawn by the owner's other tool to 16 mm with a jack row, battery bay and faceplate. Its platter mechanics (bearing, axle, magnet, AS5600 pad) are the AS5600 platter this design defaults to; **the rest of its shell does not fit** (below). `firmware/rp2040/` there is a separate RP2040 experiment (USB audio, no MIDI) that this repo does not build or test. |
+| `field-jog/` | The Field Jog shell (SCAD, STLs) and its Pro Micro sketch, redrawn by the owner's other tool to 16 mm with a jack row, battery bay, faceplate and, since commit 15417b6, a lip for a headerless ESP32-S3-DevKitC-1. Its platter mechanics (bearing, axle, magnet, AS5600 pad) are the AS5600 platter this design defaults to; **several of its controls have no firmware** (below). `firmware/rp2040/` there is a separate RP2040 experiment (USB audio, no MIDI) that this repo does not build or test. |
 | `src/`, `server/`, ... | The Field Jog 3D web viewer. **Untouched, unrelated to the firmware.** |
 
 **Mechanics: there is no complete enclosure for this design yet.** The Field Jog shell was drawn for a Pico, a hall-sensor
 loose fader and a bearing platter. The owner has since redrawn it (their other tool, merged into this branch): **16 mm thick**
-instead of 26, the 683ZZ in a sleeve hanging below the deck, a battery bay under a removable blank faceplate, a jack row on
-the top edge (MIDI in, MIDI out, USB, line in, line out) and a headphone jack on the fader end. The bearing platter is still
-the one part that matches: the default `AS5600` platter is a 76 mm disc in a well over a 683ZZ bearing, on an M3 axle that
-carries a 6 x 2.5 mm diametric magnet, with an AS5600 pad under it (`field-jog/README.md`, `field-jog/field-jog.scad`).
-Against what this firmware needs, the rest does not fit: the controller bay was the Pico-sized one (21 x 51 mm) until shell commit `e04c912` (so an
-ESP32-S3-DevKitC-1, about 70 x 25 mm, did not fit while a board with the Pico footprint did), and the latest redraw (`b06055e`)
-replaced it with a lip for the 82 x 73 mm ESP32-Audio-Kit V2.2, a classic ESP32 that cannot run this firmware (see the BOARD
-CONFLICT in the root README); the fader slot is for the
-hall-sensor block, with no mount for our slide pot; the line-in and headphone jacks have no firmware behind them (our
-line out is the optional DAC, topology A); and the AS5600 pad height has to be checked on the first assembly now that the
-body is 16 mm (`hardware/README.md` measured the old stack-up). Nothing in the SCAD carries a touch from the spinning platter
-to the hold pad either (a rotating contact, below). The experimental conductive-PLA ring has no printable file at all.
-[`hardware/README.md`](../hardware/README.md) lists what has to be drawn.
+instead of 26, the 683ZZ in a sleeve hanging below the deck, a battery bay under a removable faceplate (with an OLED window), a
+jack row on the top edge (MIDI in, MIDI out, USB, line in, line out), a headphone jack on the fader end, and five round caps
+(PLAY, CUE, LOOP IN, LOOP OUT, REV) with two LED holes. Since shell commit 15417b6 (`main`) its controller bay is a lip for a
+**headerless ESP32-S3-DevKitC-1**, the board the owner chose and this firmware targets, and the AS5600 pad sits at 3.5 mm with
+an M3x6 axle. The bearing platter is the part that matches: the default `AS5600` platter is a 76 mm disc in a well
+over a 683ZZ bearing, on an M3 axle that carries a 6 x 2.5 mm diametric magnet, with an AS5600 pad under it
+(`field-jog/README.md`, `field-jog/field-jog.scad`). What still does not match, each in the table in
+[`hardware/README.md`](../hardware/README.md) ("Shell controls vs firmware"):
+
+* the fader slot is for the hall-sensor block, with no mount for our slide pot;
+* PLAY, LOOP IN, LOOP OUT, the two LEDs, the OLED, line in and the headphone jack have no firmware behind them (our line out is
+  the optional DAC, topology A);
+* the AS5600 stack-up margin is thin on paper and only a bench test can settle it (its "Stack-up cross-check");
+* the window exposes only the native USB port, so a closed deck can be updated only through `REBOOT(bootloader)`, which has
+  never been tried on a chip, or by opening it for BOOT + RESET (section 4, `BRINGUP.md` step 2);
+* nothing in the SCAD carries a touch from the spinning platter to the hold pad (a rotating contact, below).
+
+The experimental conductive-PLA ring has no printable file at all. Nothing has been printed, fitted or run.
 
 ## 2. Decisions (made so we could start; each is cheap to reverse)
 
@@ -131,7 +136,7 @@ From TE's product page the **EP-136 K.O.-SIDEKICK** is "a two channel mixer, aud
 * Control: none. Its faders/EQ are analog/physical, which is the point of a hardware mixer.
 * If TE publishes MIDI for the Sidekick (or you capture it), add a `mixer` profile; the link layer reserves a peer slot for non-deck devices.
 
-Mechanically, the Field Jog shell has Technic-pin holes at positions the author chose so decks could bolt to either side of a Sidekick. **Those positions have not been checked against real EP hardware** (`field-jog/README.md` says no EP unit was at hand for the rail), and the shell itself does not fit this design (section 1).
+Mechanically, the Field Jog shell has Technic-pin holes at positions the author chose so decks could bolt to either side of a Sidekick. **Those positions have not been checked against real EP hardware** (`field-jog/README.md` says no EP unit was at hand for the rail), and the shell does not yet match this design in several places (section 1).
 
 ## 4. "Seamless" 2-deck + mixer: what v1 actually delivers
 
@@ -141,7 +146,7 @@ Mechanically, the Field Jog shell has Technic-pin holes at positions the author 
 4. **Rig view** in the macOS app shows both decks, link health, audio routing and a one-click test (tone to each deck, jog/fader/button check) **when both decks are on USB**. A bridged deck is listed as "Not on USB": the app only monitors cable 2, so in one-cable mode it cannot play with, display or calibrate Deck B. The app has never been compiled (`macos/README.md`).
 5. **Documented DJ-app routing** for deck 1 and deck 2 audio (`drivers/README.md`); every route is untested.
 
-**Not in v1 (honest scope-back):** audio over the radio link (ESP-NOW cannot reliably carry 1.5 Mbit/s of real-time PCM); a shared single USB audio device exposing 4 channels (needs a second I2S path or TDM wiring between decks - a hardware decision); BLE-MIDI; mixer MIDI control; firmware OTA (update over the DevKit's UART port or BOOT + reset; `REBOOT(bootloader)` over USB exists but has never been tried).
+**Not in v1 (honest scope-back):** audio over the radio link (ESP-NOW cannot reliably carry 1.5 Mbit/s of real-time PCM); a shared single USB audio device exposing 4 channels (needs a second I2S path or TDM wiring between decks - a hardware decision); BLE-MIDI; mixer MIDI control; firmware OTA (update over the DevKit's UART port or BOOT + reset; `REBOOT(bootloader)` over USB exists but has never been tried, and in the redrawn shell, whose window reaches only the native port, it is the only way to update a closed deck: prove it before closing, `BRINGUP.md` step 2).
 
 ## 5. Verification matrix (what "done" means)
 
@@ -156,15 +161,15 @@ Mechanically, the Field Jog shell has Technic-pin holes at positions the author 
 | Swift libraries | `swift test` on Linux | - |
 | macOS app (CoreMIDI/AVAudio/SwiftUI) | pure logic tested, including the AS5600 calibration flow (encoder check, direction, hold pad) against an in-memory unit; the Foundation-only part of the Kit compiled and tested; the rest **type-checked against hand-written stand-ins for the Apple frameworks, written from memory** | **never compiled against the Apple SDKs, never run**; the wizards' thresholds on a real encoder and a real pad |
 | DJ mappings | Mixxx script run against a mock engine; XML well-formedness; numbers cross-checked to the contract | import into the real apps (Mixxx included) |
-| Enclosure | nothing: the owner's redrawn 16 mm shell has been neither printed nor fitted for this design, and it does not fit it as drawn (section 1) | everything, starting with the hold pad's rotating contact and the AS5600 pad height |
+| Enclosure | nothing: the redrawn 16 mm shell (15417b6) has been neither printed nor fitted, and several of its controls have no firmware (section 1) | everything, starting with the hold pad's rotating contact and the AS5600 stack-up (thin on paper) |
 
 The "not verified" column is the first thing to do when hardware is in hand. `docs/BRINGUP.md` is the ordered
 checklist.
 
 ## 6. Order of bring-up (recommended)
 
-1. Flash firmware, watch `pio device monitor` (or `idf.py monitor`) logs: the platter line (source, whether the AS5600 answered, its magnet status, how many touch pads are wired), then sensors alive. The AS5600 must answer with its magnet detected before anything else is worth testing.
-2. macOS app -> Calibrate: *Encoder check* (spin the platter), *Platter direction*, *Hold pad* (hands off, then a hand on the platter), slide pot, knob. Then, with the platter spinning under a hand, check that the touch light stays on: the hold pad on a spinning platter is the biggest unknown. (No Mac, or the app does not compile: the same steps with ready-made SysEx frames are in `BRINGUP.md`, "Without the macOS app".)
+1. Flash firmware over the DevKit's UART port (with the deck open, if it is in the shell), watch `pio device monitor` (or `idf.py monitor`) logs: the platter line (source, whether the AS5600 answered, its magnet status, how many touch pads are wired), then sensors alive. The AS5600 must answer with its magnet detected before anything else is worth testing.
+2. macOS app -> Calibrate: *Encoder check* (spin the platter), *Platter direction*, *Hold pad* (hands off, then a hand on the platter), slide pot, knob. Then, with the platter spinning under a hand, check that the touch light stays on: the hold pad on a spinning platter is the biggest unknown. Also prove `REBOOT(bootloader)` (Settings -> Reboot to bootloader) before the deck is closed for good. (No Mac, or the app does not compile: the same steps with ready-made SysEx frames are in `BRINGUP.md`, "Without the macOS app".)
 3. MIDI monitor: confirm jog/touch/buttons (an untouched spin shows jog until the pad has registered its first touch, then only under a hand; set `jogUntouched` = REPORT to always see it); load a track in the app's built-in player, scratch.
 4. Add the DAC; confirm "EP-DJ3000 Audio" appears; play the app's test tone.
 5. Second unit: confirm link, then try one-cable bridging.

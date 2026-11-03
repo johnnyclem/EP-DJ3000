@@ -3,7 +3,9 @@
 **Status: design guidance only. Nothing here has been printed, wired or measured.** The current build is a **free-spinning
 platter on a bearing with an AS5600 magnetic encoder under it** (`platterSource = AS5600`, the contract default since v1.3),
 plus **one touch pad** (GPIO4) for hold/touch detection. The earlier segmented touch ring is kept as an experiment, further
-down, and is not the path to follow now.
+down, and is not the path to follow now. Its first printable coupon is
+[`platter-test/`](platter-test/README.md) (76 mm disc, 8 wedges, numbered stand): a bench piece, not an enclosure, and
+nobody has printed it.
 
 Two things are verified by tests in simulation only (`firmware/core`, `docs/E2E.md`): the firmware turns AS5600 angles into
 jog (1024 ticks per revolution, exact) and turns a pad reading into touch/tap. Two things are **not validated by anyone**:
@@ -160,8 +162,8 @@ estimate, not a measurement; the boot log prints the real `idle peak count`.
 **Not the current path.** Kept because the owner may come back to it: a fixed conductive-PLA disc in N isolated sectors,
 each wired to its own touch pad (GPIO4..11 for sectors 0..7), scratched by sliding a finger on it. No bearing, no magnet,
 no encoder. The firmware side is fully supported and tested (against a simulated ring); the hardware has never been
-printed. Everything in the rest of this file is about that ring; set `EPDJ_PLATTER_TOUCH_RING` and `EPDJ_TOUCH_PAD_COUNT` to
-3..8 in `menuconfig` to try it.
+printed. The bench coupon is [`platter-test/`](platter-test/README.md). Everything in the rest of this file is about that
+ring; set `EPDJ_PLATTER_TOUCH_RING` and `EPDJ_TOUCH_PAD_COUNT` to 3..8 in `menuconfig` to try it.
 
 ### What the firmware expects
 

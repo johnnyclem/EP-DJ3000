@@ -7,7 +7,8 @@ REV, an optional PCM5102A DAC and a TRS MIDI jack, all on an ESP32-S3 DevKitC-1.
 Field Jog shell (`field-jog/`), **redrawn to 16 mm** with a bearing sleeve, a battery bay under a removable faceplate, a jack
 row on the top edge and a headphone jack on the fader end. It was drawn for the platter half of this (bearing, axle, magnet,
 AS5600 pad) and for different electronics around it. The controller bay is now a lip for a headerless ESP32-S3-DevKitC-1 (about 70 × 25.5 mm; measure yours). Factory pin headers do not fit the 16 mm shell. The segmented touch ring is kept as an experiment
-([`PLATTER.md`](PLATTER.md), last sections); it is not the path to follow now.
+([`PLATTER.md`](PLATTER.md), last sections); it is not the path to follow now. Its bench coupon is
+[`platter-test/`](platter-test/README.md): not a shell, and nobody has printed it.
 
 **The board is decided:** the owner chose the ESP32-S3-DevKitC-1, which is what the firmware targets. (History, one line: the
 bay was Pico-sized until `e04c912`, then a lip for an ESP32-Audio-Kit V2.2 until `b06055e`; that board is a classic ESP32 with no
@@ -19,6 +20,7 @@ planned pin is on a header and none is USB, console, strapping or flash/PSRAM
 |---|---|
 | [`WIRING.md`](WIRING.md) | Pin table (the source of truth is `board_pins.h`) and its check against Espressif's header tables, power, **AS5600 wiring, its filter configuration, the 3.3 V / 5 V strap trap and the bring-up log lines**, DAC, TRS MIDI, LED |
 | [`PLATTER.md`](PLATTER.md) | The AS5600 platter and its mechanics; the two ways to get a hold signal off a spinning conductive-PLA platter (both unvalidated); what you lose without a hold pad; then the experimental touch ring |
+| [`platter-test/`](platter-test/README.md) | Printable bench coupon for the experimental touch ring: carrier, 8 wedges, numbered stand. Not a shell; nobody has printed it |
 | [`BOM.md`](BOM.md) | What changes from the Field Jog bill of materials |
 
 ## The mechanical delta against `field-jog/field-jog.scad` (the 16 mm redraw)
@@ -90,7 +92,8 @@ detected (`WIRING.md`, bring-up table). Too much air: tape shims under the break
 
 The conductive-PLA platter itself needs no new drawing: print `platter.stl` in conductive filament (hardened or stainless
 nozzle) instead of black PLA. Whether such a platter gives a usable hold signal is the open question
-([`PLATTER.md`](PLATTER.md)).
+([`PLATTER.md`](PLATTER.md)). The segmented ring is a different print: the bench coupon is
+[`platter-test/`](platter-test/README.md).
 
 ### Shell controls vs firmware
 

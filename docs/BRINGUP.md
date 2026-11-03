@@ -7,7 +7,8 @@ the last risks), so this checklist is where reality gets to disagree. Write down
 deviation: the "Risks" at the end say which ones are most likely.
 
 Hardware: [`hardware/WIRING.md`](../hardware/WIRING.md), [`hardware/PLATTER.md`](../hardware/PLATTER.md). There is no
-enclosure for this design yet ([`hardware/README.md`](../hardware/README.md)): bring it up on the bench.
+finished enclosure for this design yet ([`hardware/README.md`](../hardware/README.md)): bring the AS5600 path up on the
+bench. The experimental touch-ring coupon is [`hardware/platter-test/`](../hardware/platter-test/README.md).
 Firmware build and flash: [`firmware/esp32s3/README.md`](../firmware/esp32s3/README.md).
 
 **The platter is the AS5600 for now** (`platterSource = AS5600`, the default since contract v1.3; the owner's decision).

@@ -59,11 +59,12 @@ label on it, the way the Sidekick faceplate is printed and not molded
 with type. Two M2 screws hold it, on the platter side of the bay. Pull
 the knob off before lifting the plate. The pot stays on the deck.
 
-The plate has one opening: a 23.2 × 6.4 mm slot for a 0.91 inch SSD1306,
-128×32, yellow-over-blue, I2C. That is the 0.91 inch panel, not the 0.96
-inch (the 0.96 is 128×64 and would dominate the plate). The module is
-about 36 × 12 × 2.4 mm. Tape it to the underside, pins bent down into the
-bay. It shares I2C with the AS5600 (display `0x3C`, encoder `0x36`).
+The plate has one opening, cut to the glass: 30.5 × 11.85 mm. The module
+behind it is 40 × 12.85 mm, so about half a millimeter of board shows past
+the glass on the short sides and that lip is what keeps it from falling
+through. Tape it to the underside, pins bent down into the bay. It is the
+128×32 yellow-over-blue I2C panel. It shares I2C with the AS5600 (display
+`0x3C`, encoder `0x36`).
 
 ## One board
 

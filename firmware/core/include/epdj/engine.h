@@ -174,6 +174,11 @@ class Engine {
   const LedStatus& led() const { return led_; }
   const Stats& stats() const { return stats_; }
 
+  // Replaces Identity::caps (the engine still adds kDac while a DAC is present). For a capability that appears after
+  // boot, such as an AS5600 that was not answering at power-up and is found by the platform's re-probe, so Info.caps
+  // does not go on saying it is absent.
+  void setCaps(uint16_t caps) { id_.caps = caps; }
+
   // ---- state, for the platform's own use and for tests ----
   const Config& config() const { return cfg_; }
   const link::Link& link() const { return link_; }
@@ -265,6 +270,7 @@ class Engine {
   void onButtonDown(unsigned button);
   void onButtonUp(unsigned button);
   void runPlatter();
+  bool sendsUntouchedJog() const;
   void runJog();
   void runFader();
   void runKnob();
@@ -312,6 +318,7 @@ class Engine {
   TouchRing::Config ringCfg_;
   bool ringConfigured_ = false;
   JogTracker jog_;
+  StickyTouch sticky_;  // the hold pad's motion-sticky release (AS5600 and hold-only platters)
   JogEmitter jogOut_;
   ButtonDebouncer deb_;
   ButtonGestures gestures_;
@@ -382,6 +389,9 @@ class Engine {
   // held notes (the channel at press time is remembered so a live channel change cannot strand a note)
   HeldNote heldBtn_[2];
   HeldNote heldTouch_, heldPulse_;
+  // The hold pad has registered a touch since power-up (or since the platter source changed). jogUntouched = AUTO only
+  // starts suppressing coasting after this, so a pad that is configured but not yet wired never silences the encoder.
+  bool padProven_ = false;
   uint64_t pulseOffUs_ = 0;
 
   // continuous controls

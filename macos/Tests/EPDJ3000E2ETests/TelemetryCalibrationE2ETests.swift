@@ -30,9 +30,10 @@ final class TelemetryCalibrationE2ETests: E2ETestCase {
             XCTAssertEqual(StateFlags(rawValue: t.flags).contains(.touched), false)
             XCTAssertEqual(StateFlags(rawValue: t.flags).contains(.linkUp), false)
             XCTAssertEqual(t.touchRaw.count, 8)
-            for (i, raw) in t.touchRaw.enumerated() {
-                XCTAssertEqual(Double(raw), 30000 + 900 * Double(i), accuracy: 30000 * 0.004, "idle ring reading of sector \(i)")
-            }
+            XCTAssertEqual(Double(t.touchRaw[0]), 30000, accuracy: 30000 * 0.004, "idle reading of the hold pad (GPIO4, the default build's one pad)")
+            XCTAssertEqual(Array(t.touchRaw.dropFirst()), [UInt16](repeating: 0, count: 7), "pads that are not wired read 0")
+            XCTAssertTrue(StateFlags(rawValue: t.flags).contains(.angleValid), "the encoder answers")
+            XCTAssertEqual(t.angle, 0)
             XCTAssertEqual(t.bpmX10, 1200)
             XCTAssertEqual(t.jogTotal, 0)
 
@@ -58,8 +59,8 @@ final class TelemetryCalibrationE2ETests: E2ETestCase {
             t = try XCTUnwrap(frames.last)
             let sim = try await world.status()
             XCTAssertEqual(Int(t.jogTotal), sim.jogTotal, "telemetry jogTotal is what the firmware counted")
-            XCTAssertLessThan(t.jogTotal, -1400)
-            XCTAssertGreaterThan(t.jogTotal, -1700)
+            XCTAssertEqual(t.jogTotal, -1536, "1.5 revolutions of the encoder, counter-clockwise: exactly 1536 ticks")
+            XCTAssertEqual(t.angle, 2048, "Telemetry.angle is the encoder's 12-bit reading: -1.5 rev is half a turn")
             XCTAssertTrue(frames.contains { StateFlags(rawValue: $0.flags).contains(.touched) }, "the touched flag was seen")
             XCTAssertTrue(frames.contains { StateFlags(rawValue: $0.flags).contains(.angleValid) }, "the angle was valid while moving")
             try await c.client.stopStream()
@@ -290,7 +291,7 @@ final class TelemetryCalibrationE2ETests: E2ETestCase {
     }
 
     func testTouchRingWizardProducesThresholdsThatDetectTheFingerAnywhereOnTheRing() async throws {
-        try await withWorld { world in
+        try await withWorld("units=1 platter=ring") { world in  // the experimental ring: eight pads, selected explicitly
             let c = world.client()
             try await c.client.startStream(rateHz: 100)
             let wizard = try await runTouchRingWizard(world, c)
@@ -341,7 +342,7 @@ final class TelemetryCalibrationE2ETests: E2ETestCase {
     }
 
     func testTouchRingWizardRefusesAFingerThatIsTooLightForTheNoiseFloor() async throws {
-        try await withWorld { world in
+        try await withWorld("units=1 platter=ring") { world in
             let c = world.client()
             _ = try await world.command("ring u=0 peak=14")  // barely above the factory 12 per mille
             try await c.client.startStream(rateHz: 100)
@@ -367,11 +368,17 @@ final class TelemetryCalibrationE2ETests: E2ETestCase {
     private func runDirectionWizard(_ world: SimWorld, _ c: SimClient, currentInvert: Bool, fingerRevsPerSecond: Double) async throws
         -> PlatterDirectionCalibration {
         var wizard = PlatterDirectionCalibration(currentInvert: currentInvert)
-        try await world.finger(rev: 0.25, pressure: 1)
+        let onRing = world.platter == .ring
+        try await world.finger(rev: onRing ? 0.25 : nil, pressure: 1)  // the hold pad, or the ring
         var rev = 0.25
         for _ in 0..<400 {
-            try await world.ramp("finger", from: rev, to: rev + fingerRevsPerSecond * 0.02, ms: 20, slice: 20)
-            rev += fingerRevsPerSecond * 0.02
+            let dRev = fingerRevsPerSecond * 0.02
+            if onRing {
+                try await world.ramp("finger", from: rev, to: rev + dRev, ms: 20, slice: 20)
+                rev += dRev
+            } else {
+                try await world.spin(revs: dRev, ms: 20)  // the platter turns under the hand
+            }
             for t in c.telemetry.take() { wizard.feed(t) }
             if case .decided = wizard.phase { break }
         }
@@ -380,31 +387,35 @@ final class TelemetryCalibrationE2ETests: E2ETestCase {
         return wizard
     }
 
+    /// On the AS5600 platter this wizard matters most: which way the encoder counts depends on how the magnet and the
+    /// breakout were mounted (the DIR pin, or jogInvert as its software twin). Run it on both platters.
     func testPlatterDirectionWizardKeepsAClockwiseUnitAndFlipsAReversedOne() async throws {
-        try await withWorld { world in
-            let c = world.client()
-            try await c.client.startStream(rateHz: 100)
+        for args in ["units=1", "units=1 platter=ring"] {
+            try await withWorld(args) { world in
+                let c = world.client()
+                try await c.client.startStream(rateHz: 100)
 
-            // Correct unit, the user spins clockwise: nothing to change.
-            var wizard = try await runDirectionWizard(world, c, currentInvert: false, fingerRevsPerSecond: 0.5)
-            var result = try wizard.finish()
-            XCTAssertGreaterThan(result.netTicks, 0)
-            XCTAssertEqual(result.invert, false)
+                // Correct unit, the user spins clockwise: nothing to change.
+                var wizard = try await runDirectionWizard(world, c, currentInvert: false, fingerRevsPerSecond: 0.5)
+                var result = try wizard.finish()
+                XCTAssertGreaterThan(result.netTicks, 0, args)
+                XCTAssertEqual(result.invert, false, args)
 
-            // The platter is wired backwards: what the user calls clockwise moves the finger the other way round.
-            wizard = try await runDirectionWizard(world, c, currentInvert: false, fingerRevsPerSecond: -0.5)
-            result = try wizard.finish()
-            XCTAssertLessThan(result.netTicks, 0, "jogTotal falls")
-            XCTAssertEqual(result.invert, true)
-            try await c.client.apply(result.configUpdates)
-            try await expectEqual(try await c.client.getConfig(.jogInvert), 1)
+                // The platter is wired backwards: what the user calls clockwise moves the sensor the other way round.
+                wizard = try await runDirectionWizard(world, c, currentInvert: false, fingerRevsPerSecond: -0.5)
+                result = try wizard.finish()
+                XCTAssertLessThan(result.netTicks, 0, "jogTotal falls (\(args))")
+                XCTAssertEqual(result.invert, true, args)
+                try await c.client.apply(result.configUpdates)
+                try await expectEqual(try await c.client.getConfig(.jogInvert), 1)
 
-            // jogTotal is measured after jogInvert, so the same motion now counts upwards, and the wizard, run again
-            // with the new setting, leaves it alone.
-            wizard = try await runDirectionWizard(world, c, currentInvert: true, fingerRevsPerSecond: -0.5)
-            result = try wizard.finish()
-            XCTAssertGreaterThan(result.netTicks, 0, "after jogInvert = 1 the reversed motion is positive")
-            XCTAssertEqual(result.invert, true, "and the setting is kept")
+                // jogTotal is measured after jogInvert, so the same motion now counts upwards, and the wizard, run again
+                // with the new setting, leaves it alone.
+                wizard = try await runDirectionWizard(world, c, currentInvert: true, fingerRevsPerSecond: -0.5)
+                result = try wizard.finish()
+                XCTAssertGreaterThan(result.netTicks, 0, "after jogInvert = 1 the reversed motion is positive (\(args))")
+                XCTAssertEqual(result.invert, true, "and the setting is kept (\(args))")
+            }
         }
     }
 }

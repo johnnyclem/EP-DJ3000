@@ -165,6 +165,10 @@ export class Rig {
     this.heard = [];
     /** Platform effects the units asked for (save, reboot, set deck, tone). */
     this.platform = [];
+    /** The hardware the simulator was built as: "as5600" (the default: encoder + one hold pad) or "ring" (`init platter=ring`). */
+    this.platter = "as5600";
+    /** Where each unit's AS5600 is, in revolutions. An encoder cannot teleport, so scratching on it is relative to this. */
+    this.encoderRev = new Map();
   }
 
   attach(script, unit, cable) {
@@ -202,11 +206,27 @@ export class Rig {
     for (let done = 0; done < ms;) {
       const len = Math.min(this.slice, ms - done);
       const a = from + ((to - from) * done) / ms;
-      const b = from + ((to - from) * (done + len)) / ms;
+      const b = done + len === ms ? to : from + ((to - from) * (done + len)) / ms; // the end lands exactly
       const r = await this.sim.cmd(`ramp u=${unit} what=${what} from=${a} to=${b} ms=${len}`);
       await this.#deliver(r.events);
       done += len;
     }
+    if (what === "as5600") this.encoderRev.set(unit, to);
+  }
+
+  /** Turns the AS5600 platter by `revs` (negative = counter-clockwise) over `ms`, from wherever it is. */
+  async spin(revs, ms, { unit = 0 } = {}) {
+    const from = this.encoderRev.get(unit) ?? 0;
+    await this.ramp("as5600", from, from + revs, ms, { unit });
+  }
+
+  /** Puts the AS5600 at `rev` (revolutions) and remembers it. Extra `key=value` options go to the simulator's `as5600` command. */
+  async setEncoder(rev, { unit = 0, noise, valid } = {}) {
+    let line = `as5600 u=${unit} rev=${rev}`;
+    if (noise !== undefined) line += ` noise=${noise}`;
+    if (valid !== undefined) line += ` valid=${valid ? 1 : 0}`;
+    await this.cmd(line);
+    this.encoderRev.set(unit, rev);
   }
 
   async cmd(line) {

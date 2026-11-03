@@ -1,9 +1,11 @@
-// Runs the protocol library's calibration state machines (Calibration.swift) against a live telemetry stream and
-// applies their results with SET_CONFIG / SAVE_CONFIG. All the judgement lives in those machines; this only feeds them,
-// reports their phase, and moves their output to the unit.
+// Runs the protocol library's calibration state machines (Calibration.swift, EncoderDiagnosis.swift,
+// HoldPadCalibration.swift) against a live telemetry stream and applies their results with SET_CONFIG / SAVE_CONFIG.
+// All the judgement lives in those machines; this only feeds them, reports their phase, and moves their output to the
+// unit. Which steps a unit gets, and in which order, is `CalibrationFlow.steps(for:)`: it follows the unit's
+// `platterSource`.
 //
-// One step runs at a time. Live values (`latest`, `sweep`, `touch`, `platter`, `sectorRise`) are plain properties for
-// views to read on a timeline; `statuses` is what changes rarely and is @Published.
+// One step runs at a time. Live values (`latest`, `sweep`, `touch`, `holdPad`, `encoder`, `platter`, `sectorRise`) are
+// plain properties for views to read on a timeline; `statuses` is what changes rarely and is @Published.
 
 import Combine
 import EPDJ3000KitPure
@@ -12,10 +14,7 @@ import Foundation
 
 @MainActor
 public final class CalibrationController: ObservableObject {
-    public enum Step: String, CaseIterable, Identifiable, Sendable {
-        case fader, knob, touchRing, platter
-        public var id: String { rawValue }
-    }
+    public typealias Step = CalibrationStep
 
     public enum Status: Equatable {
         case notStarted
@@ -28,7 +27,7 @@ public final class CalibrationController: ObservableObject {
 
     public let session: DeckSession
 
-    @Published public var selected: Step = .fader
+    @Published public var selected: Step
     @Published public private(set) var statuses: [Step: Status] = [:]
     @Published public private(set) var isSaved = false
     @Published public private(set) var isBusy = false
@@ -37,8 +36,11 @@ public final class CalibrationController: ObservableObject {
     public private(set) var runningStep: Step?
     public private(set) var sweep: SweepCalibration?
     public private(set) var touch: TouchRingCalibration?
+    public private(set) var holdPad: HoldPadCalibration?
+    public private(set) var encoder: EncoderDiagnosis?
     public private(set) var platter: PlatterDirectionCalibration?
-    /// Per sector: how far the live reading is above the idle average captured at the start, per-mille. Display only.
+    /// Touch step only: how far the live reading is above the idle average captured at the start, per-mille, one entry
+    /// per sector (one entry for the hold pad). Display only.
     public private(set) var sectorRise: [Double] = []
 
     private var pending: [ConfigUpdate] = []
@@ -48,12 +50,22 @@ public final class CalibrationController: ObservableObject {
 
     public init(session: DeckSession) {
         self.session = session
+        selected = CalibrationFlow.steps(for: CalibrationFlow.source(config: session.config[.platterSource],
+                                                                      info: session.info?.platterSource)).first ?? .fader
     }
+
+    /// How this unit senses its platter right now: the live setting, so changing it in Settings changes the flow.
+    public var platterSource: PlatterSource {
+        CalibrationFlow.source(config: session.config[.platterSource], info: session.info?.platterSource)
+    }
+
+    /// The steps to show, in order, for `platterSource`.
+    public var steps: [Step] { CalibrationFlow.steps(for: platterSource) }
 
     public func status(_ step: Step) -> Status { statuses[step] ?? .notStarted }
 
     public var allApplied: Bool {
-        Step.allCases.allSatisfy { if case .applied = status($0) { return true } else { return false } }
+        steps.allSatisfy { if case .applied = status($0) { return true } else { return false } }
     }
 
     // MARK: lifecycle (call from onAppear / onDisappear)
@@ -86,6 +98,8 @@ public final class CalibrationController: ObservableObject {
         pending = []
         sweep = nil
         touch = nil
+        holdPad = nil
+        encoder = nil
         platter = nil
         sectorRise = []
         idleSum = [Double](repeating: 0, count: 8)
@@ -100,7 +114,20 @@ public final class CalibrationController: ObservableObject {
             let sectors = min(8, max(3, Int(session.config[.touchSectors] ?? 8)))
             touch = TouchRingCalibration(sectors: sectors, rateHz: DeckSession.telemetryRateHz)
             sectorRise = [Double](repeating: 0, count: sectors)
-        case .platter:
+        case .holdPad:
+            holdPad = HoldPadCalibration(rateHz: DeckSession.telemetryRateHz)
+            sectorRise = [0]
+        case .encoder:
+            // Caps come from GET_INFO: without it "no chip answered" would be a guess.
+            guard session.info != nil else {
+                statuses[step] = .failed("The unit has not answered yet. Wait for it to connect, then start again.")
+                runningStep = nil
+                return
+            }
+            let machine = EncoderDiagnosis(caps: session.caps, rateHz: DeckSession.telemetryRateHz)
+            encoder = machine
+            evaluateEncoder(machine)   // already decided when no chip answered at start-up
+        case .direction:
             platter = PlatterDirectionCalibration(currentInvert: (session.config[.jogInvert] ?? 0) != 0)
         }
     }
@@ -168,7 +195,22 @@ public final class CalibrationController: ObservableObject {
             touch = machine
             updateRise(t, sectors: machine.sectors)
             evaluateTouch(machine)
-        case .platter:
+        case .holdPad:
+            guard var machine = holdPad else { return }
+            if case .capturingIdle = machine.phase, let raw = t.touchRaw.first {
+                idleSum[0] += Double(raw)
+                idleCount += 1
+            }
+            machine.feed(t)
+            holdPad = machine
+            updateRise(t, sectors: 1)
+            evaluateHoldPad(machine)
+        case .encoder:
+            guard var machine = encoder else { return }
+            machine.feed(t)
+            encoder = machine
+            evaluateEncoder(machine)
+        case .direction:
             guard var machine = platter else { return }
             machine.feed(t)
             platter = machine
@@ -205,6 +247,34 @@ public final class CalibrationController: ObservableObject {
         }
     }
 
+    private func evaluateHoldPad(_ machine: HoldPadCalibration) {
+        switch machine.phase {
+        case .done:
+            do {
+                let r = try machine.finish()
+                pending = r.configUpdates
+                statuses[.holdPad] = .measured("Touch on at \(r.onPermille), off at \(r.offPermille) per-mille. A hand rises \(Int(r.risePermille)); idle noise \(Int(r.noisePermille.rounded())).")
+            } catch {
+                statuses[.holdPad] = .failed(ErrorText.describe(error))
+            }
+            runningStep = nil
+        case let .failed(error):
+            statuses[.holdPad] = .failed(ErrorText.describe(error))
+            runningStep = nil
+        default:
+            break
+        }
+    }
+
+    private func evaluateEncoder(_ machine: EncoderDiagnosis) {
+        guard let verdict = machine.verdict else { return }
+        // Nothing to send to the unit: a pass is final, a failure says what to fix.
+        let text = ErrorText.describe(verdict)
+        let status: Status = verdict.isOK ? .applied(text) : .failed(text)
+        statuses[.encoder] = status
+        runningStep = nil
+    }
+
     private func evaluatePlatter(_ machine: PlatterDirectionCalibration) {
         do {
             let r = try machine.finish()
@@ -212,9 +282,9 @@ public final class CalibrationController: ObservableObject {
             let text = r.invert == machine.currentInvert
                 ? "Clockwise gave +\(abs(r.netTicks)) ticks: direction is right."
                 : "Clockwise gave \(r.netTicks) ticks: jog direction will be flipped."
-            statuses[.platter] = .measured(text)
+            statuses[.direction] = .measured(text)
         } catch {
-            statuses[.platter] = .failed(ErrorText.describe(error))
+            statuses[.direction] = .failed(ErrorText.describe(error))
         }
         runningStep = nil
     }

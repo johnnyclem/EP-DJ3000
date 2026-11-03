@@ -16,6 +16,38 @@ namespace {
 
 const char* TAG = "diag";
 
+// What the re-probe found since the last look, once per event (the engine task counts, this task talks: it must not log).
+// The state behind a count (present, magnet, CONF) is written before the count moves.
+void encoderEvents(const Runtime& rt) {
+  using hal::sensor_budget::Magnet;
+  static uint32_t seenLosses = 0, seenRecoveries = 0;  // this task only
+  const uint32_t losses = rt.as5600->losses();
+  const uint32_t recoveries = rt.as5600->recoveries();
+  if (losses != seenLosses) {
+    seenLosses = losses;
+    ESP_LOGW(TAG, "as5600: encoder stopped answering at 0x%02X (two failed reads in a row): jog is silent until it does; asking again every 500 ms",
+             hal::As5600::kAddress);
+  }
+  if (recoveries != seenRecoveries) {
+    seenRecoveries = recoveries;
+    char conf[24];
+    if (rt.as5600->confKnown()) std::snprintf(conf, sizeof conf, "conf=0x%04X", static_cast<unsigned>(rt.as5600->conf()));
+    else std::snprintf(conf, sizeof conf, "conf=?");
+    if (rt.as5600->appearedAfterBoot() && recoveries == 1) {
+      ESP_LOGI(TAG, "as5600: encoder appeared at 0x%02X after boot (magnet %s, %s, angle reg 0x%02X): jog is live, no reboot needed",
+               hal::As5600::kAddress, hal::sensor_budget::magnetText(rt.as5600->magnet()), conf,
+               static_cast<unsigned>(hal::As5600::angleRegister()));
+      if (rt.as5600->magnet() != Magnet::Ok) {
+        ESP_LOGW(TAG, "AS5600 magnet %s (STATUS 0x%02X)", hal::sensor_budget::magnetText(rt.as5600->magnet()), rt.as5600->status());
+      }
+    } else {
+      ESP_LOGI(TAG, "as5600: encoder answering again at 0x%02X (%s): jog resumed from the platter's present position, no jump",
+               hal::As5600::kAddress, conf);
+    }
+    if (!rt.as5600->confOk()) ESP_LOGW(TAG, "as5600: CONF %s", rt.as5600->confKnown() ? "read back differently from what was written" : "could not be written or read back");
+  }
+}
+
 void sensorLine(const Runtime& rt) {
   LoopStats& s = loopStats();
   char touch[8 * 7 + 1] = {};
@@ -28,6 +60,13 @@ void sensorLine(const Runtime& rt) {
            static_cast<unsigned>(s.fader.load()), static_cast<unsigned>(s.knob.load()), static_cast<unsigned>(s.angle.load()),
            rt.as5600->present() ? (s.angleValid.load() ? "" : "(bad)") : "(none)", rt.buttons->cue() ? 1 : 0,
            rt.buttons->rev() ? 1 : 0, touch);
+  static uint32_t reportedFailures = 0;  // this task only
+  const uint32_t failures = rt.as5600->failures();
+  if (failures != reportedFailures) {
+    reportedFailures = failures;
+    ESP_LOGW(TAG, "as5600: %lu failed I2C reads since boot (loose wire or a bus fault: each costs the 1 kHz loop up to 2 ms)",
+             static_cast<unsigned long>(failures));
+  }
 }
 
 void statsLines(const Runtime& rt) {
@@ -84,6 +123,7 @@ void diagLoop(const Runtime* rt) {
   for (;;) {
     vTaskDelay(pdMS_TO_TICKS(1000));
     ++seconds;
+    encoderEvents(*rt);  // events, not statistics: logged whatever the periodic lines are set to
 #if CONFIG_EPDJ_LOG_SENSORS
     sensorLine(*rt);
 #endif

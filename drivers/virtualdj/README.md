@@ -76,7 +76,7 @@ names. Numbers are from `protocol/epdj3000.json`.
 | Name | Unit sends | VDJscript | Notes |
 |---|---|---|---|
 | `JOG` | CC 22, relative `64 + delta`, 1024 ticks per revolution | `touchwheel` | `zero="0x40" full="1024"`, clockwise = forward |
-| `JOG_TOUCH` | Note 38, vel 127 / 0 | `touchwheel_touch` | holds the track while a finger is on the platter |
+| `JOG_TOUCH` | Note 38, vel 127 / 0 | `touchwheel_touch` | holds the track while a hand is on the platter (the hold pad) |
 | `PLAY` | Note 39 pulse on a platter tap | `play_pause` | `LED_PLAY` follows play state |
 | `CUE` | Note 36 | `cue_stop` | CDJ-style cue; `LED_CUE` follows cue state |
 | `REV` | Note 37 | `reverse` | the verb list says only "play the song backward": whether a press latches or is momentary is not documented, find out on first run. `dump while_pressed` is the documented momentary alternative (reverses while held, then resumes where the track would have been) |
@@ -84,6 +84,13 @@ names. Numbers are from `protocol/epdj3000.json`.
 | `LEVEL` | CC 7 / 39 | `level` | only when `faderRole` = CHANNEL_VOLUME |
 | `PITCH` | CC 25 / 57 | `pitch` | when `faderRole` = PITCH, the unit's default |
 | `KNOB` | CC 24 / 56 | `filter` | colour-FX filter, nothing applied at centre; silent if `knobRole` = BPM |
+
+**Untouched platter motion.** The unit's default `jogUntouched` is `AUTO`: it sends `JOG` for a platter nobody touches until
+the hold pad has registered a touch since power-up, and only while a hand is on the platter after that (contract v1.4; a
+coasting platter would otherwise keep driving `touchwheel`). To get motion from a platter nobody is touching *after the pad
+has worked*, for instance as a nudge, set `jogUntouched` = `REPORT` (config key 33, value 1) in the macOS app's Settings or
+with the SysEx frame in [`../README.md`](../README.md#untouched-platter-motion-joguntouched). What
+`touchwheel` does with jog and no touch is not documented; nothing in this mapping changes for it.
 
 LEDs are not mapped separately: per the definition reference, an LED with `default="CUE"` uses the
 action of the `CUE` button as its state.
@@ -103,9 +110,11 @@ only, so whether Start/Stop are sent is unknown. UNTESTED.
 
 1. Plug in one unit, start VirtualDJ. The Controllers tab should list **EP-DJ3000 Deck** with the
    mapper `EP-DJ3000`. Not listed: see [Troubleshooting](#troubleshooting).
-2. Load a playing track. Touch the platter: the track should stop. Drag clockwise: it should play
-   forward. Backwards is the unit's `jogInvert`, not an edit here.
-3. One full revolution of your finger should be one full revolution of VirtualDJ's platter. If not,
+2. Load a playing track. Put a hand on the platter: the track should stop (the unit's touch note comes
+   from its hold pad; no stop means the pad is not seeing your hand, so run the app's Hold pad step or
+   `docs/BRINGUP.md` first). Spin it clockwise: it should play forward. Backwards is the unit's `jogInvert`,
+   not an edit here.
+3. One full revolution of the platter should be one full revolution of VirtualDJ's platter. If not,
    `full` in the definition is the knob (the VirtualDJ developers say the same of other jogs).
 4. Quick tap on the platter toggles play. CUE, REV and the slide pot do what the table says.
 5. PLAY and CUE LEDs follow the deck (the unit lights them from incoming notes 39 and 36, per the contract).
@@ -132,8 +141,9 @@ Everything about VirtualDJ's behaviour. Specifically:
 
 * That `vid`/`pid` detection finds the unit on macOS and Windows, and which of the three MIDI cables it binds.
 * That two identical units get decks 1 and 2 (rather than decks 1 and 3) and keep them after reconnect.
-* That `touchwheel` with no touch (the free-spinning `AS5600` platter reports motion untouched) behaves
-  sensibly; the docs only say it is "for a jogwheel with touch sensitivity".
+* That `touchwheel` with no touch behaves sensibly. By default the unit sends no jog for an untouched platter once the hold
+  pad has registered a touch (`jogUntouched` = `AUTO`), so this arises on a fresh unit before any touch, with `jogUntouched` =
+  `REPORT`, or in a build with no hold pad; the docs only say the verb is "for a jogwheel with touch sensitivity".
 * That `full="1024"` and a `64`-centred relative CC give one-to-one platter motion.
 * That 14-bit sliders with a skipped half (the contract allows skipping an unchanged half) behave.
 * That the `default=""` LEDs show cue and play state with `cue_stop` / `play_pause`.

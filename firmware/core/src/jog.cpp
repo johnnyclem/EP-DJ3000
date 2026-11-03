@@ -117,6 +117,20 @@ JogTracker::Output JogTracker::update(const Input& in, uint64_t nowUs) {
   return out;
 }
 
+bool StickyTouch::update(bool padTouched, uint64_t nowUs) {
+  if (!touched_) {
+    if (padTouched) {
+      touched_ = true;
+      startUs_ = nowUs;
+    }
+  } else if (!padTouched) {
+    const bool longTouch = nowUs - startUs_ > static_cast<uint64_t>(kStickyAfterMs) * 1000u;
+    const bool stillMoving = nowUs - lastMotionUs_ < static_cast<uint64_t>(kStickyMotionMs) * 1000u;
+    if (!(longTouch && stillMoving)) touched_ = false;
+  }
+  return touched_;
+}
+
 void JogEmitter::add(int32_t ticks) { accum_ = satAdd32(accum_, ticks); }
 
 bool JogEmitter::poll(uint64_t nowUs, uint8_t* value) {

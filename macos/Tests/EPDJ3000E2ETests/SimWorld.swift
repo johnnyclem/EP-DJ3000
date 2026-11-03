@@ -205,28 +205,48 @@ final class LastActivity: @unchecked Sendable {
     var idleSeconds: Double { lock.withLock { Date().timeIntervalSince(last) } }
 }
 
+/// The hardware the simulator was asked to build (`init platter=`). The default is the shipping one: a free-spinning
+/// platter on an AS5600 with ONE touch pad as the hold pad. `.ring` is the experimental segmented touch ring.
+enum SimPlatter {
+    case as5600, ring, hold
+
+    init(args: String) {
+        let value = args.split(separator: " ").first { $0.hasPrefix("platter=") }.map { String($0.dropFirst("platter=".count)) }
+        switch value {
+        case "ring": self = .ring
+        case "hold": self = .hold
+        default: self = .as5600
+        }
+    }
+}
+
 final class SimWorld: @unchecked Sendable {
     let process: SimProcess
     let clock = SimClock()
+    let platter: SimPlatter
     private var clients: [SimClient] = []
     private(set) var virtualSeconds = 0.0
     private let lastActivity = LastActivity()
     private var idlePump: Task<Void, Never>?
+    /// Where each unit's encoder is, in revolutions (unbounded: the simulator wraps it to 12 bits). The encoder cannot
+    /// teleport, so gestures on the AS5600 platter are relative to this.
+    var encoderRev: [Int: Double] = [:]
 
-    /// The touch ring learns its baseline for 250 ms and settles for 3 s (touch_ring.h).
+    /// The touch detector learns its baseline for 250 ms and settles for 3 s (touch_ring.h; the hold pad uses the same one).
     static let settleMs = 3600
 
     static func make(_ args: String = "units=1", settle: Bool = true) async throws -> SimWorld {
         guard let binary = SimBinary.path() else { throw XCTSkip("epdj_engine_sim is not built; run tools/e2e.sh (or set EPDJ_ENGINE_SIM)") }
-        let world = SimWorld(process: try SimProcess(binary: binary))
+        let world = SimWorld(process: try SimProcess(binary: binary), platter: SimPlatter(args: args))
         let r = try await world.process.command("init \(args)")
         world.advanceClock(to: r.done.t)
         if settle { try await world.run(ms: settleMs) }
         return world
     }
 
-    private init(process: SimProcess) {
+    private init(process: SimProcess, platter: SimPlatter) {
         self.process = process
+        self.platter = platter
         process.activityHook = { [lastActivity] in lastActivity.touch() }
         // A request the unit never answers waits for a virtual timeout that only moves when a test moves time. If the whole
         // test sits idle in real time, let the timeout happen so a missing reply is a failure, not a hang.
@@ -292,12 +312,13 @@ final class SimWorld: @unchecked Sendable {
         while done < ms {
             let len = min(slice, ms - done)
             let a = from + (to - from) * Double(done) / Double(ms)
-            let b = from + (to - from) * Double(done + len) / Double(ms)
+            let b = done + len == ms ? to : from + (to - from) * Double(done + len) / Double(ms)  // the end lands exactly
             let r = try await process.command("ramp u=\(unit) what=\(what) from=\(a) to=\(b) ms=\(len)")
             advanceClock(to: r.done.t)
             for c in clients { await c.settle() }
             done += len
         }
+        if what == "as5600" { encoderRev[unit] = to }
     }
 
     func finger(rev: Double? = nil, pressure: Double? = nil, unit: Int = 0) async throws {
@@ -307,12 +328,37 @@ final class SimWorld: @unchecked Sendable {
         try await command(line)
     }
 
-    /// A finger lands at `startRev`, dwells, travels `revs` (negative = counter-clockwise), dwells and lifts.
+    /// Sets the encoder (the AS5600 angle in revolutions, its noise in counts, whether its reads succeed) and remembers where it is.
+    func setEncoder(rev: Double? = nil, noise: Double? = nil, valid: Bool? = nil, unit: Int = 0) async throws {
+        var line = "as5600 u=\(unit)"
+        if let rev { line += " rev=\(rev)" }
+        if let noise { line += " noise=\(noise)" }
+        if let valid { line += " valid=\(valid ? 1 : 0)" }
+        try await command(line)
+        if let rev { encoderRev[unit] = rev }
+    }
+
+    /// Turns the AS5600 platter by `revs` (negative = counter-clockwise) over `ms`, with nobody touching it.
+    func spin(revs: Double, ms: Int, unit: Int = 0) async throws {
+        let from = encoderRev[unit] ?? 0
+        try await ramp("as5600", from: from, to: from + revs, ms: ms, unit: unit)
+    }
+
+    /// A hand scratches: it lands, dwells, moves the platter `revs` (negative = counter-clockwise) over `ms`, dwells and lifts.
+    /// On the default AS5600 platter the hand lands on the hold pad (`startRev` means nothing there: the encoder simply
+    /// turns from wherever it is). On the touch ring (`init platter=ring`) the finger lands at `startRev` and slides.
     func gesture(startRev: Double = 0.25, revs: Double, ms: Int, dwellMs: Int = 100, tailMs: Int = 150, afterMs: Int = 300,
                  unit: Int = 0) async throws {
-        try await finger(rev: startRev, pressure: 1, unit: unit)
-        try await run(ms: dwellMs)
-        try await ramp("finger", from: startRev, to: startRev + revs, ms: ms, unit: unit)
+        switch platter {
+        case .ring:
+            try await finger(rev: startRev, pressure: 1, unit: unit)
+            try await run(ms: dwellMs)
+            try await ramp("finger", from: startRev, to: startRev + revs, ms: ms, unit: unit)
+        case .as5600, .hold:
+            try await finger(pressure: 1, unit: unit)
+            try await run(ms: dwellMs)
+            try await spin(revs: revs, ms: ms, unit: unit)
+        }
         try await run(ms: tailMs)
         try await finger(pressure: 0, unit: unit)
         try await run(ms: afterMs)
@@ -394,6 +440,19 @@ final class SimWorld: @unchecked Sendable {
             for ev in parser.feed(e.bytes) { out.append((e.t, ev)) }
         }
         return out
+    }
+
+    /// Touch-on and touch-off notes (note 38) a unit sent on cable 0 since log index `index`.
+    func touchNotes(unit: Int = 0, from index: Int = 0) -> (downs: Int, ups: Int) {
+        var downs = 0, ups = 0
+        for (_, ev) in midiEvents(unit: unit, from: index) {
+            switch ev {
+            case let .noteOn(_, n, v) where n == Proto.Note.touch: if v > 0 { downs += 1 } else { ups += 1 }
+            case let .noteOff(_, n, _) where n == Proto.Note.touch: ups += 1
+            default: break
+            }
+        }
+        return (downs, ups)
     }
 
     private static let faderControllers: Set<UInt8> = [

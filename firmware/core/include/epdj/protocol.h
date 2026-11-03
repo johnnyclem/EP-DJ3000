@@ -112,6 +112,11 @@ enum class RebootMode : uint8_t {
   Normal = 0,
   Bootloader = 1,
 };
+enum class JogUntouched : uint8_t {
+  Auto = 0,
+  Report = 1,
+  Suppress = 2,
+};
 
 // ---- bit fields ----
 namespace caps {
@@ -231,6 +236,7 @@ enum class ConfigKey : uint8_t {
   LedBrightness = 30,
   ButtonDebounceMs = 31,
   LinkGroup = 32,
+  JogUntouched = 33,
 };
 struct ConfigDesc {
   ConfigKey key;
@@ -239,12 +245,12 @@ struct ConfigDesc {
   int32_t maxValue;
   int32_t defaultValue;
 };
-constexpr size_t kConfigCount = 33;
+constexpr size_t kConfigCount = 34;
 constexpr ConfigDesc kConfigTable[kConfigCount] = {
   {ConfigKey::DeckId, "deckId", 0, 1, 0},
   {ConfigKey::MidiChannel, "midiChannel", 0, 16, 16},
   {ConfigKey::Mode, "mode", 0, 2, 0},
-  {ConfigKey::PlatterSource, "platterSource", 0, 2, 1},
+  {ConfigKey::PlatterSource, "platterSource", 0, 2, 0},
   {ConfigKey::JogInvert, "jogInvert", 0, 1, 0},
   {ConfigKey::TouchSectors, "touchSectors", 3, 8, 8},
   {ConfigKey::TouchOnPermille, "touchOnPermille", 1, 1000, 12},
@@ -274,6 +280,7 @@ constexpr ConfigDesc kConfigTable[kConfigCount] = {
   {ConfigKey::LedBrightness, "ledBrightness", 0, 255, 64},
   {ConfigKey::ButtonDebounceMs, "buttonDebounceMs", 1, 30, 4},
   {ConfigKey::LinkGroup, "linkGroup", 0, 255, 0},
+  {ConfigKey::JogUntouched, "jogUntouched", 0, 2, 0},
 };
 
 // ---- structs (little-endian, packed) ----

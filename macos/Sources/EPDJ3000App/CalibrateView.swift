@@ -6,37 +6,52 @@ import EPDJ3000KitPure
 import EPDJ3000Protocol
 import SwiftUI
 
-typealias CalStep = CalibrationController.Step
+typealias CalStep = CalibrationStep
 
-extension CalStep {
+extension CalibrationStep {
     var title: String {
         switch self {
+        case .encoder: return "Encoder check"
+        case .direction: return "Platter direction"
+        case .holdPad: return "Hold pad"
+        case .touchRing: return "Touch ring (experimental)"
         case .fader: return "Slide pot"
         case .knob: return "Knob"
-        case .touchRing: return "Touch ring"
-        case .platter: return "Platter direction"
         }
     }
 
     var systemImage: String {
         switch self {
+        case .encoder: return "arrow.triangle.2.circlepath"
+        case .direction: return "arrow.clockwise"
+        case .holdPad: return "hand.raised"
+        case .touchRing: return "hand.point.up.left"
         case .fader: return "slider.horizontal.3"
         case .knob: return "dial.medium"
-        case .touchRing: return "hand.point.up.left"
-        case .platter: return "arrow.clockwise"
         }
     }
 
-    var instruction: String {
+    func instruction(source: PlatterSource) -> String {
         switch self {
+        case .encoder:
+            return "Spin the platter by hand, at least one full turn, then let go. The app checks that the AS5600 answered at start-up and that its angle follows the spin smoothly. It reads the chip's angle directly, so it makes no difference whether the hold pad sees your hand or what the jogUntouched setting says. The dial shows the raw angle; which way it turns does not matter yet, the next step fixes that."
+        case .direction:
+            switch source {
+            case .touchRing:
+                return "Put a finger on the platter and slide it clockwise (as seen from above) for at least a quarter turn. If the count goes negative the jog direction gets flipped."
+            case .as5600:
+                return "Spin the platter clockwise (as seen from above) for at least a quarter turn. The count is the unit's own jog total, which includes the movement of an untouched platter even when the unit is set not to send that as jog, so no hand on the hold pad is needed. If the count goes negative the jog direction gets flipped."
+            case .touchHoldOnly:
+                return "Spin the platter clockwise (as seen from above) for at least a quarter turn. If the count goes negative the jog direction gets flipped."
+            }
+        case .holdPad:
+            return "Take your hands off the platter and let it rest. The app measures the idle noise, then asks for a flat hand on the platter: press and hold until it says release. DJ software goes into scratch mode on the touch note this pad produces, so the thresholds matter. This does not test the touch while the platter turns: afterwards spin it with your hand on it and watch the touch light on the Decks tab."
+        case .touchRing:
+            return "Take your hands off the platter first. The app measures the idle noise, then asks for a finger on each sector in turn: press and hold until the next one is requested. Sector 1 is the first pad as wired."
         case .fader:
             return "Start with the slide pot at its left end. Push it slowly to the right end and leave it there. The end where you stop is taken as \"high\", which also sets the direction. It needs about 1500 counts of travel."
         case .knob:
             return "Turn the knob fully counter-clockwise, then fully clockwise, and leave it there. The end where you stop is taken as \"high\"."
-        case .touchRing:
-            return "Take your hands off the platter first. The app measures the idle noise, then asks for a finger on each sector in turn: press and hold until the next one is requested. Sector 1 is the first pad as wired."
-        case .platter:
-            return "Put a finger on the platter and slide it clockwise (as seen from above) for at least a quarter turn. If the count goes negative the jog direction gets flipped."
         }
     }
 }
@@ -81,16 +96,21 @@ struct CalibrationPane: View {
             }
             HStack(alignment: .top, spacing: 16) {
                 stepList.frame(width: 240)
-                ScrollView { StepDetail(cal: cal, step: cal.selected).padding(.trailing, 8) }
+                ScrollView { StepDetail(cal: cal, step: shown).padding(.trailing, 8) }
             }
         }
         .onAppear { cal.attach() }
         .onDisappear { cal.detach() }
     }
 
+    /// The selected step, or the first one when the platter source changed under the wizard and the selection left the flow.
+    private var shown: CalStep {
+        cal.steps.contains(cal.selected) ? cal.selected : (cal.steps.first ?? cal.selected)
+    }
+
     private var stepList: some View {
         VStack(alignment: .leading, spacing: 8) {
-            ForEach(CalStep.allCases) { step in
+            ForEach(cal.steps) { step in
                 Button {
                     cal.selected = step
                 } label: {
@@ -101,7 +121,7 @@ struct CalibrationPane: View {
                         StatusIcon(status: cal.status(step))
                     }
                     .padding(8)
-                    .background(RoundedRectangle(cornerRadius: 8).fill(cal.selected == step ? Color.orange.opacity(0.25) : Color.clear))
+                    .background(RoundedRectangle(cornerRadius: 8).fill(shown == step ? Color.orange.opacity(0.25) : Color.clear))
                 }
                 .buttonStyle(.plain)
             }
@@ -112,7 +132,7 @@ struct CalibrationPane: View {
             Text(cal.isSaved ? "Saved. The values survive a power cycle." : "Applied values are live but not saved.")
                 .font(.caption).foregroundStyle(.secondary)
             if cal.allApplied {
-                Label("All four steps passed", systemImage: "checkmark.seal.fill").foregroundStyle(.green)
+                Label("All \(cal.steps.count) steps passed", systemImage: "checkmark.seal.fill").foregroundStyle(.green)
             }
         }
     }
@@ -141,11 +161,13 @@ struct StepDetail: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text(step.title).font(.title2)
-            Text(step.instruction).foregroundStyle(.secondary)
+            Text(step.instruction(source: cal.platterSource)).foregroundStyle(.secondary)
             switch step {
             case .fader, .knob: SweepPanel(cal: cal, step: step)
+            case .encoder: EncoderPanel(cal: cal)
+            case .holdPad: HoldPadPanel(cal: cal)
             case .touchRing: TouchRingPanel(cal: cal)
-            case .platter: PlatterDirectionPanel(cal: cal)
+            case .direction: PlatterDirectionPanel(cal: cal)
             }
             resultLine
             actions
@@ -228,6 +250,80 @@ struct SweepPanel: View {
 }
 
 @MainActor
+struct EncoderPanel: View {
+    @ObservedObject var cal: CalibrationController
+
+    var body: some View {
+        Live(hz: 20) { _ in
+            let t = cal.latest
+            let valid = t.map { StateFlags(rawValue: $0.flags).contains(.angleValid) } ?? false
+            let angle = Int(t?.angle ?? 0) & (EncoderDiagnosis.countsPerTurn - 1)
+            HStack(alignment: .top, spacing: 18) {
+                PlatterView(angle: Double(angle) / Double(EncoderDiagnosis.countsPerTurn) * 2 * Double.pi, touched: false)
+                    .frame(width: 170, height: 170)
+                    .opacity(valid ? 1 : 0.35)
+                VStack(alignment: .leading, spacing: 8) {
+                    KeyValueRow("Chip answered at start-up", cal.session.caps.contains(.as5600) ? "yes" : "no")
+                    KeyValueRow("Angle", valid ? "\(angle) / \(EncoderDiagnosis.countsPerTurn - 1)" : "no valid reading")
+                    if let machine = cal.encoder, cal.runningStep == .encoder, case let .measuring(span, required) = machine.phase {
+                        MeterBar(title: "Turned", value: Double(span) / Double(max(1, required)),
+                                 detail: "\(span) of \(required) counts",
+                                 tint: span >= required ? .green : .orange)
+                        Text(span == 0 ? "Waiting for you to spin the platter." : "Keep spinning until one full turn is covered.")
+                            .font(.callout)
+                    }
+                    if t == nil {
+                        Text("No telemetry yet. Start the step and wait a moment.").font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@MainActor
+struct HoldPadPanel: View {
+    @ObservedObject var cal: CalibrationController
+
+    var body: some View {
+        Live(hz: 20) { _ in
+            let rise = cal.sectorRise.first ?? 0
+            let raw = Int(cal.latest?.touchRaw.first ?? 0)
+            let touched = cal.latest.map { StateFlags(rawValue: $0.flags).contains(.touched) } ?? false
+            VStack(alignment: .leading, spacing: 8) {
+                if let machine = cal.holdPad, cal.runningStep == .holdPad {
+                    Text(phaseText(machine.phase)).font(.callout)
+                    if let progress = progress(machine.phase) { ProgressView(value: progress) }
+                } else {
+                    Text("Start the step to measure the pad.").font(.caption).foregroundStyle(.secondary)
+                }
+                MeterBar(title: "Hold pad", value: max(0, min(1, rise / 100)), detail: "\(Int(rise))\u{2030}  raw \(raw)")
+                LedLabel(title: "Unit says: touched", on: touched)
+            }
+        }
+    }
+
+    private func phaseText(_ phase: HoldPadCalibration.Phase) -> String {
+        switch phase {
+        case let .capturingIdle(collected, needed): return "Hands off. Measuring idle noise (\(collected)/\(needed))."
+        case .awaitingHand: return "Lay a flat hand on the platter and hold."
+        case .holding: return "Holding..."
+        case .awaitingRelease: return "Release the platter."
+        case .done: return "Measured."
+        case let .failed(error): return ErrorText.describe(error)
+        }
+    }
+
+    private func progress(_ phase: HoldPadCalibration.Phase) -> Double? {
+        switch phase {
+        case let .capturingIdle(collected, needed): return Double(collected) / Double(max(1, needed))
+        case let .holding(collected, needed): return Double(collected) / Double(max(1, needed))
+        default: return nil
+        }
+    }
+}
+
+@MainActor
 struct TouchRingPanel: View {
     @ObservedObject var cal: CalibrationController
 
@@ -284,7 +380,7 @@ struct PlatterDirectionPanel: View {
             VStack(alignment: .leading, spacing: 8) {
                 let jog = Int(cal.latest?.jogTotal ?? 0)
                 KeyValueRow("Jog total (telemetry)", "\(jog)")
-                if let machine = cal.platter, cal.runningStep == .platter {
+                if let machine = cal.platter, cal.runningStep == .direction {
                     KeyValueRow("Net travel since start", "\(machine.netTicks) ticks")
                     MeterBar(title: "Needed to decide", value: Double(abs(machine.netTicks)) / Double(machine.minTicks),
                              detail: "\(abs(machine.netTicks)) of \(machine.minTicks)")

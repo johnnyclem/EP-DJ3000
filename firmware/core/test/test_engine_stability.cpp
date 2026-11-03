@@ -75,7 +75,7 @@ struct Unit {
   uint64_t events = 0, badEvents = 0, linkPackets = 0;
   uint32_t maxStepPush = 0, maxInputPush = 0;
   // coverage: the chaos must actually visit the states the invariants are about
-  uint64_t modeMs[3] = {}, linkMs[5] = {}, transportMs[3] = {};
+  uint64_t modeMs[3] = {}, linkMs[5] = {}, transportMs[3] = {}, platterMs[3] = {};
   uint64_t clocks = 0, jogCcs = 0, notes = 0, sysexFrames = 0, bridged = 0;
 
   Unit(int deckId, uint8_t mac, int64_t off, uint32_t seed)
@@ -297,6 +297,7 @@ EPDJ_TEST(engine_stability_one_hour_two_units_random_everything) {
       ++u->modeMs[static_cast<size_t>(u->engine.mode())];
       ++u->linkMs[static_cast<size_t>(u->engine.led().link)];
       ++u->transportMs[static_cast<size_t>(u->engine.transport())];
+      ++u->platterMs[static_cast<size_t>(u->cfg.get(ConfigKey::PlatterSource))];
     }
 
     // Spot checks on the engine's own state.
@@ -318,6 +319,7 @@ EPDJ_TEST(engine_stability_one_hour_two_units_random_everything) {
     CHECK(u->events > 100000);
     for (uint64_t m : u->modeMs) CHECK(m > 60000);               // every mode for over a minute
     for (uint64_t m : u->transportMs) CHECK(m > 60000);          // stopped, playing and paused
+    for (uint64_t m : u->platterMs) CHECK(m > 60000);            // the units boot as AS5600 (the default); random SET_CONFIG must still put the touch ring and hold-only through their paces
     CHECK(u->linkMs[static_cast<size_t>(LedStatus::LinkLed::Searching)] > 60000);
     CHECK(u->linkMs[static_cast<size_t>(LedStatus::LinkLed::Up)] + u->linkMs[static_cast<size_t>(LedStatus::LinkLed::Bridging)] > 600000);
     CHECK(u->clocks > 10000 && u->jogCcs > 5000 && u->notes > 1000 && u->sysexFrames > 1000);

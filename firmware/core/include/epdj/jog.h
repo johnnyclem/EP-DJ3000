@@ -15,8 +15,10 @@ namespace epdj {
 //    low-pass whose noise band follows the angle uncertainty TouchRing reports: heavy smoothing
 //    inside the band (a resting finger is silent), pass-through beyond it (a fast scratch is not
 //    delayed). A quiet ring therefore gets a tight band and low lag, a noisy one a wide band.
-//  * As5600: angle is the raw 12-bit reading, free spinning: motion is reported touched or not, with
-//    no filtering and exact integer conservation (quarter-tick remainder is carried, never dropped).
+//  * As5600: angle is the 12-bit reading (the chip's filtered ANGLE register by default), free spinning: the
+//    tracker counts motion touched or not, with no filtering of its own and exact integer conservation
+//    (quarter-tick remainder is carried, never dropped). Whether untouched motion is also SENT is the engine's
+//    jogUntouched policy, applied where ticks enter the JogEmitter, so total() always counts everything.
 //  * TouchHoldOnly: touch and tap only; ticks are always 0.
 //
 // Tap = touch down -> up within tapMaxMs where the largest excursion from the touch-down angle stays
@@ -70,6 +72,35 @@ class JogTracker {
   float excursion_ = 0.0f;  // max |cum_| since touch-down, units
   int32_t total_ = 0;
   float velocity_ = 0.0f;
+};
+
+// Motion-sticky release for the hold pad (AS5600 and hold-only platters; the ring has no such problem). The idea is the
+// original Field Jog author's: on a free-spinning platter the pad's signal can drop out in the middle of a long contact
+// while the platter is still being scratched, and a false touch-up there would drop the DJ app out of scratch mode (note
+// off, then note on again a moment later). So once a touch has lasted longer than kStickyAfterMs, a release from the pad
+// is only accepted after the platter has made no jog tick for kStickyMotionMs. Shorter touches release at once, and a
+// platter that is still releases within kStickyMotionMs of the pad saying so: it can never stick.
+//
+// The price, by design: a long touch followed by a hand lifted off a SPINNING platter stays "touched" until the platter
+// stops (a coast of seconds on a good bearing).
+//
+// update() sees the pad's verdict before the tracker runs, noteMotion() the tracker's ticks after it, so the motion
+// seen by update() is the previous sample's: one millisecond, far below kStickyMotionMs.
+class StickyTouch {
+ public:
+  static constexpr uint32_t kStickyAfterMs = 7000;  // a touch longer than this (strictly) is "long"
+  static constexpr uint32_t kStickyMotionMs = 80;   // stillness that confirms a release after a long touch (reached = accepted)
+
+  bool update(bool padTouched, uint64_t nowUs);
+  void noteMotion(bool moved, uint64_t nowUs) {
+    if (moved) lastMotionUs_ = nowUs;
+  }
+  void reset() { touched_ = false; }
+  bool touched() const { return touched_; }
+
+ private:
+  bool touched_ = false;
+  uint64_t startUs_ = 0, lastMotionUs_ = 0;
 };
 
 // Accumulates ticks and hands out relative-CC values (64 + clamp(accum, -63, 63)) at most once per

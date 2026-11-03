@@ -10,7 +10,7 @@ extern "C" {
 #endif
 
 // ---- MIDI: three cables share one bulk pair; sysex replies need room ----
-// TX: a GET_CONFIG dump is 34 SysEx frames = 169 USB-MIDI packets = 676 bytes, which must fit in one go
+// TX: a GET_CONFIG dump is 35 SysEx frames = 174 USB-MIDI packets = 696 bytes, which must fit in one go
 // (static_assert in usb_device.cpp). RX: host requests are small and one at a time (the app waits for each answer).
 #undef CFG_TUD_MIDI_RX_BUFSIZE
 #undef CFG_TUD_MIDI_TX_BUFSIZE

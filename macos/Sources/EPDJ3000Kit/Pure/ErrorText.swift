@@ -59,11 +59,41 @@ public enum ErrorText {
         case let .noFingerDetected(sector):
             return "No touch seen on sector \(sector + 1). Check its wiring, or press harder and cover the whole sector."
         case let .insufficientContrast(weakest, required):
-            return "The weakest sector rises only \(weakest) per-mille; at least \(required + 1) is needed. Improve that sector's contact or shielding."
+            return "The weakest touch signal rises only \(weakest) per-mille; at least \(required + 1) is needed. Improve that pad's contact or shielding."
+        case .padNotConnected:
+            return "The hold pad reads zero: its wire is not connected, or the contact between the spinning platter and the pad is open."
+        case .noHandDetected:
+            return "No touch seen on the platter. Lay a flat hand on it and hold. If the reading still does not move, check the wire to the pad and the contact between the rotating platter and the pad."
         case let .insufficientMotion(ticks):
             return "The platter only moved \(ticks) ticks. Spin it a quarter turn or more."
         case .notComplete:
             return "The step is not finished yet."
+        }
+    }
+
+    /// The encoder check's verdict worded as the next thing to do. The first sentence says what was found.
+    public static func describe(_ verdict: EncoderDiagnosis.Verdict) -> String {
+        let turn = EncoderDiagnosis.countsPerTurn
+        switch verdict {
+        case .noEncoder:
+            return "No AS5600 answered when the unit started. Check the I2C wiring (SDA and SCL on the right pins, not swapped), "
+                + "that the breakout is powered from 3.3 V (many have a 3.3 V / 5 V strap or jumper; the ESP32-S3's I2C is 3.3 V) "
+                + "and has its pull-ups, then restart the unit."
+        case let .readsFailing(samples):
+            return "The AS5600 answered at start-up, but the unit got no valid angle in \(samples) readings. The I2C connection is "
+                + "loose or intermittent (reseat SDA and SCL), or the platter source setting is not AS5600. Restart the unit after fixing it."
+        case let .notMoving(span):
+            let turns = String(format: "%.2f", Double(span) / Double(turn))
+            return "The angle moved only \(span) of \(turn) counts (\(turns) turn). Spin the platter at least one full turn. "
+                + "If you did, the magnet is missing, too far from the chip (it wants 1 to 3 mm), or not on the axle; "
+                + "the unit's start-up log reports the magnet as detected, too weak or too strong."
+        case let .erratic(jumps, steps):
+            return "The angle jumps around instead of following the spin (\(jumps) of \(steps) steps were implausibly large). "
+                + "The magnet is off-centre, too weak or too strong (keep it 1 to 3 mm from the chip, centred on the axle), or the I2C bus is noisy."
+        case let .ok(turns, invalid):
+            let turned = String(format: "%.1f", turns)
+            return "The AS5600 follows the platter smoothly: \(turned) turns measured"
+                + (invalid > 0 ? ", \(invalid) readings failed along the way." : ".")
         }
     }
 }

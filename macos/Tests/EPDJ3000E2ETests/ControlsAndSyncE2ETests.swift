@@ -89,7 +89,7 @@ final class ControlsAndSyncE2ETests: E2ETestCase {
     }
 
     func testReTouchingTheRingAtAnotherAngleNeverJumps() async throws {
-        try await withWorld { world in
+        try await withWorld("units=1 platter=ring") { world in  // the experimental ring: the finger's angle is the platter's
             let c = world.client()
             var state = ControllerState(deck: .a)
             for rev in [0.05, 0.55, 0.30, 0.80, 0.55] {
@@ -105,19 +105,27 @@ final class ControlsAndSyncE2ETests: E2ETestCase {
     }
 
     func testFingersThatLandAndLiftSlowlyDoNotMoveThePlatter() async throws {
-        try await withWorld { world in
-            let c = world.client()
-            var state = ControllerState(deck: .a)
-            for rampMs in [4, 20, 60, 150] {  // how long the fingertip takes to roll on and off
-                try await world.finger(rev: 0.7, pressure: 0)
-                try await world.ramp("pressure", from: 0, to: 1, ms: rampMs, slice: 4)
-                try await world.run(ms: 300)
-                try await world.ramp("pressure", from: 1, to: 0, ms: rampMs, slice: 4)
-                try await world.run(ms: 200)
+        for args in ["units=1", "units=1 platter=ring"] {
+            try await withWorld(args) { world in
+                let c = world.client()
+                var state = ControllerState(deck: .a)
+                let mark = world.process.log.count
+                for rampMs in [4, 20, 60, 150] {  // how long the fingertip takes to roll on and off
+                    try await world.finger(rev: 0.7, pressure: 0)
+                    try await world.ramp("pressure", from: 0, to: 1, ms: rampMs, slice: 4)
+                    try await world.run(ms: 300)
+                    try await world.ramp("pressure", from: 1, to: 0, ms: rampMs, slice: 4)
+                    try await world.run(ms: 200)
+                }
+                state.apply(c.events.take())
+                XCTAssertLessThanOrEqual(abs(state.jogTicks), 6, "landing and lifting moved the platter by \(state.jogTicks) ticks (\(args))")
+                XCTAssertFalse(state.touched)
+                if world.platter != .ring {
+                    let n = world.touchNotes(from: mark)
+                    XCTAssertEqual(n.downs, 4, "one touch note per landing on the hold pad, however slowly the finger rolled on")
+                    XCTAssertEqual(n.ups, 4)
+                }
             }
-            state.apply(c.events.take())
-            XCTAssertLessThanOrEqual(abs(state.jogTicks), 6, "landing and lifting moved the platter by \(state.jogTicks) ticks")
-            XCTAssertFalse(state.touched)
         }
     }
 

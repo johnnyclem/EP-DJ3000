@@ -124,6 +124,12 @@ public enum RebootMode: UInt8, CaseIterable, Sendable {
     case bootloader = 1
 }
 
+public enum JogUntouched: UInt8, CaseIterable, Sendable {
+    case auto = 0
+    case report = 1
+    case suppress = 2
+}
+
 public struct Caps: OptionSet, Sendable {
     public let rawValue: UInt16
     public init(rawValue: UInt16) { self.rawValue = rawValue }
@@ -248,6 +254,7 @@ public enum ConfigKey: UInt8, CaseIterable, Sendable {
     case ledBrightness = 30
     case buttonDebounceMs = 31
     case linkGroup = 32
+    case jogUntouched = 33
 }
 
 public struct ConfigDesc: Sendable {
@@ -264,7 +271,7 @@ public enum ConfigTable {
         ConfigDesc(key: .deckId, name: "deckId", minValue: 0, maxValue: 1, defaultValue: 0, summary: "Which deck this unit is (A/B). Sets default MIDI channel and USB name."),
         ConfigDesc(key: .midiChannel, name: "midiChannel", minValue: 0, maxValue: 16, defaultValue: 16, summary: "Zero-based MIDI channel 0..15, or 16 = auto (follow deckId)."),
         ConfigDesc(key: .mode, name: "mode", minValue: 0, maxValue: 2, defaultValue: 0, summary: "DJ controller, standalone clock master, or clock follower."),
-        ConfigDesc(key: .platterSource, name: "platterSource", minValue: 0, maxValue: 2, defaultValue: 1, summary: "How platter rotation is sensed: AS5600 magnetic encoder, segmented capacitive touch ring (conductive PLA), or touch/hold only (no rotation)."),
+        ConfigDesc(key: .platterSource, name: "platterSource", minValue: 0, maxValue: 2, defaultValue: 0, summary: "How platter rotation is sensed. AS5600 (default): a free-spinning platter on a bearing with a diametric magnet over an AS5600 magnetic encoder; touch/hold comes from one touch pad. TOUCH_RING: a segmented conductive-PLA ring on touch pads, finger-slide scratching (experimental, kept for later). TOUCH_HOLD_ONLY: touch detect only, no rotation."),
         ConfigDesc(key: .jogInvert, name: "jogInvert", minValue: 0, maxValue: 1, defaultValue: 0, summary: "Flip jog direction."),
         ConfigDesc(key: .touchSectors, name: "touchSectors", minValue: 3, maxValue: 8, defaultValue: 8, summary: "Number of capacitive sectors in the platter ring."),
         ConfigDesc(key: .touchOnPermille, name: "touchOnPermille", minValue: 1, maxValue: 1000, defaultValue: 12, summary: "Finger-down threshold, per-mille rise over baseline."),
@@ -294,6 +301,7 @@ public enum ConfigTable {
         ConfigDesc(key: .ledBrightness, name: "ledBrightness", minValue: 0, maxValue: 255, defaultValue: 64, summary: "Status LED brightness."),
         ConfigDesc(key: .buttonDebounceMs, name: "buttonDebounceMs", minValue: 1, maxValue: 30, defaultValue: 4, summary: "Button debounce time."),
         ConfigDesc(key: .linkGroup, name: "linkGroup", minValue: 0, maxValue: 255, defaultValue: 0, summary: "Radio rig id. Units only link with peers that share it, so two rigs in one room do not cross-link."),
+        ConfigDesc(key: .jogUntouched, name: "jogUntouched", minValue: 0, maxValue: 2, defaultValue: 0, summary: "Whether platter motion with no hand on it is sent as jog. AUTO: a free-spinning platter coasts for seconds after release and would bend the pitch the whole time, so once the hold pad has registered a touch since power-up, untouched motion is suppressed; until then it is reported, so the encoder works before the pad does. REPORT: always send it (pitch-bend nudge). SUPPRESS: send jog only while touched. Telemetry jogTotal always counts all motion."),
     ]
     public static func desc(_ key: ConfigKey) -> ConfigDesc { all[Int(key.rawValue)] }
 }

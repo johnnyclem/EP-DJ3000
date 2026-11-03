@@ -434,7 +434,11 @@ int main() {
       }
     }
   }
-  CHECK(refused == 0 && packets == 169, "%u packets accepted, %u refused (expected all 169 of the dump)", packets, refused);
+  // The dump is one SysEx message per frame, each ceil(n / 3) four-byte packets: 35 frames = 174 packets with the 34 keys of v1.4.
+  size_t dumpPackets = 0;
+  for (const auto& f : replies.frames) dumpPackets += (f.size() + 2) / 3;
+  CHECK(refused == 0 && packets == dumpPackets, "%u packets accepted, %u refused (expected all %zu of the dump)", packets, refused,
+        dumpPackets);
 
   // The host collects the endpoint 64 bytes at a time; everything must come out in order.
   Bytes onTheWire;
@@ -461,7 +465,7 @@ int main() {
     if (!tud_midi_n_packet_write(0, raw)) break;
     if (++room > 1000) break;
   }
-  CHECK(room * 4u >= 676u, "TX FIFO took only %u packets with an idle host", room);
+  CHECK(room >= dumpPackets, "TX FIFO took only %u packets with an idle host, a dump is %zu", room, dumpPackets);
   std::printf("info idle host: the TX FIFO takes %u more packets (%u B) before refusing\n", room, room * 4);
 
   // ---- stop ----

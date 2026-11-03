@@ -11,7 +11,7 @@ namespace {
 const char* TAG = "adc";
 }
 
-bool AdcInputs::begin() {
+bool AdcInputs::begin(unsigned i2cReadUs) {
   adc_oneshot_unit_init_cfg_t unitCfg = {};
   unitCfg.unit_id = ADC_UNIT_1;
   unitCfg.ulp_mode = ADC_ULP_MODE_DISABLE;
@@ -44,17 +44,21 @@ bool AdcInputs::begin() {
   }
   const uint64_t elapsed = nowUs() - t0;
   conversionUs_ = static_cast<unsigned>((elapsed + kProbe / 2) / kProbe);
-  unsigned n = conversionUs_ > 0 ? kBudgetUs / (2 * conversionUs_) : CONFIG_EPDJ_ADC_OVERSAMPLE;
-  if (n > CONFIG_EPDJ_ADC_OVERSAMPLE) n = CONFIG_EPDJ_ADC_OVERSAMPLE;
-  if (n < 1) n = 1;
-  oversample_ = n;
+  bool squeezed = false;
+  oversample_ = sensor_budget::adcOversample(i2cReadUs, conversionUs_, CONFIG_EPDJ_ADC_OVERSAMPLE, &squeezed);
   lastFader_ = sample(chFader_, &lastFader_);
   lastKnob_ = sample(chKnob_, &lastKnob_);
-  ESP_LOGI(TAG, "fader GPIO%d raw %u, knob GPIO%d raw %u; %u us per conversion, x%u oversampling (%u us per ms)", pins::kFader,
-           lastFader_, pins::kKnob, lastKnob_, conversionUs_, oversample_, 2 * oversample_ * conversionUs_);
-  if (n < CONFIG_EPDJ_ADC_OVERSAMPLE) {
-    ESP_LOGW(TAG, "conversions are slow: oversampling lowered from %d to %u to stay within %u us per ms",
-             CONFIG_EPDJ_ADC_OVERSAMPLE, oversample_, kBudgetUs);
+  const unsigned sensorUs = sensor_budget::sensorUs(i2cReadUs, conversionUs_, oversample_);
+  ESP_LOGI(TAG, "fader GPIO%d raw %u, knob GPIO%d raw %u; %u us per conversion, x%u oversampling; sensor time per ms: ADC %u us + AS5600 read %u us = %u us of %u",
+           pins::kFader, lastFader_, pins::kKnob, lastKnob_, conversionUs_, oversample_, 2 * oversample_ * conversionUs_, i2cReadUs,
+           sensorUs, kBudgetUs);
+  if (squeezed) {
+    ESP_LOGW(TAG, "oversampling lowered from %d to %u to keep the sensors within %u us per ms%s", CONFIG_EPDJ_ADC_OVERSAMPLE,
+             oversample_, kBudgetUs, i2cReadUs > 0 ? " (the AS5600 read comes off the top)" : " (conversions are slow)");
+  }
+  if (sensorUs > kBudgetUs) {
+    ESP_LOGW(TAG, "even one conversion per channel plus the AS5600 read takes %u us, over the %u us budget: the 1 ms tick has less room", sensorUs,
+             kBudgetUs);
   }
   return true;
 }

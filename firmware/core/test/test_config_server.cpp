@@ -182,6 +182,7 @@ Bytes cat(Bytes a, const Bytes& b) {
 EPDJ_TEST(get_info_reply_is_byte_exact_with_the_reference_vector) {
   Rig r;
   r.config.set(ConfigKey::DeckId, 1);
+  r.config.set(ConfigKey::PlatterSource, static_cast<int32_t>(proto::PlatterSource::TouchRing));  // not the default: the vector says TOUCH_RING
   // Reference "info reply": deck B, mode DJ, TOUCH_RING, fw 0.1.2, hw 1, caps 62, serial DEADBEEF, 1 h up.
   const auto& v = epdj_vec::frameVectors()[7];
   CHECK_EQ(v.cmd, 0x41);
@@ -192,15 +193,23 @@ EPDJ_TEST(get_info_reply_is_byte_exact_with_the_reference_vector) {
 EPDJ_TEST(get_info_fills_identity_from_the_live_config) {
   Rig r;
   r.config.set(ConfigKey::Mode, 2);
-  r.config.set(ConfigKey::PlatterSource, 0);
   r.send(0, 0x01, {});
   proto::Info info;
   CHECK(proto::deserialize(r.only().payload.data(), r.only().payload.size(), &info));
   CHECK_EQ(info.protocolVersion, proto::kProtocolVersion);
   CHECK_EQ(info.deck, 0);
   CHECK_EQ(info.mode, 2);
-  CHECK_EQ(info.platterSource, 0);
+  CHECK_EQ(info.platterSource, static_cast<int>(proto::PlatterSource::As5600));  // nothing set: the contract default
   CHECK_EQ(info.serial, 0xDEADBEEFu);
+
+  // ... and it follows the live config, not a constant.
+  for (proto::PlatterSource s : {proto::PlatterSource::TouchRing, proto::PlatterSource::TouchHoldOnly, proto::PlatterSource::As5600}) {
+    r.config.set(ConfigKey::PlatterSource, static_cast<int32_t>(s));
+    r.clear();
+    r.send(0, 0x01, {});
+    CHECK(proto::deserialize(r.only().payload.data(), r.only().payload.size(), &info));
+    CHECK_EQ(info.platterSource, static_cast<int>(s));
+  }
 }
 
 // ---- GET_CONFIG ----
@@ -228,7 +237,8 @@ EPDJ_TEST(get_config_dump_all_sends_one_frame_per_key_in_order_then_an_ack) {
   }
   CHECK_EQ(syx::readI32le(r.sink.replies[23].payload.data() + 1), 1285);
   CHECK_EQ(syx::readI32le(r.sink.replies[1].payload.data() + 1), 5);
-  CHECK_EQ(syx::readI32le(r.sink.replies[32].payload.data() + 1), 0);  // linkGroup, the last key
+  CHECK_EQ(syx::readI32le(r.sink.replies[32].payload.data() + 1), 0);  // linkGroup
+  CHECK_EQ(syx::readI32le(r.sink.replies[33].payload.data() + 1), 0);  // jogUntouched (AUTO), the last key
   // ACK[GET_CONFIG] is the end marker: it follows the last key and nothing else does.
   CHECK_EQ(r.sink.replies.back().cmd, 0x7E);
   CHECK_BYTES(r.sink.replies.back().payload, (Bytes{0x02}));
@@ -236,13 +246,13 @@ EPDJ_TEST(get_config_dump_all_sends_one_frame_per_key_in_order_then_an_ack) {
 
   // A single-key read is just the CONFIG frame, no end marker.
   r.clear();
-  r.send(0, 0x02, {32});
+  r.send(0, 0x02, {33});
   CHECK_EQ(r.only().cmd, 0x42);
 }
 
 EPDJ_TEST(get_config_errors) {
   Rig r;
-  r.send(0, 0x02, {33});
+  r.send(0, 0x02, {34});
   r.expectNak(0x02, Err::BadKey);
   r.clear();
   r.send(0, 0x02, {0xFE});
@@ -299,7 +309,7 @@ EPDJ_TEST(set_config_negative_value_from_vector_is_out_of_range) {
 
 EPDJ_TEST(set_config_errors) {
   Rig r;
-  r.send(0, 0x03, cat({33}, i32(0)));
+  r.send(0, 0x03, cat({34}, i32(0)));
   r.expectNak(0x03, Err::BadKey);
   r.clear();
   r.send(0, 0x03, cat({255}, i32(0)));

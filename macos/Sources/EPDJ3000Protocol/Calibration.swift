@@ -21,8 +21,12 @@ public enum CalibrationError: Error, Equatable, Sendable {
     case deadSector(Int)
     /// No finger was seen on this sector within the time limit.
     case noFingerDetected(sector: Int)
-    /// A finger on the weakest sector rises less than the threshold the noise floor demands.
+    /// A finger on the weakest sector (or on the hold pad) rises less than the threshold the noise floor demands.
     case insufficientContrast(weakestRisePermille: Int, requiredOnPermille: Int)
+    /// The hold pad idles at 0 counts: its wire, or the contact from the spinning platter to it, is not connected.
+    case padNotConnected
+    /// No hand was seen on the platter within the time limit (hold pad).
+    case noHandDetected
     /// The platter did not turn far enough to tell which way is clockwise.
     case insufficientMotion(ticks: Int)
     /// `finish()` called before the wizard had everything it needs.
@@ -111,6 +115,24 @@ public struct SweepCalibration: Sendable {
 }
 
 // MARK: - Touch ring
+
+/// PROTOCOL.md 3.2, shared by the ring and the hold-pad wizards: `touchOnPermille` = 50% of the weakest finger rise,
+/// `touchOffPermille` = 60% of that, neither below 3x the idle noise (and on stays above off, so hysteresis survives
+/// the floor).
+enum TouchThresholds {
+    static func derive(weakestRise weakest: Double, noisePermille: Double) throws -> (on: Int, off: Int) {
+        var on = Int((0.5 * weakest).rounded())
+        var off = Int((0.6 * Double(on)).rounded())
+        // ceil(3 x noise); the epsilon keeps a noise of exactly 5.000000000000001 from costing a whole per-mille.
+        let floor = Int((3 * noisePermille - 1e-9).rounded(.up))
+        off = max(off, floor, 1)
+        on = max(on, off + 1)
+        guard Double(on) < weakest else {
+            throw CalibrationError.insufficientContrast(weakestRisePermille: Int(weakest), requiredOnPermille: on)
+        }
+        return (min(on, 1000), min(off, 1000))
+    }
+}
 
 public struct TouchRingResult: Equatable, Sendable {
     public var sectors: Int
@@ -202,17 +224,9 @@ public struct TouchRingCalibration: Sendable {
         default: throw CalibrationError.notComplete
         }
         let weakest = rises.min() ?? 0
-        var on = Int((0.5 * weakest).rounded())
-        var off = Int((0.6 * Double(on)).rounded())
-        // ceil(3 x noise); the epsilon keeps a noise of exactly 5.000000000000001 from costing a whole per-mille.
-        let floor = Int((3 * noisePermille - 1e-9).rounded(.up))
-        off = max(off, floor, 1)
-        on = max(on, off + 1)
-        guard Double(on) < weakest else {
-            throw CalibrationError.insufficientContrast(weakestRisePermille: Int(weakest), requiredOnPermille: on)
-        }
+        let (on, off) = try TouchThresholds.derive(weakestRise: weakest, noisePermille: noisePermille)
         return TouchRingResult(sectors: sectors, idleMean: mean, risePermille: rises, noisePermille: noisePermille,
-                               onPermille: min(on, 1000), offPermille: min(off, 1000))
+                               onPermille: on, offPermille: off)
     }
 
     // MARK: phases
@@ -298,8 +312,10 @@ public struct PlatterDirectionResult: Equatable, Sendable {
 }
 
 /// The user spins the platter clockwise; if `jogTotal` falls, the direction is wrong.
-/// `jogTotal` is the sum of the jog deltas the device sends, i.e. it already includes the current `jogInvert`,
-/// so a falling total means "flip the current setting", not "set it to 1".
+/// `jogTotal` is the sum of the platter's jog ticks, i.e. it already includes the current `jogInvert`, so a falling
+/// total means "flip the current setting", not "set it to 1". Since contract v1.4 it counts ALL motion, also what the
+/// unit did not send as jog because nobody was touching the platter (`jogUntouched`), so the user needs no hand on the
+/// hold pad here. (With the experimental touch ring the platter only moves under a finger, as before.)
 public struct PlatterDirectionCalibration: Sendable {
     public enum Phase: Equatable, Sendable {
         case waitingForSpin

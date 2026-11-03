@@ -11,13 +11,246 @@ final class ControllerStateE2ETests: E2ETestCase {
 
     // MARK: platter
 
-    func testOneRevolutionFoldsIntoTheTicksTheFirmwareCountedAndAboutOneThousandAndTwentyFour() async throws {
-        for (deck, startRev, revs) in [(Deck.a, 0.25, 1.0), (.a, 0.6, -1.0), (.b, 0.1, 1.0), (.b, 0.9, -1.0)] {
+    /// The default build: a free-spinning platter on an AS5600, one hold pad. Nothing in the init line selects it.
+    func testOneRevolutionOfTheAS5600PlatterFoldsIntoExactlyOneThousandAndTwentyFourTicks() async throws {
+        for (deck, revs) in [(Deck.a, 1.0), (.a, -1.0), (.b, 1.0), (.b, -1.0)] {
             try await withWorld("units=1 deck0=\(deck.rawValue)") { world in
                 let c = world.client()
                 var state = ControllerState(deck: deck)
                 var wrongChannel = ControllerState(channel: deck == .a ? 1 : 0)
                 var sawTouched = false
+                let info = try await c.client.getInfo()
+                XCTAssertEqual(info.platterSource, PlatterSource.as5600.rawValue, "the factory platter")
+
+                try await world.gesture(revs: revs, ms: 1800, afterMs: 400)
+                for e in c.events.take() {
+                    state.apply(e)
+                    wrongChannel.apply(e)
+                    sawTouched = sawTouched || state.touched
+                }
+                let sim = try await world.status()
+                XCTAssertEqual(state.jogTicks, sim.jogTotal, "\(deck) \(revs): the fold lost or invented ticks")
+                XCTAssertEqual(state.jogTicks, Int(1024 * revs), "one revolution of the encoder is 1024 ticks, \(revs > 0 ? "clockwise" : "counter-clockwise") sign")
+                XCTAssertEqual(state.jogRevolutions, revs, accuracy: 1e-9)
+                XCTAssertEqual(wrongChannel.jogTicks, 0, "a state on the other channel ignores this unit")
+                XCTAssertTrue(sawTouched, "the hold pad said touched while the hand was on it")
+                XCTAssertFalse(state.touched, "released")
+            }
+        }
+    }
+
+    /// A hand lands on the hold pad and lets go, with the platter still: the one thing that proves the pad works to a unit on
+    /// `jogUntouched` = AUTO (the unit suppresses a coasting platter only after this has happened since power-up). Short, so the
+    /// 7 s sticky release is not involved, and no tick is made. Asserts that the pad registered it.
+    private func provePad(_ world: SimWorld) async throws {
+        let mark = world.process.log.count
+        try await world.finger(pressure: 1)
+        try await world.run(ms: 300)
+        try await world.finger(pressure: 0)
+        try await world.run(ms: 300)
+        let notes = world.touchNotes(from: mark)
+        XCTAssertEqual(notes.downs, 1, "the hold pad registered the hand")
+        XCTAssertEqual(notes.ups, 1, "and the release")
+    }
+
+    /// Contract v1.4's `jogUntouched` is AUTO by default. Once the hold pad has registered a hand, AUTO keeps a platter that
+    /// nobody touches off the wire (a free-spinning platter coasts for seconds and would bend the pitch the whole time). The
+    /// firmware still counts the motion: telemetry's jogTotal is the direction wizard's evidence.
+    func testACoastingPlatterIsSilentOnceTheHoldPadHasWorkedAndStillCountedInTelemetry() async throws {
+        try await withWorld { world in
+            let c = world.client()
+            var state = ControllerState(deck: .a)
+            try await c.client.startStream(rateHz: 100)
+            try await expectEqual(try await c.client.getConfig(.jogUntouched), Int32(JogUntouched.auto.rawValue), "nothing was configured: AUTO")
+            try await provePad(world)  // AUTO only suppresses a coast after the pad has seen a hand
+            state.apply(c.events.take())
+            XCTAssertEqual(state.jogTicks, 0, "the proof itself moved nothing")
+            try await world.spin(revs: 1, ms: 1000)
+            try await world.run(ms: 200)
+            state.apply(c.events.take())
+            XCTAssertEqual(state.jogTicks, 0, "no jog message for a platter nobody is touching")
+            XCTAssertEqual(state.jogRevolutions, 0)
+            XCTAssertFalse(state.touched)
+            try await expectEqual(try await world.status().jogTotal, 1024)
+            XCTAssertEqual(c.telemetry.take().last?.jogTotal, 1024, "telemetry counts all motion, touched or not")
+        }
+    }
+
+    /// The same default unit BEFORE any touch: the hold pad is configured (the default build has one) but nothing has shown it
+    /// works, so an untouched spin is reported as motion. The encoder works before the pad does. The first touch ends that,
+    /// and changing the policy proves nothing about the pad.
+    func testAnUntouchedSpinIsReportedUntilTheHoldPadHasRegisteredAHandAndSilentAfterwards() async throws {
+        try await withWorld { world in
+            let c = world.client()
+            var state = ControllerState(deck: .a)
+            try await c.client.startStream(rateHz: 100)
+            try await expectEqual(try await c.client.getConfig(.jogUntouched), Int32(JogUntouched.auto.rawValue), "nothing was configured: AUTO")
+            try await world.spin(revs: 0.25, ms: 500)
+            try await world.run(ms: 100)
+            state.apply(c.events.take())
+            XCTAssertEqual(state.jogTicks, 256, "nobody has touched the pad yet: the quarter turn is on the wire")
+            XCTAssertFalse(state.touched)
+            XCTAssertEqual(world.touchNotes().downs, 0, "still no touch note")
+
+            try await c.client.setConfig(.jogUntouched, Int32(JogUntouched.suppress.rawValue))
+            try await world.spin(revs: 0.25, ms: 500)
+            try await world.run(ms: 100)
+            state.apply(c.events.take())
+            XCTAssertEqual(state.jogTicks, 256, "SUPPRESS never sends untouched motion, proven pad or not")
+            try await c.client.setConfig(.jogUntouched, Int32(JogUntouched.auto.rawValue))
+            try await world.spin(revs: 0.25, ms: 500)
+            try await world.run(ms: 100)
+            state.apply(c.events.take())
+            XCTAssertEqual(state.jogTicks, 512, "back on AUTO the pad is still unproven: reported again")
+
+            try await provePad(world)
+            state.apply(c.events.take())
+            try await world.spin(revs: 0.25, ms: 500)
+            try await world.run(ms: 100)
+            state.apply(c.events.take())
+            XCTAssertEqual(state.jogTicks, 512, "the pad has worked: the same untouched spin is now a coast, and silent")
+            try await expectEqual(try await world.status().jogTotal, 4 * 256, "every quarter turn was counted either way")
+        }
+    }
+
+    /// A change of platter source starts the proof over (the pad was proven for the old platter), and so does a reboot (nothing is stored).
+    func testTheHoldPadProofStartsOverWhenThePlatterSourceChangesAndAtReboot() async throws {
+        try await withWorld { world in
+            let c = world.client()
+            var state = ControllerState(deck: .a)
+            try await provePad(world)
+            try await world.spin(revs: 0.25, ms: 500)
+            try await world.run(ms: 100)
+            state.apply(c.events.take())
+            XCTAssertEqual(state.jogTicks, 0, "proven pad: the coast is silent")
+
+            // Each change is applied between two samples (two changes in one sample would net out to none), so time passes between them.
+            try await c.client.setConfig(.platterSource, Int32(PlatterSource.touchHoldOnly.rawValue))
+            try await world.run(ms: 50)
+            try await c.client.setConfig(.platterSource, Int32(PlatterSource.as5600.rawValue))
+            try await world.run(ms: 50)
+            _ = c.events.take()
+            try await world.spin(revs: 0.25, ms: 500)
+            try await world.run(ms: 100)
+            state.apply(c.events.take())
+            XCTAssertEqual(state.jogTicks, 256, "after a source change the unit has no proof of the pad: the spin is reported")
+
+            try await provePad(world)
+            _ = c.events.take()
+            try await world.spin(revs: 0.25, ms: 500)
+            try await world.run(ms: 100)
+            state.apply(c.events.take())
+            XCTAssertEqual(state.jogTicks, 256, "one more hand on the pad and the next coast is silent again")
+
+            _ = try await world.command("reboot u=0")
+            try await world.run(ms: SimWorld.settleMs)  // restart, re-enumeration, and the pad's baseline again
+            try await expectEqual(try await world.status().int("reboots"), 1, "the unit restarted")
+            _ = c.events.take()
+            try await world.spin(revs: 0.25, ms: 500)
+            try await world.run(ms: 100)
+            state.apply(c.events.take())
+            XCTAssertEqual(state.jogTicks, 512, "a fresh boot has seen no hand: the spin is reported")
+        }
+    }
+
+    /// A scratch with a coast after it: every tick made while the hand was on the platter reaches the host exactly (up to the
+    /// few the pad takes to notice the release), the coast does not, and the firmware counted both.
+    func testATouchHeldScratchPassesEveryTickExactlyAndTheCoastAfterItDoesNot() async throws {
+        try await withWorld { world in
+            let c = world.client()
+            var state = ControllerState(deck: .a)
+            try await world.finger(pressure: 1)
+            try await world.run(ms: 150)
+            try await world.spin(revs: 0.5, ms: 500)  // pushed by hand: 512 ticks while touched
+            let releasedAt = world.virtualSeconds
+            try await world.finger(pressure: 0)
+            try await world.spin(revs: 0.5, ms: 500)  // it coasts on at the same speed: 512 more
+            try await world.run(ms: 300)
+            state.apply(c.events.take())
+            let sim = try await world.status()
+            XCTAssertEqual(sim.jogTotal, 1024, "the firmware counted both halves")
+            XCTAssertGreaterThanOrEqual(state.jogTicks, 512, "every tick made while touched arrived")
+            XCTAssertLessThanOrEqual(state.jogTicks, 530, "the coast did not (only the few ticks before the pad noticed the release)")
+            XCTAssertEqual(world.touchNotes().downs, 1)
+            XCTAssertEqual(world.touchNotes().ups, 1)
+            let lastJog = world.midiEvents().last { if case let .controlChange(_, cc, _) = $0.event { return cc == Proto.CC.jog } else { return false } }
+            XCTAssertLessThan(Double(lastJog!.t) / 1e6 - releasedAt, 0.05, "nothing is sent for the coast that follows")
+        }
+    }
+
+    /// `jogUntouched` set live from the host, on a unit whose pad has worked: REPORT turns the coast into a pitch nudge, SUPPRESS
+    /// stops it again, AUTO is silent again (switching the policy does not undo the proof).
+    func testJogUntouchedCanBeChangedLiveFromTheHost() async throws {
+        try await withWorld { world in
+            let c = world.client()
+            var state = ControllerState(deck: .a)
+            try await provePad(world)  // otherwise AUTO reports (the previous test)
+            _ = c.events.take()
+            try await world.spin(revs: 0.25, ms: 500)
+            try await world.run(ms: 100)
+            state.apply(c.events.take())
+            XCTAssertEqual(state.jogTicks, 0, "AUTO with a proven pad: silent")
+            try await c.client.setConfig(.jogUntouched, Int32(JogUntouched.report.rawValue))
+            try await world.spin(revs: 0.25, ms: 500)
+            try await world.run(ms: 100)
+            state.apply(c.events.take())
+            XCTAssertEqual(state.jogTicks, 256, "REPORT: exactly the quarter turn made since, nothing queued from before")
+            try await c.client.setConfig(.jogUntouched, Int32(JogUntouched.suppress.rawValue))
+            try await world.spin(revs: 0.25, ms: 500)
+            try await world.run(ms: 100)
+            state.apply(c.events.take())
+            XCTAssertEqual(state.jogTicks, 256, "SUPPRESS: silent again")
+            try await c.client.setConfig(.jogUntouched, Int32(JogUntouched.auto.rawValue))
+            try await world.spin(revs: 0.25, ms: 500)
+            try await world.run(ms: 100)
+            state.apply(c.events.take())
+            XCTAssertEqual(state.jogTicks, 256, "AUTO again: silent, the pad has still worked since power-up")
+            try await expectEqual(try await world.status().jogTotal, 1024, "the firmware counted all four quarter turns")
+        }
+    }
+
+    /// No hold pad configured at all (`EPDJ_TOUCH_PAD_COUNT` = 0): nothing is ever touched, so AUTO reports.
+    func testWithNoHoldPadAutoReportsUntouchedMotion() async throws {
+        try await withWorld("units=1 touch=0") { world in
+            let c = world.client()
+            var state = ControllerState(deck: .a)
+            try await expectEqual(try await c.client.getConfig(.jogUntouched), Int32(JogUntouched.auto.rawValue), "AUTO")
+            try await world.spin(revs: 1, ms: 1000)
+            try await world.run(ms: 200)
+            state.apply(c.events.take())
+            XCTAssertEqual(state.jogTicks, 1024)
+            XCTAssertFalse(state.touched)
+        }
+    }
+
+    /// The same spin with the hand off, when asked for it (`jogUntouched = REPORT`): the platter coasts, the host still gets
+    /// every tick, and nothing says "touched".
+    func testAFreeSpinWithoutTouchReachesTheHostAsMotionWhenJogUntouchedIsReport() async throws {
+        try await withWorld { world in
+            let c = world.client()
+            var state = ControllerState(deck: .a)
+            try await c.client.setConfig(.jogUntouched, Int32(JogUntouched.report.rawValue))
+            try await world.spin(revs: 1, ms: 1000)
+            try await world.run(ms: 200)
+            state.apply(c.events.take())
+            XCTAssertEqual(state.jogTicks, 1024)
+            try await expectEqual(try await world.status().jogTotal, 1024)
+            XCTAssertFalse(state.touched)
+            XCTAssertEqual(state.playPulseCount, 0)
+            XCTAssertEqual(world.touchNotes().downs, 0, "no touch note without a finger on the hold pad")
+        }
+    }
+
+    /// The experimental touch ring (selected explicitly, it is not the default): a finger slides, the angle is the ring's.
+    func testRingOneRevolutionFoldsIntoTheTicksTheFirmwareCountedAndAboutOneThousandAndTwentyFour() async throws {
+        for (deck, startRev, revs) in [(Deck.a, 0.25, 1.0), (.a, 0.6, -1.0), (.b, 0.1, 1.0), (.b, 0.9, -1.0)] {
+            try await withWorld("units=1 deck0=\(deck.rawValue) platter=ring") { world in
+                let c = world.client()
+                var state = ControllerState(deck: deck)
+                var wrongChannel = ControllerState(channel: deck == .a ? 1 : 0)
+                var sawTouched = false
+                let info = try await c.client.getInfo()
+                XCTAssertEqual(info.platterSource, PlatterSource.touchRing.rawValue)
 
                 try await world.gesture(startRev: startRev, revs: revs, ms: 1800, afterMs: 400)
                 let events = c.events.take()
@@ -33,7 +266,7 @@ final class ControllerStateE2ETests: E2ETestCase {
                 XCTAssertFalse(state.touched, "released")
                 XCTAssertEqual(Double(state.jogTicks), 1024 * revs, accuracy: 24, "one revolution = 1024 ticks, \(revs > 0 ? "clockwise" : "counter-clockwise") sign")
                 XCTAssertEqual(state.jogRevolutions, revs, accuracy: 0.025)
-                observe("\(deck) one \(revs > 0 ? "CW" : "CCW") revolution: \(state.jogTicks) ticks (expected \(Int(1024 * revs)))")
+                observe("ring: \(deck) one \(revs > 0 ? "CW" : "CCW") revolution: \(state.jogTicks) ticks (expected \(Int(1024 * revs)))")
             }
         }
     }
@@ -240,11 +473,11 @@ final class ControllerStateE2ETests: E2ETestCase {
 
     func testFreeSpinningAS5600PlatterIsCountedExactlyAcrossTheWrapAndWithEncoderNoise() async throws {
         for (start, revs, noise) in [(0.0, 1.0, 0.0), (0.9, 0.3, 0.0), (0.05, -1.0, 0.0), (0.0, 3.0, 1.5), (0.7, -2.0, 1.5)] {
-            try await withWorld("units=1 as5600=1") { world in
+            try await withWorld { world in  // the factory unit: nothing is configured, the AS5600 is the platter
                 let c = world.client()
                 var state = ControllerState(deck: .a)
-                try await c.client.setConfig(.platterSource, Int32(PlatterSource.as5600.rawValue))
-                _ = try await world.command("as5600 u=0 rev=\(start) noise=\(noise)")
+                try await c.client.setConfig(.jogUntouched, Int32(JogUntouched.report.rawValue))  // the spin is untouched; AUTO would keep it off the wire
+                try await world.setEncoder(rev: start, noise: noise)
                 try await world.run(ms: 100)
                 _ = c.events.take()
                 let before = try await world.status().jogTotal
@@ -256,6 +489,74 @@ final class ControllerStateE2ETests: E2ETestCase {
                 XCTAssertEqual(Double(state.jogTicks), 1024 * revs, accuracy: 1.5, "the encoder's net travel, whatever the noise and wrap")
                 XCTAssertFalse(state.touched, "free-spinning: nobody is touching it")
             }
+        }
+    }
+
+    /// The chip is there but its reads fail (a loose SDA wire) while the platter keeps turning: no ticks, and the first good
+    /// read afterwards is a new reference, not a jump.
+    func testReadsThatFailWhileThePlatterTurnsProduceNoTicksAndNoJumpAfterwards() async throws {
+        try await withWorld { world in
+            let c = world.client()
+            var state = ControllerState(deck: .a)
+            try await c.client.setConfig(.jogUntouched, Int32(JogUntouched.report.rawValue))  // the spin is untouched; AUTO would keep it off the wire
+            try await c.client.startStream(rateHz: 100)
+            try await world.setEncoder(rev: 0, valid: false)
+            try await world.spin(revs: 0.37, ms: 400)
+            try await world.run(ms: 100)
+            state.apply(c.events.take())
+            XCTAssertEqual(state.jogTicks, 0)
+            XCTAssertFalse(c.telemetry.take().suffix(5).contains { StateFlags(rawValue: $0.flags).contains(.angleValid) }, "ANGLE_VALID is down while the reads fail")
+            try await world.setEncoder(rev: world.encoderRev[0] ?? 0, valid: true)
+            try await world.run(ms: 100)
+            state.apply(c.events.take())
+            XCTAssertEqual(state.jogTicks, 0, "the displacement made while blind is not a jump")
+            XCTAssertTrue(c.telemetry.take().suffix(5).allSatisfy { StateFlags(rawValue: $0.flags).contains(.angleValid) })
+            try await world.spin(revs: 0.25, ms: 500)
+            try await world.run(ms: 100)
+            state.apply(c.events.take())
+            XCTAssertEqual(state.jogTicks, 256, "and counting is exact again")
+        }
+    }
+
+    /// No AS5600 answers (a wrong wire, a dead breakout): the unit is silent on jog instead of making something up, and
+    /// its telemetry says the angle is not valid. The hold pad, the buttons and the slide pot still work.
+    func testAUnitWhoseEncoderNeverAnswersIsSilentOnJogAndSaysSo() async throws {
+        try await withWorld("units=1 as5600=0") { world in
+            let c = world.client()
+            var state = ControllerState(deck: .a)
+            try await c.client.startStream(rateHz: 100)
+            let info = try await c.client.getInfo()
+            XCTAssertEqual(info.platterSource, PlatterSource.as5600.rawValue, "still configured for the encoder")
+            XCTAssertEqual(Caps(rawValue: info.caps), [.trsMidi, .link, .statusLed], "the host can see that no AS5600 answered")
+            let mark = world.process.log.count
+            try await world.gesture(revs: 2, ms: 1500)  // somebody turns the (absent) platter and touches the pad
+            _ = try await world.command("buttons u=0 cue=1")
+            try await world.run(ms: 50)
+            state.apply(c.events.take())
+            XCTAssertEqual(state.jogTicks, 0)
+            try await expectEqual(try await world.status().jogTotal, 0)
+            XCTAssertFalse(world.midiEvents(from: mark).contains { if case let .controlChange(_, cc, _) = $0.event { return cc == Proto.CC.jog } else { return false } },
+                           "not one jog message")
+            XCTAssertEqual(state.buttons, [.cue], "the rest of the unit is alive")
+            XCTAssertEqual(world.touchNotes(from: mark).downs, 1, "and the hold pad still says touched")
+            let frames = c.telemetry.take()
+            XCTAssertFalse(frames.isEmpty)
+            for t in frames { XCTAssertFalse(StateFlags(rawValue: t.flags).contains(.angleValid), "ANGLE_VALID is down when nothing answers") }
+        }
+    }
+
+    /// The hold pad is optional hardware: without it jog works, but a DJ app never hears "touched".
+    func testWithoutAHoldPadTheUnitStillSendsMotionButNeverATouch() async throws {
+        try await withWorld("units=1 touch=0") { world in
+            let c = world.client()
+            var state = ControllerState(deck: .a)
+            let mark = world.process.log.count
+            try await world.gesture(revs: 1, ms: 1000)
+            state.apply(c.events.take())
+            XCTAssertEqual(state.jogTicks, 1024)
+            XCTAssertEqual(world.touchNotes(from: mark).downs, 0, "no touch note ever")
+            XCTAssertFalse(state.touched)
+            XCTAssertEqual(state.playPulseCount, 0, "and no tap-play either")
         }
     }
 
@@ -415,11 +716,11 @@ final class ControllerStateE2ETests: E2ETestCase {
     }
 
     func testAFlickFasterThanTheWireCanCarryIsDeliveredLateButNeverLost() async throws {
-        try await withWorld("units=1 as5600=1") { world in
+        try await withWorld { world in
             let c = world.client()
             var state = ControllerState(deck: .a)
-            try await c.client.setConfig(.platterSource, Int32(PlatterSource.as5600.rawValue))
-            _ = try await world.command("as5600 u=0 rev=0 noise=0")
+            try await c.client.setConfig(.jogUntouched, Int32(JogUntouched.report.rawValue))  // the flick is untouched; AUTO would keep it off the wire
+            try await world.setEncoder(rev: 0, noise: 0)
             try await world.run(ms: 100)
             _ = c.events.take()
             let before = try await world.status().jogTotal

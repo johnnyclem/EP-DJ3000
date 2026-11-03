@@ -32,6 +32,23 @@ Mixxx is the one app where the other roles are useful too, because the Deck outp
 The orange knob drives the deck's Quick Effect (filter). That one is deliberate: applied
 effects are included in the Deck outputs, so it stays audible through the hardware mixer.
 
+## Untouched platter: the pitch bend works until the hold pad has
+
+Since contract v1.4 a unit stops sending jog for a platter nobody is touching once its hold pad has worked. The unit's default
+`jogUntouched` is `AUTO`: it sends untouched jog until the hold pad has registered a touch since power-up, and not after that,
+because a free-spinning platter coasts for seconds after release, which as pitch bend would slow or speed the deck the whole
+time. So on a fresh unit the script's untouched path (the table row below) runs: spinning the platter bends the pitch, so the
+encoder works before the pad does. After the pad has seen one hand (until the next reboot, or a change of `platterSource`)
+platter motion arrives only under a hand, as `scratchTick`, and a coasting platter does nothing.
+
+To get a pitch bend from spinning the platter without touching it *also after the pad has worked*, set `jogUntouched` = `REPORT`
+(config key 33, value 1) in the macOS app's Settings or with the SysEx frame in
+[`../README.md`](../README.md#untouched-platter-motion-joguntouched). The script needs no change: it already adds untouched
+jog to `[ChannelN],jog` (`BEND_SCALE` below). A firmware built with no hold pad (`EPDJ_TOUCH_PAD_COUNT` = 0) reports untouched
+motion under `AUTO` for good and pitch-bends like this. The default build has one configured pad, and the unit cannot tell
+whether anything is connected to it or whether it works: it only knows whether it has reported a touch, so a pad that never sees
+a hand leaves `AUTO` reporting (a pitch-bend wheel, no scratching).
+
 ## Install
 
 Three files go in the same folder. Mixxx looks for each `<file>` in the mapping's own
@@ -85,7 +102,7 @@ cp drivers/mixxx/EP-DJ3000.midi.xml drivers/mixxx/EP-DJ3000-scripts.js \
 |---|---|---|
 | Platter touched / released | note 38 | `engine.scratchEnable` / `scratchDisable` for the deck: 1024 intervals per rev, 33 1/3 rpm, alpha 1/8, beta alpha/32, ramp on both |
 | Platter moved, touched | CC 22 (relative, 64 = none) | `engine.scratchTick(deck, ticks)`; positive = clockwise |
-| Platter moved, untouched (AS5600 build) | CC 22 | pitch bend: ticks x `BEND_SCALE` is added to `[ChannelN],jog`, clamped to Mixxx's documented -3..3. `jog` is an accumulator that Mixxx zeroes after each audio callback (`RateControl::getJogFactor`), and the unit can send several messages per callback, so the script adds rather than overwrites |
+| Platter moved, untouched (sent until the hold pad's first touch since power-up, with `jogUntouched` = `REPORT`, or in a build with no hold pad; not sent after the pad has worked) | CC 22 | pitch bend: ticks x `BEND_SCALE` is added to `[ChannelN],jog`, clamped to Mixxx's documented -3..3. `jog` is an accumulator that Mixxx zeroes after each audio callback (`RateControl::getJogFactor`), and the unit can send several messages per callback, so the script adds rather than overwrites |
 | Platter tap | note 39 | toggles `[ChannelN],play`. The touch down/up of the tap scratches for a moment and releases |
 | CUE | note 36 | `cue_default` follows the button (honours Mixxx's cue mode setting). LED follows `cue_indicator` |
 | REV | note 37 | `reverseroll` while held. See `REV_BEHAVIOR` |
@@ -125,6 +142,10 @@ Switch to `"toggle"` if you want a latching reverse.
 
 ## Known limits
 
+- **Scratching needs the touch note.** `scratchEnable` is only called on note 38, and on the default AS5600 platter
+  that note comes from the one hold pad. Until that pad reliably sees a hand on the spinning platter
+  (`docs/BRINGUP.md`, first bring-up step 3), nothing scratches: with the default build and `jogUntouched` = `AUTO` the
+  platter sends nothing at all, and with `REPORT` (or a build with no hold pad) every platter movement is a pitch bend.
 - **Not run in real Mixxx.** Scratch feel, pitch-bend strength, soft-takeover behaviour with
   a real pot, LED timing and the pitch fader's direction (it follows Mixxx's *rate slider
   direction* preference; flip `faderInvert` on the unit if it is backwards) are unknown

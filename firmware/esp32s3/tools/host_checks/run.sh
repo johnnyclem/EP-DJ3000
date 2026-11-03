@@ -1,6 +1,8 @@
 #!/bin/sh
 # Host tests of the ESP32-S3 layer's pure logic: the engine task's output policy (main/output_pump.h), its
-# catch-up rule (main/tick_pacing.h) and the touch measurement-length fit (epdj_hal/touch_range.h). They are the
+# catch-up rule (main/tick_pacing.h), the touch measurement-length fit (epdj_hal/touch_range.h) and the AS5600 magnet
+# decode and sensor time budget (epdj_hal/sensor_budget.h), the AS5600 CONF word and register choice
+# (epdj_hal/as5600_regs.h) and the encoder re-probe timing (epdj_hal/encoder_retry.h). They are the
 # headers the firmware compiles, run against fakes; nothing here needs ESP-IDF or a chip. Uses firmware/core's test
 # harness and compiles firmware/core/src with the same flags as the core's own build.
 #
@@ -41,7 +43,7 @@ wait
 [ -f "$out/harness.o" ] || g++ $flags -I"$core/test" -c "$core/test/harness_main.cpp" -o "$out/harness.o"
 
 rc=0
-for t in test_output_pump test_pacing_and_range; do
+for t in test_output_pump test_pacing_and_range test_sensor_budget test_as5600_conf test_encoder_retry; do
   echo "== $t"
   # shellcheck disable=SC2086
   g++ $flags $warn $inc "$here/$t.cpp" "$out"/core_*.o "$out/harness.o" -o "$out/$t"

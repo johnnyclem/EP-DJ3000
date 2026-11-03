@@ -71,7 +71,7 @@ EPDJ_TEST(engine_sysex_get_info_reports_the_live_unit) {
     CHECK_EQ(info.platterSource, 2);
     CHECK_EQ(info.serial, 0xA0B0C00Bu);
     CHECK_EQ(info.uptimeS, 2);
-    CHECK_EQ(info.caps, proto::caps::kTouchRing | proto::caps::kTrsMidi | proto::caps::kLink | proto::caps::kStatusLed);
+    CHECK_EQ(info.caps, proto::caps::kAs5600 | proto::caps::kTrsMidi | proto::caps::kLink | proto::caps::kStatusLed);
   }
 
   d.in.dacPresent = true;
@@ -84,6 +84,28 @@ EPDJ_TEST(engine_sysex_get_info_reports_the_live_unit) {
   }
 
   CHECK_EQ(ask(d, 0, Cmd::GetInfo).size(), 0);  // addressed to the other deck: not ours
+}
+
+EPDJ_TEST(engine_info_caps_follow_setCaps_so_an_encoder_found_after_boot_is_reported) {
+  // The platform re-probes an AS5600 that did not answer at boot (encoder_retry.h). When it turns up, Info.caps must say so,
+  // or a host that reads caps (the Mac app's encoder check) keeps calling it a wiring fault that is already fixed.
+  Deck d(0);
+  const uint16_t withoutEncoder = proto::caps::kTrsMidi | proto::caps::kLink | proto::caps::kStatusLed;
+  d.engine.setCaps(withoutEncoder);
+  d.run(5);
+  const auto caps = [&]() {
+    const std::vector<Reply> r = ask(d, 0, Cmd::GetInfo);
+    CHECK_EQ(r.size(), 1);
+    proto::Info info;
+    if (r.size() == 1 && proto::deserialize(r[0].payload.data(), r[0].payload.size(), &info)) return info.caps;
+    return static_cast<uint16_t>(0xFFFF);
+  };
+  CHECK_EQ(caps(), withoutEncoder);
+  d.engine.setCaps(static_cast<uint16_t>(withoutEncoder | proto::caps::kAs5600));
+  CHECK_EQ(caps(), withoutEncoder | proto::caps::kAs5600);
+  d.in.dacPresent = true;  // the engine still adds the DAC bit on top
+  d.run(2);
+  CHECK_EQ(caps(), withoutEncoder | proto::caps::kAs5600 | proto::caps::kDac);
 }
 
 EPDJ_TEST(engine_accepts_input_before_the_first_step) {
@@ -236,17 +258,24 @@ EPDJ_TEST(engine_sysex_set_config_applies_live_to_the_fader) {
   CHECK(lastPair(d, 23, 55) > 11000);
 }
 
-EPDJ_TEST(engine_sysex_set_config_during_a_scratch_does_not_glitch) {
+// ring = false: the default AS5600 platter with its hold pad; true: the experimental touch ring.
+static void setConfigDuringAScratch(bool ring) {
   Deck d(0);
-  d.ringIdle(kSettleMs);
+  if (ring) d.useRing();
+  d.touchIdle(kSettleMs);
   d.clearLog();
   // Finger down and moving; reconfigure the touch thresholds, the tap window and the invert flag on the way.
-  for (int i = 0; i < 150; ++i) d.ringStep(0.2, 1.0);
   double rev = 0.2;
+  const auto hold = [&]() {  // finger on the platter at `rev` without moving it (on the ring that is a position, on the pad it is not)
+    if (ring) d.ringStep(rev, 1.0);
+    else d.padStep(true);
+  };
+  for (int i = 0; i < 150; ++i) hold();
   auto sweep = [&](int ms, double revPerSec) {
     for (int i = 0; i < ms; ++i) {
       rev += revPerSec * 1e-3;
-      d.ringStep(rev, 1.0);
+      if (ring) d.ringStep(rev, 1.0);
+      else d.turn(revPerSec * 4.096, true);
     }
   };
   sweep(400, 0.4);
@@ -263,8 +292,8 @@ EPDJ_TEST(engine_sysex_set_config_during_a_scratch_does_not_glitch) {
   const int64_t totalAtFlip = d.engine.jogTotal();
   sweep(600, 0.4);
   d.run(1);
-  for (int i = 0; i < 100; ++i) d.ringStep(rev, 1.0);
-  d.ringIdle(300);
+  for (int i = 0; i < 100; ++i) hold();
+  d.touchIdle(300);
 
   const std::vector<Bytes> msgs = usbMsgs(d.log, 0);
   CHECK_EQ(countEq(msgs, b({0x90, 38, 127})), 1);  // one touch-down ...
@@ -279,11 +308,15 @@ EPDJ_TEST(engine_sysex_set_config_during_a_scratch_does_not_glitch) {
   CHECK(maxAbs < 20);  // 0.4 rev/s = 410 ticks/s = 0.8 ticks per 2 ms
 }
 
+EPDJ_TEST(engine_sysex_set_config_during_a_scratch_does_not_glitch) { setConfigDuringAScratch(/*ring=*/false); }
+
+EPDJ_TEST(engine_sysex_set_config_during_a_ring_scratch_does_not_glitch) { setConfigDuringAScratch(/*ring=*/true); }
+
 // ---- telemetry -----------------------------------------------------------------------------------
 
 EPDJ_TEST(engine_sysex_stream_reports_inputs_at_the_requested_rate) {
   Deck d(0);
-  d.ringIdle(300);
+  d.touchIdle(300);
   d.in.faderRaw = 1234;
   d.in.knobRaw = 2345;
   d.in.audioStreaming = true;
@@ -341,22 +374,27 @@ EPDJ_TEST(engine_sysex_stream_reports_inputs_at_the_requested_rate) {
 }
 
 EPDJ_TEST(engine_sysex_telemetry_shows_touch_angle_and_jog) {
-  Deck d(0);
-  d.ringIdle(kSettleMs);
-  ask(d, 0, Cmd::Stream, b({100}));
-  d.clearLog();
-  d.ringGesture(0.25, 0.5, 1.0, 100);
-  std::vector<proto::Telemetry> f = telemetryFrames(d.log);
-  bool sawTouched = false, sawAngle = false;
-  for (const proto::Telemetry& t : f) {
-    sawTouched = sawTouched || (t.flags & proto::stateFlags::kTouched) != 0;
-    sawAngle = sawAngle || (t.flags & proto::stateFlags::kAngleValid) != 0;
-  }
-  CHECK(sawTouched && sawAngle);
-  CHECK(!f.empty());
-  if (!f.empty()) {
-    CHECK_EQ(f.back().jogTotal, d.engine.jogTotal());
-    CHECK(f.back().jogTotal > 900);
+  for (int ring = 0; ring <= 1; ++ring) {
+    Deck d(0);
+    if (ring) d.useRing();
+    d.touchIdle(kSettleMs);
+    ask(d, 0, Cmd::Stream, b({100}));
+    d.clearLog();
+    d.gesture(0.25, 0.5, 1.0, 100);
+    std::vector<proto::Telemetry> f = telemetryFrames(d.log);
+    bool sawTouched = false, sawAngle = false;
+    for (const proto::Telemetry& t : f) {
+      sawTouched = sawTouched || (t.flags & proto::stateFlags::kTouched) != 0;
+      sawAngle = sawAngle || (t.flags & proto::stateFlags::kAngleValid) != 0;
+    }
+    CHECK(sawTouched && sawAngle);
+    CHECK(!f.empty());
+    if (!f.empty()) {
+      CHECK_EQ(f.back().jogTotal, d.engine.jogTotal());
+      CHECK(f.back().jogTotal > 900);
+      // With the encoder as the platter, Telemetry.angle is its 12-bit reading (the platter has been at rest for 150 ms).
+      if (!ring) CHECK_EQ(f.back().angle, d.in.angle12);
+    }
   }
 }
 
@@ -667,9 +705,9 @@ EPDJ_TEST(engine_sysex_survives_usb_packetisation_and_garbage) {
 EPDJ_TEST(engine_outputs_round_trip_through_usb_packets) {
   Deck d(0);
   d.set(ConfigKey::Mode, 1);
-  d.ringIdle(kSettleMs);
+  d.touchIdle(kSettleMs);
   d.clearLog();
-  d.ringGesture(0.3, 0.5, 0.5, 100);
+  d.gesture(0.3, 0.5, 0.5, 100);
   d.click(true, 20);
   for (int raw = 100; raw < 3000; raw += 20) {
     d.in.faderRaw = static_cast<uint16_t>(raw);

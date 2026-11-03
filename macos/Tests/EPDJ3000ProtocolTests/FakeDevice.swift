@@ -21,7 +21,7 @@ final class FakeDevice: MidiTransport, @unchecked Sendable {
             }
         }
         var info = Info(protocolVersion: Proto.protocolVersion, fwMajor: 0, fwMinor: 1, fwPatch: 2, hwRev: 1, deck: 0, mode: 0,
-                        platterSource: 1, caps: 0x3E, serial: 0xDEADBEEF, uptimeS: 3600)
+                        platterSource: 0, caps: 0x3D, serial: 0xDEADBEEF, uptimeS: 3600)   // an AS5600 build: caps AS5600 + DAC + TRS + link + USB audio
         var peers: [Peer] = []
         var hasDac = true
         var failFlash = false

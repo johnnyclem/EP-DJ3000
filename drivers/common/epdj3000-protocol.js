@@ -130,6 +130,11 @@ var EPDJ3000 = {
     "RebootMode": {
       "normal": 0,
       "bootloader": 1
+    },
+    "JogUntouched": {
+      "auto": 0,
+      "report": 1,
+      "suppress": 2
     }
   }
 };

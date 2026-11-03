@@ -76,28 +76,29 @@ Under the plate is a bay beside the board. A flat LiPo fits next to the
 display module. There is no
 cell holder. The long-side pin holes are unchanged.
 
-## Audio kit
+## DevKit
 
-The brain is an ESP32-Audio-Kit V2.2. The PCB is 82 × 73 mm, ±0.2.
-The 73 mm side goes across the deck. Turned the other way, an 82 mm
-board has under half a millimeter of clearance inside an 88 mm shell,
-and a print will fuse it to the walls.
+The brain is an ESP32-S3-DevKitC-1, the board the firmware is written for.
+The audio kit is out. It is a classic ESP32 and it cannot be the USB device.
 
-The board sits at x = 7.5, y = 54, in a lip on the tray floor. That
-clears the pin ribs at 16, 25 and 48 mm, and it stops at y = 136, just
-short of the encoder pad. The scratch fader is now a 40 mm slot below
-it (about 27 mm of throw). Cue and play stay in that strip. The kit's
-own six keys are the pads, so the deck has no holes over the PCB until
-the button centers are measured off the real board.
+The DevKit seat is a lip at the top of the tray, about 70 × 25.5 mm, native
+USB toward the window in the top wall. Measure your board before trusting
+that. Factory pin headers do not fit a 16 mm shell. Clip them, or use a
+board without headers. The UART port stays inside. Flash with the deck
+open. The window is the native USB port only.
 
-Headphone and line-in face a long side. Don't cut those holes yet. A
-3.5 mm plug can reach across the 5 mm gap, but only if the hole is on
-the jack's real center.
+## Encoder
 
-Cue and play are 15 mm round caps in the fader strip, left of the cap.
-Reverse is the small cap on the right. Tempo is still the knob. The
-slot is still a loose scratch fader, just shorter, because the audio
-kit now owns the middle of the deck.
+The AS5600 pad used to sit at 6.2 mm. That left 1.9 mm under the magnet,
+which is where the chip is, so the magnet hit the board. The pad is now
+3.5 mm, for a headerless breakout. Measure yours. A thicker module needs
+the pad lower still, or it hits the magnet again.
+
+The axle is an M3×6, not an M3×12. A 12 mm shank from the underside of
+the platter ends at about z = 3 mm, which is in the pad and the floor.
+M3×6 ends just below the bearing, and the 2.5 mm magnet glued on the tip
+sits roughly 2 mm above a chip on the 3.5 mm pad. Shim with tape if your
+breakout is thinner.
 
 ## Technic pins
 
@@ -150,14 +151,14 @@ The orange pieces are 0.6 mm. Print them slow, on a clean plate.
 
 - 4× M2.5×12 self-tapping screws (pan head). Pilots in the bosses are 2.15 mm. Heads sit in the four corner counterbores.
 - 1× 683ZZ bearing, 3×7×3 mm. Press into the platter well from above. It should sit about 0.4 mm below the floor of the well. If it stands proud, it will scrape.
-- 1× M3×12 button head. This is the axle. Head hides in the pocket on the underside of the platter. Shank points down through the bearing.
+- 1× M3×6 button head. This is the axle. Head hides in the pocket on the underside of the platter. Shank points down through the bearing. An M3×12 puts the magnet in the floor.
 - 1× 6×2.5 mm **diametric** magnet, glued to the end of that M3, for the AS5600.
-- 1× AS5600 breakout. Solder wires, not tall pin headers. Two M2 holes, 16 mm apart, on the pad under the platter. The chip wants to be 1–3 mm from the magnet. Shim with tape if the gap is wrong.
+- 1× AS5600 breakout, headerless. Two M2 holes, 16 mm apart, on the pad under the platter. The pad top is at 3.5 mm. The chip wants 1–3 mm of air under the magnet. Measure the module before printing. A tall one will not fit.
 - 1× 6×2.5 mm magnet (axial is fine) in the fader lock.
 - 2× hall sensors, SS49E or A1302. Glue one to the top of each post beside the fader. Flat face toward the lock.
 - 2× 6×6 mm tactile switches. Glue them under the button holes so the actuator passes into the stem.
 - 1× vertical 9 mm pot, 10k, if you want the orange knob to do something. Bushing is the 7.3 mm hole. The knob is a friction fit on a 6 mm shaft.
-- 1× Raspberry Pi Pico, or a Pro Micro. Rails are sized for a Pico (21×51 mm) with the USB connector toward the top edge. A Pro Micro fits in the same bay with a bit of foam.
+- 1× ESP32-S3-DevKitC-1, headerless. The lip is 70 × 25.5 mm, USB toward the top window. Measure yours. The firmware targets this board.
 - 4× 3.5 mm TRS jacks on the top end, beside the USB-C window. Left pair is MIDI in and MIDI out. Right pair is line in and line out.
 - 1× 3.5 mm TRS headphone jack, centered on the fader end. The long sides are pin holes only.
 
@@ -171,7 +172,7 @@ No slide pot. The crossfader is a loose block with a magnet, same idea as the re
 4. Fader: push the stem down through the slot. Press the lock onto the stem from inside (0.2 mm interference; file it if it won't start). Glue the magnet into the lock, facing the posts.
 5. Glue the two halls to the posts. Glue the two tactiles under the button holes. Push the caps on.
 6. Pot in the corner hole, knob on the shaft.
-7. Pico or Pro Micro between the rails, USB at the window in the top wall. The window is 12.5×7.5 mm so a micro-USB plug can pass through and seat on the board.
+7. DevKit in the lip, native USB at the window. Flash over the UART port before the deck is closed.
 8. Four screws from the face into the bosses.
 9. Glue the orange plus, the bar, and the USB tab. Press the feet in.
 

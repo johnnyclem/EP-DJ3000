@@ -34,7 +34,7 @@ const PIECES: Piece[] = [
   { id: "platter", file: "platter.stl", color: BLACK, poses: [{ position: [44, 148, 15.3] }] },
   { id: "fader", file: "fader.stl", color: BLACK, poses: [{ position: [44, 58, 24], rotation: [Math.PI, 0, 0] }] },
   { id: "lock", file: "fader_lock.stl", color: "#1c1c1e", poses: [{ position: [36, 48, 5.2] }] },
-  { id: "knob", file: "knob.stl", color: ORANGE, poses: [{ position: [74, 218, 16] }] },
+  { id: "knob", file: "knob.stl", color: ORANGE, poses: [{ position: [78, 216, 22] }] },
   {
     id: "button",
     file: "button.stl",
@@ -55,7 +55,7 @@ const PIECES: Piece[] = [
     ],
   },
   { id: "plus", file: "plus.stl", color: ORANGE, poses: [{ position: [44, 148, 18.4] }] },
-  { id: "plate", file: "faceplate.stl", color: "#f4f4f0", poses: [{ position: [7, 188, 14.4] }] },
+  { id: "plate", file: "faceplate.stl", color: "#f4f4f0", poses: [{ position: [3, 188, 20.4] }] },
   {
     id: "foot",
     file: "foot.stl",

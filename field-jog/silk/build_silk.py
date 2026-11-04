@@ -19,9 +19,9 @@ BOLD = "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf"
 
 # Deck coordinates match field-jog.scad. y = 0 is the fader end.
 W, H = 88.0, 240.0
-PLATE = (7.0, 188.0, 74.0, 45.0)  # x, y, w, h
-OLED_LOCAL = (31.0, 30.0, 30.5, 11.85)  # cx, cy, w, h on the plate
-KNOB_LOCAL = (67.0, 30.0, 13.0)  # cx, cy, hole diameter
+PLATE = (3.0, 188.0, 82.0, 46.0)  # x, y, w, h
+OLED_LOCAL = (28.0, 22.0, 30.5, 11.85)  # cx, cy, w, h on the plate
+KNOB_LOCAL = (75.0, 28.0, 13.0)  # cx, cy, hole diameter
 
 
 class Face:
@@ -162,26 +162,25 @@ def deck_art(regular, bold, guides):
 def face_art(regular, bold, guides):
     # Local plate coords, jack end at the top of the file.
     def ly(local_y):
-        return 45.0 - local_y
+        return 46.0 - local_y
 
     parts = []
-    # One row above the glass, toward the jacks. The glass top is local y = 35.9.
     ports = ["MIDI IN", "MIDI OUT", "USB", "LINE IN", "LINE OUT"]
-    cap = 2.2
+    cap = 2.4
     gap = 1.6
     widths = [regular.measure(t, cap, 0.01) for t in ports]
     total = sum(widths) + gap * (len(ports) - 1)
-    x = (74.0 - total) / 2
-    baseline = ly(41.6)
+    x = (82.0 - total) / 2
+    baseline = ly(42.0)
     for text, width in zip(ports, widths):
         d, _ = regular.path(text, x, baseline, cap, 0.01)
         parts.append(cut_path(d))
         x += width + gap
 
     # Name on the platter side of the glass, clear of the two M2s at local y = 3.
-    p, _ = label(bold, "FIELD JOG", 4.0, ly(8.2), 4.2, 0.08, "left")
+    p, _ = label(bold, "FIELD JOG", 6.0, ly(8.0), 4.2, 0.08, "left")
     parts.append(p)
-    p, _ = label(regular, "TEMPO", 66.0, ly(12.2), 2.2, 0.04, "middle")
+    p, _ = label(regular, "TEMPO", 75.0, ly(8.0), 2.2, 0.04, "middle")
     parts.append(p)
 
     guide = ""
@@ -190,11 +189,11 @@ def face_art(regular, bold, guides):
         kx, ky, kd = KNOB_LOCAL
         guide = "\n".join(
             [
-                rect(0.3, 0.3, 73.4, 44.4),
+                rect(0.3, 0.3, 81.4, 45.4),
                 rect(ox - ow / 2, ly(oy + oh / 2), ow, oh),
                 hole(kx, ly(ky), kd),
-                hole(15, ly(3), 2.2),
-                hole(41, ly(3), 2.2),
+                hole(4, ly(20), 2.2),
+                hole(78, ly(16), 2.2),
             ]
         )
     return "\n".join(parts), guide
@@ -209,13 +208,13 @@ def main():
     write("deck-guide.svg", header(W, H) + guide + "\n" + cuts + "\n</svg>\n")
 
     cuts, guide = face_art(regular, bold, True)
-    write("faceplate-cut.svg", header(74, 45) + cuts + "\n</svg>\n")
-    write("faceplate-guide.svg", header(74, 45) + guide + "\n" + cuts + "\n</svg>\n")
+    write("faceplate-cut.svg", header(82, 46) + cuts + "\n</svg>\n")
+    write("faceplate-guide.svg", header(82, 46) + guide + "\n" + cuts + "\n</svg>\n")
 
     # One mat: deck, 12 mm gap, faceplate. A 10 mm bar to check the import.
     d_cuts, _ = deck_art(regular, bold, False)
     f_cuts, _ = face_art(regular, bold, False)
-    mat_w, mat_h = 88 + 12 + 74, 240
+    mat_w, mat_h = 88 + 12 + 82, 240
     bar = '<rect x="0" y="0" width="10" height="1.2" fill="#000"/>'
     moved = f_cuts.replace("<path ", '<path transform="translate(100 0)" ')
     body = (

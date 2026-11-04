@@ -3,10 +3,11 @@
 // Teenage Engineering EP-133 (240 x 176 x 16) and EP-136 (240 x 88 x 16).
 // Not a TE product, and not a copy of the Frisk Fader / Scratch Ninja STL.
 //
-// Default size 88 x 240 x 16 mm. Same thickness as an EP-133 and an EP-136,
-// so the cases sit flush. The 683ZZ lives in a sleeve that hangs below the
-// deck, and the fader lock rides in the cavity under it. The platter and
-// the knob stand proud of the 16 mm case, the way the K.O. knobs do.
+// Default size 88 x 240. The playing surface is 16 mm, same as an EP-133
+// and an EP-136, so the cases sit flush. The top 52 mm rises to 22 mm.
+// That cap is the battery door: a 59 x 33 x 15 mm 2xAA holder will not
+// fit in a 16 mm shell. The 683ZZ lives in a sleeve that hangs below the
+// deck, and the fader lock rides in the cavity under it.
 //
 // OpenSCAD customizer: change `part` to export one piece.
 //   openscad -D 'part="top"' -o top.stl field-jog.scad
@@ -58,6 +59,8 @@ pot_y0 = fader_y0 + fader_slot_l / 2 - pot_body_l / 2;
 knob_d = 16;
 knob_h = 12;
 knob_hole = 6.3;      // friction fit on a 6 mm pot shaft
+knob_x = 78;          // right of the 2xAA holder
+knob_y = H - 24;
 
 /* [Hidden] */
 eps = 0.05;
@@ -83,48 +86,48 @@ technic_ys = [16, 25, 48, 216, 224];
 
 platter_cx = W / 2;
 platter_cy = 148;
-knob_x = W - 14;
-knob_y = H - 22;
 fader_cx = W / 2;
 
-// Removable cover over the top 19% of the deck. Flush, 1.6 mm, no engraving.
-// Silkscreen this plate. Cut type into the FDM skin and the top layers tear out.
+// Raised cap over the top end, like a TE battery hump. The rest stays 16 mm.
+bump_y0 = 188;
+bump_h = 22;
+
+// Door, flush with the cap. Two M2s in the side margins, clear of the cells.
 plate_t = 1.6;
-plate_x0 = 7;
+plate_x0 = 3;
 plate_y0 = 188;
-plate_w = 74;
-plate_h = 45;
-plate_ledge = 4.2;
-// Two M2s in the ledge on the platter side of the bay.
-plate_screws = [[22, 191], [48, 191]];
+plate_w = 82;
+plate_h = 46;
+plate_screws = [[7, 208], [81, 204]];
 
 // Measured module, not the catalog 0.91" drawing. Glass is 30.5 x 11.85.
-// The PCB is 40 x 12.85 and stops the glass from falling through (0.5 mm
-// of board past the glass on the short sides). Tape it to the underside.
+// The PCB is 40 x 12.85 and tapes to the underside of the door, in the
+// air above the cells.
 oled_w = 30.5;
 oled_h = 11.85;
-oled_cx = 39;   // plate-local. Shifted toward the knob so a pouch fits on the left.
-oled_cy = 30;
+oled_cx = 28;   // plate-local
+oled_cy = 22;
 
 encoder_pad_top = 3.5;   // headerless AS5600. 6.2 left 1.9 mm and the chip hit the magnet
 encoder_pad_w = 26;
 encoder_pad_d = 20;
 
-// ESP32-S3-DevKitC-1, headerless. Factory pin headers do not fit a 16 mm shell.
-// About 70 x 25 mm. Measure yours. Native USB faces the top-end window.
+// Headerless ESP32-S3-DevKitC-1, parked on the left under the platter.
+// The battery cap owns the top end, so the board's own USB no longer
+// meets the back panel. Run a short lead to the window.
 devkit_l = 70;
 devkit_w = 25.5;
-devkit_x0 = W / 2 - devkit_w / 2;
-devkit_y0 = H - wall - 2 - devkit_l;
+devkit_x0 = 3.6;
+devkit_y0 = 102;
 
-// One flat pouch behind the faceplate, left of the DevKit. AAA is 10.5 mm
-// round and the cavity is 10 mm, so a round cell does not fit. The pouch
-// is 5 x 12 x 30 mm. The door clamps it. There is no holder spring.
-cell_x0 = 11.2;
-cell_y0 = 198;
-cell_w = 13.0;
-cell_l = 32.0;
-cell_t = 5.2;
+// Leaded 2xAA holder, the common 59 x 33 x 15 mm box. Pocket is 1 mm
+// larger on X and Y and 16 mm clear above the floor, so the springs
+// are not crushed by the door. Jack bodies on the end wall must stay
+// under 12 mm or they meet the cells.
+holder_l = 60;
+holder_w = 34.5;
+holder_x0 = 11;
+holder_y0 = 193;
 
 // Cue and play on the lower left, clear of the scratch fader.
 play_x = 17;
@@ -239,17 +242,13 @@ module bottom() {
                        platter_cy - encoder_pad_d / 2,
                        floor_t - eps])
                 cube([encoder_pad_w, encoder_pad_d, encoder_pad_top - floor_t + eps]);
-            // DevKitC-1 locating lip. Headerless board, USB toward the top wall.
+            // DevKitC-1 locating lip. Left side, under the platter. Headerless.
             difference() {
                 translate([devkit_x0 - 1.3, devkit_y0 - 1.3, floor_t])
                     cube([devkit_w + 2.6, devkit_l + 2.6, 0.8]);
                 translate([devkit_x0 - 0.4, devkit_y0 - 0.4, floor_t - eps])
                     cube([devkit_w + 0.8, devkit_l + 0.8, 1.2]);
             }
-            // Pouch pedestal. A 5.2 mm cell ends 0.8 mm short of the plate.
-            translate([cell_x0 + 0.8, cell_y0 + 0.8, floor_t])
-                cube([cell_w - 1.6, cell_l - 1.6,
-                      body_h - plate_t - cell_t - 0.8 - floor_t]);
             // Slide-pot cradle. The 75 mm body sits up against the deck.
             // Two rails pinch the 9 mm width. A channel in the floor is
             // where the pins go after they are bent flat.
@@ -317,6 +316,14 @@ module top_plate() {
         union() {
             translate([sh, sh, tray_h])
                 rounded_box(W - 2 * sh, H - 2 * sh, skin, R);
+            // Battery cap. Same outline, cut off below the platter so only
+            // the top end is taller.
+            intersection() {
+                translate([sh, sh, tray_h])
+                    rounded_box(W - 2 * sh, H - 2 * sh, bump_h - tray_h, R);
+                translate([-1, bump_y0, 0])
+                    cube([W + 2, H, bump_h + 1]);
+            }
             // Sleeve drops into the tray so a 3 mm bearing fits in a 16 mm case.
             translate([platter_cx, platter_cy, ledge_z])
                 cylinder(d = bearing_d + 6.4, h = body_h - well_d - ledge_z, $fn = 48);
@@ -357,9 +364,9 @@ module top_plate() {
             translate([p[0], p[1], tray_h - eps])
                 cylinder(d = led_d, h = skin + 2 * eps, $fn = 20);
 
-        // pot / knob bushing
+        // pot / knob bushing, through the cap
         translate([knob_x, knob_y, tray_h - eps])
-            cylinder(d = 7.3, h = skin + 2 * eps, $fn = 36);
+            cylinder(d = 7.3, h = bump_h - tray_h + 2 * eps, $fn = 36);
 
         // screw counterbores, from the face
         screw_positions() {
@@ -369,29 +376,18 @@ module top_plate() {
                 cylinder(d = 2.8, h = skin + 2 * eps, $fn = 18);
         }
 
-        // Battery cover rebate. The plate sits flush. Nothing is engraved.
-        translate([plate_x0, plate_y0, body_h - plate_t])
+        // Door rebate, flush with the top of the cap.
+        translate([plate_x0, plate_y0, bump_h - plate_t])
             cube([plate_w, plate_h, plate_t + eps]);
 
-        // Battery well. Opens when the faceplate comes off. Left of the screen.
-        translate([cell_x0, cell_y0, tray_h - eps])
-            cube([cell_w, cell_l, skin + 2 * eps]);
-        // Pinch notch at the jack end of the well, still under the plate.
-        translate([cell_x0 + cell_w / 2, cell_y0 + cell_l - 1.5, tray_h - eps])
-            cylinder(d = 8, h = skin + 2 * eps, $fn = 24);
-        // Screen. The 40 x 12.85 mm board sits in a pocket and does not show.
-        translate([plate_x0 + oled_cx - 20.3, plate_y0 + oled_cy - 6.7, body_h - plate_t - 1.6])
-            cube([40.6, 13.4, 1.6 + eps]);
-        translate([plate_x0 + oled_cx - oled_w / 2, plate_y0 + oled_cy - oled_h / 2, tray_h - eps])
-            cube([oled_w, oled_h, skin + 2 * eps]);
-        // Pins drop into the tray on the platter side of the board.
-        translate([plate_x0 + oled_cx - 6, plate_y0 + oled_cy - 9.6, tray_h - eps])
-            cube([12, 3.2, skin + 2 * eps]);
+        // 2xAA holder. Opens into the tray when the door comes off.
+        translate([holder_x0, holder_y0, tray_h - eps])
+            cube([holder_l, holder_w, bump_h - tray_h + 2 * eps]);
 
-        // Plate screws, from the rebate floor down into the bosses.
+        // Plate screws, from the rebate into the solid side of the cap.
         for (p = plate_screws)
-            translate([p[0], p[1], body_h - plate_t - 6])
-                cylinder(d = 1.8, h = 6 + eps, $fn = 16);
+            translate([p[0], p[1], bump_h - plate_t - 8])
+                cylinder(d = 1.8, h = 8 + eps, $fn = 16);
     }
 }
 
@@ -573,7 +569,7 @@ module assembly_solids() {
             plus_mark();
     color([0.10, 0.10, 0.11]) fader_placed();
     color([0.93, 0.40, 0.09])
-        translate([knob_x, knob_y, body_h])
+        translate([knob_x, knob_y, bump_h])
             knob();
     color([0.12, 0.12, 0.13]) {
         cap_placed(play_x, play_y, play_d, play_h);
@@ -587,7 +583,7 @@ module assembly_solids() {
             translate([p[0], p[1], body_h - 0.4])
                 cylinder(d = 2.6, h = 1.1, $fn = 20);
     color([0.94, 0.94, 0.92])
-        translate([plate_x0, plate_y0, body_h - plate_t])
+        translate([plate_x0, plate_y0, bump_h - plate_t])
             faceplate();
     color([0.18, 0.18, 0.18])
         foot_positions()

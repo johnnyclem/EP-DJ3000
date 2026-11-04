@@ -53,16 +53,19 @@ Don't engrave the deck. The first print tore out everywhere the type was
 cut into the top skin. FDM will not hold a shallow indent on a face this
 thin.
 
-The top 45 mm is a separate flat plate, 1.6 mm, sitting flush. Two M2
-screws hold it. Pull the knob off before lifting the plate.
+The top 52 mm of the deck rises from 16 mm to 22 mm. That cap is the
+battery door. A leaded 2×AA holder is 59 × 33 × 15 mm, and a 16 mm shell
+cannot hold it. The playing surface stays 16 mm so it still sits flush
+with a Sidekick. The door is the lid of the cap. Two M2s in the side
+margins hold it. Pull the knob off before lifting the door.
 
-Under the left side of that plate is the only battery volume in a 16 mm
-shell. The DevKit owns the middle and the screen owns the right, so what
-is left is a well 13 × 32 mm. A 5 × 12 × 30 mm pouch drops in and sits on
-a pedestal, 0.8 mm short of the plate, so the door does not crush it.
-An AAA is 10.5 mm round and the cavity is 10 mm, so a round cell does not
-fit. There is no charger and no protection circuit in this design. The
-unit still runs from USB. The pouch is there for when that circuit exists.
+The pocket under the door is 60 × 34.5 mm and 16 mm clear above the
+floor, so the 15 mm holder drops in without the door crushing the
+springs. It stops 10 mm short of the inside of the end wall. A jack body
+longer than that will hit the cells. The screen tapes to the underside
+of the door, in the air above the cells. The DevKit moves to the left,
+under the platter, and its USB reaches the back-panel window on a short
+lead. There is still no charger.
 
 The plate has one opening, cut to the glass: 30.5 × 11.85 mm. The module
 behind it is 40 × 12.85 mm, so about half a millimeter of board shows past

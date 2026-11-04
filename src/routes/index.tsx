@@ -38,13 +38,14 @@ function Home() {
       <dl className="grid grid-cols-3 divide-x divide-line border border-line">
         <Spec k="Height" v="240 mm" />
         <Spec k="Width" v="88 mm" />
-        <Spec k="Thick" v="16 mm" />
+        <Spec k="Thick" v="16 / 22" />
       </dl>
 
       <p className="text-sm leading-relaxed text-muted">
         The long edge matches the EP row, and the width matches a Sidekick. The 76 mm
         platter is centered, with 6 mm of deck on each side. The knob sits above it.
-        It is 16 mm thick, the same as a K.O. II and a Sidekick, so the cases sit flush.
+        It is 16 mm thick where it meets the row, the same as a K.O. II and a Sidekick.
+        The top 52 mm rises to 22 mm so a 2×AA holder fits under the door.
         The deck is not engraved. Type tore out of the first print, so the lettering
         is vinyl, cut 1:1 for a Cricut. The faceplate carries the name, the port row
         and the tempo label. The buttons are labeled on the deck.

@@ -89,9 +89,7 @@ named elsewhere in this repo are what v1.1 boards have, from memory: look at you
 
 * CUE (GPIO12) and REV (GPIO13): one terminal to the pin, the other to GND. Debounce is in firmware
   (`buttonDebounceMs`, default 4 ms). Optionally 100 nF across each switch.
-* Slide pot: 10 kΩ linear, ends to 3V3 and GND, wiper to GPIO1. Which end is "up" does not matter: `faderInvert` and
-  the calibration take care of it. A wiper that breaks contact for a moment reads 0 or 4095 for a sample: the
-  engine's filter rejects single-sample spikes, but do not use a scratchy pot.
+* Slide pot: the part in the shell is a dual-gang 75 mm fader, 60 mm travel, marked **B103** (10 kΩ linear). Use **one** gang. Ends of that gang to 3V3 and GND, wiper to GPIO1, 100 nF from the wiper to GND. Leave the second gang unconnected. Do not tie the two wipers together. Which end is "up" does not matter: `faderInvert` and the calibration take care of it. A wiper that breaks contact for a moment reads 0 or 4095 for a sample: the engine's filter rejects single-sample spikes, but do not use a scratchy pot.
 * Knob pot: 10 kΩ linear, same wiring, wiper to GPIO2.
 
 ## DAC: PCM5102A board (I2S, no I2C, no MCLK)

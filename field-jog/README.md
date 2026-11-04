@@ -165,23 +165,22 @@ The orange pieces are 0.6 mm. Print them slow, on a clean plate.
 - 1× M3×6 button head. This is the axle. Head hides in the pocket on the underside of the platter. Shank points down through the bearing. An M3×12 puts the magnet in the floor.
 - 1× 6×2.5 mm **diametric** magnet, glued to the end of that M3, for the AS5600.
 - 1× AS5600 breakout, headerless. Two M2 holes, 16 mm apart, on the pad under the platter. The pad top is at 3.5 mm. The chip wants 1–3 mm of air under the magnet. Measure the module before printing. A tall one will not fit.
-- 1× 6×2.5 mm magnet (axial is fine) in the fader lock.
-- 2× hall sensors, SS49E or A1302. Glue one to the top of each post beside the fader. Flat face toward the lock.
+- 1× dual-gang slide pot, 75 × 9 mm, 60 mm travel, B103 (10 k linear). One gang is the crossfader. Bend the pins flat.
 - 2× 6×6 mm tactile switches. Glue them under the button holes so the actuator passes into the stem.
 - 1× vertical 9 mm pot, 10k, if you want the orange knob to do something. Bushing is the 7.3 mm hole. The knob is a friction fit on a 6 mm shaft.
 - 1× ESP32-S3-DevKitC-1, headerless. The lip is 70 × 25.5 mm, USB toward the top window. Measure yours. The firmware targets this board.
 - 4× 3.5 mm TRS jacks on the top end, beside the USB-C window. Left pair is MIDI in and MIDI out. Right pair is line in and line out.
 - 1× 3.5 mm TRS headphone jack, centered on the fader end. The long sides are pin holes only.
 
-No slide pot. The crossfader is a loose block with a magnet, same idea as the red one, so it can be hit. The two halls read where it is. The curve is monotonic, not linear. Trim `FADER_LO` and `FADER_HI` in the sketch.
+The crossfader is a real slide pot, not the printed magnet block. The one that fits is 75 mm long, 9 mm wide, 60 mm of travel, dual-gang, marked B103 (10 k linear). The slot is 66 mm so the metal tang can finish its travel. Two rails under the deck pinch the body. Bend the eight pins flat into the channel in the floor. The M2 holes on the pot are 67 mm apart and sit on the same line as the slot, so they are not drilled through the skin. The printed cap pushes onto the tang. Do not print the magnet lock.
 
 ## Assembly
 
 1. Press the 683ZZ into the deck.
 2. Drop the M3 button head into the platter pocket, shank down, through the bearing. A tiny dot of threadlocker on the head so it stays in the platter and spins with it. Glue the diametric magnet to the shank end.
 3. Screw the AS5600 to the pad, chip up, under the magnet.
-4. Fader: push the stem down through the slot. Press the lock onto the stem from inside (0.2 mm interference; file it if it won't start). Glue the magnet into the lock, facing the posts.
-5. Glue the two halls to the posts. Glue the two tactiles under the button holes. Push the caps on.
+4. Slide pot into the cradle, lever up through the slot. Bend the pins flat into the floor channel. Push the printed cap onto the tang.
+5. Glue the tactiles under the button holes. Push the caps on.
 6. Pot in the corner hole, knob on the shaft.
 7. DevKit in the lip, native USB at the window. Flash over the UART port before the deck is closed.
 8. Four screws from the face into the bosses.

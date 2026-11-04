@@ -36,15 +36,23 @@ bearing_h = 3.0;
 shaft_hole = 5.6;     // ledge hole, clears an M3 shank, supports the bearing race
 
 /* [Fader] */
+// Dual-gang slide pot, 75 x 9 mm body, 60 mm travel, lever 1.2 mm thick.
+// B103 is 10 k linear. The slot clears the metal tang. The body is cradled
+// under the deck. Its M2 holes are 67 mm apart on the centerline, which is
+// the same line as the slot, so they are not drilled through the skin.
 fader_slot_w = 8.0;
-fader_slot_l = 64;
-fader_y0 = 26;
-fader_stem_w = 7.2;
-fader_stem_l = 13.0;
-fader_stem_below = 3.2;
+fader_slot_l = 66;
+fader_y0 = 25;
+pot_body_l = 75;
+pot_body_w = 9.6;     // 9 mm body, plus a little clearance
+pot_body_h = 7;
 cap_w = 22;
 cap_d = 14;
 cap_h = 8;
+tang_slot_w = 1.6;    // the lever is 1.2 mm thick
+tang_slot_l = 5.4;
+tang_slot_d = 5.5;
+pot_y0 = fader_y0 + fader_slot_l / 2 - pot_body_l / 2;
 
 /* [Knob] */
 knob_d = 16;
@@ -229,11 +237,13 @@ module bottom() {
                 translate([devkit_x0 - 0.4, devkit_y0 - 0.4, floor_t - eps])
                     cube([devkit_w + 0.8, devkit_l + 0.8, 1.2]);
             }
-            // Hall posts. Magnet in the fader lock passes these.
-            translate([hall_x, fader_y0 + 12, floor_t - eps])
-                cylinder(d = hall_d, h = hall_z_top - floor_t + eps, $fn = 24);
-            translate([hall_x, fader_y0 + fader_slot_l - 12, floor_t - eps])
-                cylinder(d = hall_d, h = hall_z_top - floor_t + eps, $fn = 24);
+            // Slide-pot cradle. The 75 mm body sits up against the deck.
+            // Two rails pinch the 9 mm width. A channel in the floor is
+            // where the pins go after they are bent flat.
+            translate([fader_cx - pot_body_w / 2 - 1.6, pot_y0, floor_t])
+                cube([1.6, pot_body_l, tray_h - pot_body_h - floor_t]);
+            translate([fader_cx + pot_body_w / 2, pot_y0, floor_t])
+                cube([1.6, pot_body_l, tray_h - pot_body_h - floor_t]);
             technic_ribs();
         }
 
@@ -268,9 +278,9 @@ module bottom() {
             translate([0, 0, -eps])
                 cylinder(d = foot_d, h = foot_h + eps, $fn = 28);
 
-        // faint centerline under the fader, inside the floor, as a glue guide
-        translate([fader_cx - 0.4, fader_y0 - 2, floor_t - 0.45])
-            cube([0.8, fader_slot_l + 4, 0.5]);
+        // Pin channel under the slide pot. Bend the pins flat into this.
+        translate([fader_cx - 4, pot_y0 + 2, floor_t - 1.2])
+            cube([8, pot_body_l - 4, 1.2 + eps]);
 
         technic_bores();
     }
@@ -399,29 +409,29 @@ module plus_mark() {
         plus_2d(14.6, 3.05);
 }
 
-// ---------- fader ----------
-// Print orientation: flat face of the cap on the bed, chamfer and stem pointing up.
-// Installed, the chamfer ends up against the deck (a small bevel) and the flat
-// face is what your hand hits. Stem drops through the slot.
+// Cap pushes onto the pot's metal tang. No stem, no magnet lock.
+// Print the flat face on the bed. The slot opens toward the deck.
+module fader() {
+    difference() {
+        hull() {
+            translate([-cap_w / 2, -cap_d / 2, 0])
+                cube([cap_w, cap_d, cap_h - 1.4]);
+            translate([-cap_w / 2 + 1.3, -cap_d / 2 + 1.3, cap_h - 1.4])
+                cube([cap_w - 2.6, cap_d - 2.6, 1.4]);
+        }
+        translate([-tang_slot_w / 2, -tang_slot_l / 2, cap_h - tang_slot_d])
+            cube([tang_slot_w, tang_slot_l, tang_slot_d + eps]);
+    }
+}
 
-stem_len = skin + fader_stem_below;
+// Old magnet lock. Not used with the slide pot. Kept so the export still builds.
+stem_len = skin + 3.2;
 lock_w = 16;
 lock_d = 20;
 lock_t = 5.4;
 socket_d = 2.0;
-
-module fader() {
-    hull() {
-        translate([-cap_w / 2, -cap_d / 2, 0])
-            cube([cap_w, cap_d, cap_h - 1.4]);
-        translate([-cap_w / 2 + 1.3, -cap_d / 2 + 1.3, cap_h - 1.4])
-            cube([cap_w - 2.6, cap_d - 2.6, 1.4]);
-    }
-    translate([-fader_stem_w / 2, -fader_stem_l / 2, cap_h - eps])
-        cube([fader_stem_w, fader_stem_l, stem_len + eps]);
-}
-
-// Socket faces up. Magnet pocket faces down (6 mm bridge, or pause and drop the magnet in).
+fader_stem_w = 7.2;
+fader_stem_l = 13.0;
 module fader_lock() {
     difference() {
         cube([lock_w, lock_d, lock_t]);
@@ -534,7 +544,6 @@ module assembly_solids() {
         translate([platter_cx, platter_cy, body_h - well_d + platter_t - 0.7])
             plus_mark();
     color([0.10, 0.10, 0.11]) fader_placed();
-    color([0.16, 0.16, 0.17]) fader_lock_placed();
     color([0.93, 0.40, 0.09])
         translate([knob_x, knob_y, body_h])
             knob();
@@ -619,7 +628,7 @@ echo("TRAY_H", tray_h, "CAVITY_H", tray_h - floor_t);
 echo("PLATTER_CENTER", platter_cx, platter_cy);
 echo("PLATTER_PROUD", platter_t - well_d);
 echo("KNOB", knob_x, knob_y);
-echo("FADER_TRAVEL", fader_slot_l - fader_stem_l);
+echo("FADER_TRAVEL", 60);
 echo("ENCODER_PAD_TOP_Z", encoder_pad_top);
 echo("HALL_POST_TOP_Z", hall_z_top);
 echo("DEVKIT", devkit_x0, devkit_y0, devkit_w, devkit_l);

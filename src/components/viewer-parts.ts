@@ -8,6 +8,7 @@ export const VIEW_ITEMS = [
   { id: "knob", label: "Knob" },
   { id: "button", label: "Cue / Play" },
   { id: "loop", label: "Loop" },
+  { id: "flange", label: "Clips" },
   { id: "plus", label: "Plus" },
   { id: "plate", label: "Plate" },
   { id: "foot", label: "Feet" },

@@ -15,7 +15,7 @@
 // Print the top and the platter face-up. See README.md.
 
 /* [Export] */
-part = "all"; // [all, section, top, bottom, platter, fader, fader_lock, knob, button, plus, faceplate, foot]
+part = "all"; // [all, section, top, bottom, platter, fader, fader_lock, knob, button, loop, flange, plus, faceplate, foot]
 
 /* [Body] */
 W = 88;
@@ -145,7 +145,23 @@ loop_h = 5.2;
 led_d = 3.1;
 rev_x = 71;
 rev_y = 48;
-stem_past = 2.4;      // how far the stem pokes through the skin onto a tactile
+stem_past = 2.4;      // unused. The stem is sized below, for a clip and a 6x6.
+// Printed plunger. 3.4 mm stem passes a 4.4 mm hole. The clip slides onto
+// the neck from inside the tray, and the tip meets a 6x6x5 mm tactile.
+// A 4.3 mm switch works with a scrap of tape under it. A 7 mm one, and
+// any 25 mm panel button, does not fit the 10 mm cavity.
+stem_d = 3.4;
+stem_hole = 4.4;
+neck_d = 2.2;
+neck_l = 2.0;
+neck_from_face = skin + 0.35;  // flange clears the skin when the cap is down
+tip_l = 2.05;
+flange_d = 8.6;
+flange_t = 1.8;
+tact_body = 6.3;     // 6.0 mm body, a little clearance
+nest_wall = 1.3;
+nest_rim = 1.5;
+nest_pad = 1.2;      // seat above the floor. Actuator of a 5 mm switch meets the tip.
 
 hall_x = fader_cx + 13;
 hall_z_top = 7.0;
@@ -257,6 +273,9 @@ module bottom() {
             translate([fader_cx + pot_body_w / 2, pot_y0, floor_t])
                 cube([1.6, pot_body_l, tray_h - pot_body_h - floor_t]);
             technic_ribs();
+            // Switch nests. The rim keeps a 6x6 from walking. The gap faces
+            // the middle of the deck so the pins can be bent out and soldered.
+            button_nests();
         }
 
         // M2.5 pilots, blind, from the rim down
@@ -359,7 +378,7 @@ module top_plate() {
         // Stem holes only. No square wells: a shallow pocket tears the top skin.
         for (p = [[play_x, play_y], [cue_x, cue_y], [in_x, in_y], [out_x, out_y], [rev_x, rev_y]])
             translate([p[0], p[1], tray_h - eps])
-                cylinder(d = 5.2, h = skin + 2 * eps, $fn = 28);
+                cylinder(d = stem_hole, h = skin + 2 * eps, $fn = 28);
         for (p = [[in_x + 11, in_y], [out_x + 11, out_y]])
             translate([p[0], p[1], tray_h - eps])
                 cylinder(d = led_d, h = skin + 2 * eps, $fn = 20);
@@ -504,13 +523,58 @@ module knob() {
     }
 }
 
+module button_stem(h) {
+    translate([0, 0, h - 0.8])
+        cylinder(d = stem_d, h = 0.8 + neck_from_face, $fn = 24);
+    translate([0, 0, h + neck_from_face])
+        cylinder(d = neck_d, h = neck_l, $fn = 20);
+    translate([0, 0, h + neck_from_face + neck_l])
+        cylinder(d = stem_d - 0.2, h = tip_l, $fn = 20);
+}
+
 module round_cap(d, h) {
     hull() {
         cylinder(d = d, h = 1.2, $fn = 64);
         translate([0, 0, h - 1.4]) cylinder(d = d - 1.4, h = 1.4, $fn = 64);
     }
-    translate([0, 0, h - 0.6])
-        cylinder(d = 4.4, h = skin + stem_past + 0.6, $fn = 24);
+    button_stem(h);
+}
+
+// Slides onto the neck from the side. The throat is narrower than the neck,
+// so it snaps and stays. Print it flat.
+module flange() {
+    difference() {
+        cylinder(d = flange_d, h = flange_t, $fn = 36);
+        translate([0, 0, -eps])
+            cylinder(d = neck_d + 0.4, h = flange_t + 2 * eps, $fn = 18);
+        translate([-1.0, -flange_d / 2, -eps])
+            cube([2.0, flange_d / 2, flange_t + 2 * eps]);
+    }
+}
+
+module button_nest(open_x) {
+    outer = tact_body + 2 * nest_wall;
+    translate([-outer / 2, -outer / 2, floor_t])
+        cube([outer, outer, nest_pad]);
+    difference() {
+        translate([-outer / 2, -outer / 2, floor_t + nest_pad])
+            cube([outer, outer, nest_rim]);
+        translate([-tact_body / 2, -tact_body / 2, floor_t + nest_pad - eps])
+            cube([tact_body, tact_body, nest_rim + 2 * eps]);
+        // Pin gap, toward the middle of the deck.
+        translate([open_x > 0 ? tact_body / 2 - 0.4 : -outer / 2 - 0.2,
+                   -1.5,
+                   floor_t + nest_pad - eps])
+            cube([nest_wall + 0.8, 3.0, nest_rim + 2 * eps]);
+    }
+}
+
+module button_nests() {
+    for (p = [[play_x, play_y, 1], [cue_x, cue_y, 1], [in_x, in_y, 1], [out_x, out_y, 1]])
+        translate([p[0], p[1], 0])
+            button_nest(p[2]);
+    translate([rev_x, rev_y, 0])
+        button_nest(-1);
 }
 
 module button() { round_cap(play_d, play_h); }
@@ -635,6 +699,8 @@ if (part == "all") {
     button();
 } else if (part == "loop") {
     loop_button();
+} else if (part == "flange") {
+    flange();
 } else if (part == "plus") {
     plus_mark();
 } else if (part == "faceplate") {

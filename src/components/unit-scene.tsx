@@ -54,6 +54,18 @@ const PIECES: Piece[] = [
       { position: [71, 48, 21.2], rotation: [Math.PI, 0, 0] },
     ],
   },
+  {
+    id: "flange",
+    file: "flange.stl",
+    color: "#2a2a2c",
+    poses: [
+      { position: [17, 36, 9.55] },
+      { position: [17, 60, 9.55] },
+      { position: [17, 86, 9.55] },
+      { position: [17, 102, 9.55] },
+      { position: [71, 48, 9.55] },
+    ],
+  },
   { id: "plus", file: "plus.stl", color: ORANGE, poses: [{ position: [44, 148, 18.4] }] },
   { id: "plate", file: "faceplate.stl", color: "#f4f4f0", poses: [{ position: [3, 188, 20.4] }] },
   {

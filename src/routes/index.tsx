@@ -12,6 +12,8 @@ const PARTS = [
   ["fader_lock.stl", "Fader lock", "Black"],
   ["knob.stl", "Knob", "Orange"],
   ["button.stl", "Button ×2", "Black"],
+  ["loop.stl", "Loop button ×3", "Black"],
+  ["flange.stl", "Button clip ×5", "Black"],
   ["plus.stl", "Platter mark", "Orange"],
   ["tab.stl", "USB tab", "Orange"],
   ["bar.stl", "Name bar", "Orange"],

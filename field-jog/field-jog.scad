@@ -37,21 +37,21 @@ shaft_hole = 5.6;     // ledge hole, clears an M3 shank, supports the bearing ra
 
 /* [Fader] */
 // Dual-gang slide pot, 75 x 9 mm body, 60 mm travel, lever 1.2 mm thick.
-// B103 is 10 k linear. The slot clears the metal tang. The body is cradled
-// under the deck. Its M2 holes are 67 mm apart on the centerline, which is
-// the same line as the slot, so they are not drilled through the skin.
-fader_slot_w = 8.0;
-fader_slot_l = 66;
-fader_y0 = 25;
+// B103 is 10 k linear. Body is 7.5 mm tall, so the rails leave 8.2 mm and
+// the two M2s pull it up against the deck. The slot clears the 1.2 mm lever.
+fader_slot_w = 3.4;     // the lever is 1.2 mm. The old 8 mm slot was for the printed stem
+fader_slot_l = 62;      // 60 mm travel, plus the lever, plus a hair
+fader_y0 = 27;          // center stays at y = 58, under the 75 mm body
 pot_body_l = 75;
-pot_body_w = 9.6;     // 9 mm body, plus a little clearance
-pot_body_h = 7;
+pot_body_w = 9.6;       // 9 ± 0.5 mm body
+pot_body_h = 8.2;       // drawing says 7.5. Leave room so the rails don't crush it
 cap_w = 22;
 cap_d = 14;
 cap_h = 8;
-tang_slot_w = 1.6;    // the lever is 1.2 mm thick
+tang_slot_w = 1.45;     // press fit on the 1.2 mm tang. 1.6 rocked
 tang_slot_l = 5.4;
-tang_slot_d = 5.5;
+tang_slot_d = 6.6;      // the tang only sticks a few mm past the skin
+pot_screw_span = 67;    // the two M2 threads, on the centerline
 pot_y0 = fader_y0 + fader_slot_l / 2 - pot_body_l / 2;
 
 /* [Knob] */
@@ -326,9 +326,15 @@ module top_plate() {
         translate([platter_cx, platter_cy, ledge_z - eps])
             cylinder(d = shaft_hole, h = ledge + 2 * eps, $fn = 32);
 
-        // crossfader slot
+        // crossfader slot. Narrow: only the 1.2 mm lever comes through.
         translate([fader_cx, 0, tray_h - eps])
             y_round_slot(fader_slot_w, fader_y0, fader_y0 + fader_slot_l, 0, skin + 2 * eps);
+
+        // M2 into the pot's own threads. 67 mm apart, just past the ends of
+        // the slot, so the screws don't break into the opening.
+        for (s = [-1, 1])
+            translate([fader_cx, fader_y0 + fader_slot_l / 2 + s * pot_screw_span / 2, tray_h - eps])
+                cylinder(d = 2.2, h = skin + 2 * eps, $fn = 18);
 
         // Stem holes only. No square wells: a shallow pocket tears the top skin.
         for (p = [[play_x, play_y], [cue_x, cue_y], [in_x, in_y], [out_x, out_y], [rev_x, rev_y]])

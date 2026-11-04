@@ -40,8 +40,8 @@ const PIECES: Piece[] = [
     file: "button.stl",
     color: BLACK,
     poses: [
-      { position: [17, 36, 23], rotation: [Math.PI, 0, 0] },
-      { position: [17, 60, 23], rotation: [Math.PI, 0, 0] },
+      { position: [17, 36, 25], rotation: [Math.PI, 0, 0] },
+      { position: [17, 60, 25], rotation: [Math.PI, 0, 0] },
     ],
   },
   {
@@ -49,9 +49,9 @@ const PIECES: Piece[] = [
     file: "loop.stl",
     color: BLACK,
     poses: [
-      { position: [17, 86, 21.2], rotation: [Math.PI, 0, 0] },
-      { position: [17, 102, 21.2], rotation: [Math.PI, 0, 0] },
-      { position: [71, 48, 21.2], rotation: [Math.PI, 0, 0] },
+      { position: [17, 86, 23.2], rotation: [Math.PI, 0, 0] },
+      { position: [17, 102, 23.2], rotation: [Math.PI, 0, 0] },
+      { position: [71, 48, 23.2], rotation: [Math.PI, 0, 0] },
     ],
   },
   {
@@ -59,11 +59,11 @@ const PIECES: Piece[] = [
     file: "flange.stl",
     color: "#2a2a2c",
     poses: [
-      { position: [17, 36, 9.55] },
-      { position: [17, 60, 9.55] },
-      { position: [17, 86, 9.55] },
-      { position: [17, 102, 9.55] },
-      { position: [71, 48, 9.55] },
+      { position: [17, 36, 9.85] },
+      { position: [17, 60, 9.85] },
+      { position: [17, 86, 9.85] },
+      { position: [17, 102, 9.85] },
+      { position: [71, 48, 9.85] },
     ],
   },
   { id: "plus", file: "plus.stl", color: ORANGE, poses: [{ position: [44, 148, 18.4] }] },

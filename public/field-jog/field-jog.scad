@@ -145,23 +145,24 @@ loop_h = 5.2;
 led_d = 3.1;
 rev_x = 71;
 rev_y = 48;
-stem_past = 2.4;      // unused. The stem is sized below, for a clip and a 6x6.
-// Printed plunger. 3.4 mm stem passes a 4.4 mm hole. The clip slides onto
-// the neck from inside the tray, and the tip meets a 6x6x5 mm tactile.
-// A 4.3 mm switch works with a scrap of tape under it. A 7 mm one, and
-// any 25 mm panel button, does not fit the 10 mm cavity.
+// Plunger. A 2 mm boss on the deck makes a 6.2 mm guide, so the cap cannot
+// rock. Travel is 0.45 mm: the click, then the cap stops, before the dome
+// is crushed. Bore is 3.85. If it grinds, run a 3.5 mm drill through it.
 stem_d = 3.4;
-stem_hole = 4.4;
+stem_hole = 3.85;
+btn_travel = 0.45;
+guide_h = 2.0;
+guide_d = 7.6;
 neck_d = 2.2;
-neck_l = 2.0;
-neck_from_face = skin + 0.35;  // flange clears the skin when the cap is down
-tip_l = 2.05;
+neck_l = 1.9;
+neck_from_face = guide_h + skin + btn_travel;
+tip_l = 2.0;
 flange_d = 8.6;
-flange_t = 1.8;
+flange_t = 1.5;
 tact_body = 6.3;     // 6.0 mm body, a little clearance
 nest_wall = 1.3;
 nest_rim = 1.5;
-nest_pad = 1.2;      // seat above the floor. Actuator of a 5 mm switch meets the tip.
+nest_pad = 1.2;      // 5 mm switch. The tip is on the actuator at rest.
 
 hall_x = fader_cx + 13;
 hall_z_top = 7.0;
@@ -350,6 +351,11 @@ module top_plate() {
             for (p = plate_screws)
                 translate([p[0], p[1], tray_h - 4])
                     cylinder(d = 5.4, h = 4 + eps, $fn = 24);
+            // Button guides. The cap stops on the boss, so the face of the
+            // deck never takes the blow. Hidden under the cap.
+            for (p = [[play_x, play_y], [cue_x, cue_y], [in_x, in_y], [out_x, out_y], [rev_x, rev_y]])
+                translate([p[0], p[1], body_h])
+                    cylinder(d = guide_d, h = guide_h, $fn = 40);
         }
 
         // platter well
@@ -375,10 +381,13 @@ module top_plate() {
             translate([fader_cx, fader_y0 + fader_slot_l / 2 + s * pot_screw_span / 2, tray_h - eps])
                 cylinder(d = 2.2, h = skin + 2 * eps, $fn = 18);
 
-        // Stem holes only. No square wells: a shallow pocket tears the top skin.
-        for (p = [[play_x, play_y], [cue_x, cue_y], [in_x, in_y], [out_x, out_y], [rev_x, rev_y]])
+        // Guided stem hole, through the boss and the skin, with a lead-in.
+        for (p = [[play_x, play_y], [cue_x, cue_y], [in_x, in_y], [out_x, out_y], [rev_x, rev_y]]) {
             translate([p[0], p[1], tray_h - eps])
-                cylinder(d = stem_hole, h = skin + 2 * eps, $fn = 28);
+                cylinder(d = stem_hole, h = skin + guide_h + 2 * eps, $fn = 28);
+            translate([p[0], p[1], body_h + guide_h - 0.45])
+                cylinder(d1 = stem_hole, d2 = stem_hole + 1.6, h = 0.7, $fn = 28);
+        }
         for (p = [[in_x + 11, in_y], [out_x + 11, out_y]])
             translate([p[0], p[1], tray_h - eps])
                 cylinder(d = led_d, h = skin + 2 * eps, $fn = 20);
@@ -581,7 +590,7 @@ module button() { round_cap(play_d, play_h); }
 module loop_button() { round_cap(loop_d, loop_h); }
 
 module cap_placed(x, y, d, h) {
-    translate([x, y, body_h + h])
+    translate([x, y, body_h + guide_h + h])
         rotate([180, 0, 0])
             round_cap(d, h);
 }

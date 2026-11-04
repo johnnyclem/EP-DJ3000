@@ -103,7 +103,7 @@ plate_screws = [[22, 191], [48, 191]];
 // of board past the glass on the short sides). Tape it to the underside.
 oled_w = 30.5;
 oled_h = 11.85;
-oled_cx = 31;   // plate-local, left of the knob
+oled_cx = 39;   // plate-local. Shifted toward the knob so a pouch fits on the left.
 oled_cy = 30;
 
 encoder_pad_top = 3.5;   // headerless AS5600. 6.2 left 1.9 mm and the chip hit the magnet
@@ -116,6 +116,15 @@ devkit_l = 70;
 devkit_w = 25.5;
 devkit_x0 = W / 2 - devkit_w / 2;
 devkit_y0 = H - wall - 2 - devkit_l;
+
+// One flat pouch behind the faceplate, left of the DevKit. AAA is 10.5 mm
+// round and the cavity is 10 mm, so a round cell does not fit. The pouch
+// is 5 x 12 x 30 mm. The door clamps it. There is no holder spring.
+cell_x0 = 11.2;
+cell_y0 = 198;
+cell_w = 13.0;
+cell_l = 32.0;
+cell_t = 5.2;
 
 // Cue and play on the lower left, clear of the scratch fader.
 play_x = 17;
@@ -237,6 +246,10 @@ module bottom() {
                 translate([devkit_x0 - 0.4, devkit_y0 - 0.4, floor_t - eps])
                     cube([devkit_w + 0.8, devkit_l + 0.8, 1.2]);
             }
+            // Pouch pedestal. A 5.2 mm cell ends 0.8 mm short of the plate.
+            translate([cell_x0 + 0.8, cell_y0 + 0.8, floor_t])
+                cube([cell_w - 1.6, cell_l - 1.6,
+                      body_h - plate_t - cell_t - 0.8 - floor_t]);
             // Slide-pot cradle. The 75 mm body sits up against the deck.
             // Two rails pinch the 9 mm width. A channel in the floor is
             // where the pins go after they are bent flat.
@@ -360,8 +373,13 @@ module top_plate() {
         translate([plate_x0, plate_y0, body_h - plate_t])
             cube([plate_w, plate_h, plate_t + eps]);
 
-        // Screen. The deck opens only for the glass. The 40 x 12.85 mm
-        // board sits in a pocket behind the plate and does not show.
+        // Battery well. Opens when the faceplate comes off. Left of the screen.
+        translate([cell_x0, cell_y0, tray_h - eps])
+            cube([cell_w, cell_l, skin + 2 * eps]);
+        // Pinch notch at the jack end of the well, still under the plate.
+        translate([cell_x0 + cell_w / 2, cell_y0 + cell_l - 1.5, tray_h - eps])
+            cylinder(d = 8, h = skin + 2 * eps, $fn = 24);
+        // Screen. The 40 x 12.85 mm board sits in a pocket and does not show.
         translate([plate_x0 + oled_cx - 20.3, plate_y0 + oled_cy - 6.7, body_h - plate_t - 1.6])
             cube([40.6, 13.4, 1.6 + eps]);
         translate([plate_x0 + oled_cx - oled_w / 2, plate_y0 + oled_cy - oled_h / 2, tray_h - eps])

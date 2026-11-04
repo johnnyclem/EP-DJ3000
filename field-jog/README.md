@@ -53,11 +53,16 @@ Don't engrave the deck. The first print tore out everywhere the type was
 cut into the top skin. FDM will not hold a shallow indent on a face this
 thin.
 
-The top 45 mm is a separate flat plate, 1.6 mm, sitting flush over the
-battery bay. It is blank on purpose. Silkscreen it, or stick a vinyl
-label on it, the way the Sidekick faceplate is printed and not molded
-with type. Two M2 screws hold it, on the platter side of the bay. Pull
-the knob off before lifting the plate. The pot stays on the deck.
+The top 45 mm is a separate flat plate, 1.6 mm, sitting flush. Two M2
+screws hold it. Pull the knob off before lifting the plate.
+
+Under the left side of that plate is the only battery volume in a 16 mm
+shell. The DevKit owns the middle and the screen owns the right, so what
+is left is a well 13 × 32 mm. A 5 × 12 × 30 mm pouch drops in and sits on
+a pedestal, 0.8 mm short of the plate, so the door does not crush it.
+An AAA is 10.5 mm round and the cavity is 10 mm, so a round cell does not
+fit. There is no charger and no protection circuit in this design. The
+unit still runs from USB. The pouch is there for when that circuit exists.
 
 The plate has one opening, cut to the glass: 30.5 × 11.85 mm. The module
 behind it is 40 × 12.85 mm, so about half a millimeter of board shows past

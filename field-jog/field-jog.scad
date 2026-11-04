@@ -360,11 +360,15 @@ module top_plate() {
         translate([plate_x0, plate_y0, body_h - plate_t])
             cube([plate_w, plate_h, plate_t + eps]);
 
-        // Bay. Stops short of the knob so the pot still has a deck to clamp to.
-        translate([plate_x0 + plate_ledge, plate_y0 + 6, tray_h - eps])
-            cube([knob_x - 10 - (plate_x0 + plate_ledge),
-                  plate_h - 6 - plate_ledge,
-                  skin + 2 * eps]);
+        // Screen. The deck opens only for the glass. The 40 x 12.85 mm
+        // board sits in a pocket behind the plate and does not show.
+        translate([plate_x0 + oled_cx - 20.3, plate_y0 + oled_cy - 6.7, body_h - plate_t - 1.6])
+            cube([40.6, 13.4, 1.6 + eps]);
+        translate([plate_x0 + oled_cx - oled_w / 2, plate_y0 + oled_cy - oled_h / 2, tray_h - eps])
+            cube([oled_w, oled_h, skin + 2 * eps]);
+        // Pins drop into the tray on the platter side of the board.
+        translate([plate_x0 + oled_cx - 6, plate_y0 + oled_cy - 9.6, tray_h - eps])
+            cube([12, 3.2, skin + 2 * eps]);
 
         // Plate screws, from the rebate floor down into the bosses.
         for (p = plate_screws)

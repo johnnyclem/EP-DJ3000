@@ -45,10 +45,9 @@ function Home() {
         The long edge matches the EP row, and the width matches a Sidekick. The 76 mm
         platter is centered, with 6 mm of deck on each side. The knob sits above it.
         It is 16 mm thick, the same as a K.O. II and a Sidekick, so the cases sit flush.
-        The deck is not engraved. Type tore out of the first print. The top 45 mm
-        is a blank plate over the battery bay, meant to be silkscreened. A thin slot
-        in it takes a 0.91 inch 128×32 screen. Cue and play are round, lower left.
-        Loop in and out sit above them, each with an LED. Tempo is the knob, not a fader.
+        The deck is not engraved. Type tore out of the first print, so the lettering
+        is vinyl, cut 1:1 for a Cricut. The faceplate carries the name, the port row
+        and the tempo label. The buttons are labeled on the deck.
         Pin holes are 16, 25, 48, 216 and 224 mm from the fader end, 8 mm off the
         bottom, on both long sides.
       </p>
@@ -61,6 +60,39 @@ function Home() {
       >
         Download print files
       </a>
+
+      <section className="flex flex-col gap-3">
+        <h2 className="font-mono text-xs tracking-widest text-muted uppercase">Vinyl</h2>
+        <img
+          src="/field-jog/silk/preview.png"
+          alt="Vinyl lettering laid out on the deck, jacks at the top"
+          className="w-full border border-line"
+        />
+        <p className="text-sm leading-relaxed text-muted">
+          Cut this in black vinyl. The screen, the knob and the platter stay clear.
+          On the mat file the left piece is the deck and the right piece is the
+          faceplate. A 10 mm bar sits in the gap. If the import comes in small,
+          scale it until that bar is 10 mm.
+        </p>
+        <div className="flex flex-wrap gap-4 font-mono text-xs tracking-wide text-accent uppercase">
+          <a href="/field-jog/silk/mat-cut.svg" target="_blank" rel="noreferrer">
+            Mat
+          </a>
+          <a href="/field-jog/silk/deck-cut.svg" target="_blank" rel="noreferrer">
+            Deck
+          </a>
+          <a href="/field-jog/silk/faceplate-cut.svg" target="_blank" rel="noreferrer">
+            Faceplate
+          </a>
+          <a href="/field-jog/silk/deck-guide.svg" target="_blank" rel="noreferrer">
+            Deck guide
+          </a>
+          <a href="/field-jog/silk/faceplate-guide.svg" target="_blank" rel="noreferrer">
+            Plate guide
+          </a>
+        </div>
+      </section>
+
 
       <section className="flex flex-col gap-3">
         <h2 className="font-mono text-xs tracking-widest text-muted uppercase">Parts</h2>

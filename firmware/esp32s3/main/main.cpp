@@ -65,6 +65,7 @@
 #include "epdj_hal/dac_detect.h"
 #include "epdj_hal/board_pins.h"
 #include "epdj_hal/i2c_bus.h"
+#include "epdj_hal/oled.h"
 #include "epdj_hal/nvs_store.h"
 #include "epdj_hal/sensor_budget.h"
 #include "epdj_link/radio.h"
@@ -310,6 +311,23 @@ extern "C" void app_main(void) {
 
   if (radioOn) ESP_LOGI(TAG, "link group %u (%s)", static_cast<unsigned>(app::effectiveLinkGroup(g_rt)),
                         g_cfg.get(proto::ConfigKey::LinkGroup) != 0 ? "linkGroup config key" : "build default");
+
+  // 512 bytes on the 400 kHz bus is about 12 ms. Painted here, once, before the engine task exists, so a frame
+  // can never sit in front of an AS5600 read.
+  const char* encLine = "NO ENCODER";
+  if (g_as5600.present()) {
+    switch (g_as5600.magnet()) {
+      case hal::sensor_budget::Magnet::Ok: encLine = "MAGNET OK"; break;
+      case hal::sensor_budget::Magnet::TooWeak: encLine = "MAGNET TOO WEAK"; break;
+      case hal::sensor_budget::Magnet::TooStrong: encLine = "MAGNET TOO CLOSE"; break;
+      case hal::sensor_budget::Magnet::Missing: encLine = "NO MAGNET"; break;
+      default: encLine = "MAGNET ?"; break;
+    }
+  }
+  const hal::OledBringup oled = hal::oledBringup(g_i2c, g_cfg.deck() == proto::Deck::A ? 'A' : 'B', encLine);
+  if (!oled.present && g_i2c.ok()) {
+    ESP_LOGW(TAG, "oled stayed blank: no SSD1306 on SDA GPIO%d SCL GPIO%d", pins::kI2cSda, pins::kI2cScl);
+  }
 
   app::startEngineTask(&g_rt);
   app::startDiagTask(&g_rt);

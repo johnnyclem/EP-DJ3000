@@ -1,4 +1,4 @@
-// The one I2C master bus (SDA/SCL from board_pins.h): AS5600 encoder and the optional DAC codec probe.
+// The one I2C master bus (SDA/SCL from board_pins.h): AS5600 encoder, optional SSD1306, optional DAC codec probe.
 #pragma once
 #include <cstdint>
 

@@ -135,6 +135,23 @@ function Home() {
           </a>
         </p>
       </section>
+      <section className="flex flex-col gap-2 text-sm leading-relaxed">
+        <h2 className="font-mono text-xs tracking-widest text-muted uppercase">ECM sleeve</h2>
+        <p className="text-muted">
+          A 96 × 18.8 mm handheld shell for an ECM-77B head. The capsule slides in from the tip and the cable leaves the back. The orange button is a cap.
+        </p>
+        <p className="flex gap-4">
+          <a className="text-fg underline" href="/ecm-handy/body.stl" target="_blank" rel="noreferrer">
+            Body
+          </a>
+          <a className="text-fg underline" href="/ecm-handy/button.stl" target="_blank" rel="noreferrer">
+            Button
+          </a>
+          <a className="text-fg underline" href="/ecm-handy/ecm-handy.scad" target="_blank" rel="noreferrer">
+            SCAD
+          </a>
+        </p>
+      </section>
     </main>
   );
 }

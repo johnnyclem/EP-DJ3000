@@ -10,7 +10,6 @@ export const VIEW_ITEMS = [
   { id: "loop", label: "Loop" },
   { id: "flange", label: "Clips" },
   { id: "plus", label: "Plus" },
-  { id: "plate", label: "Plate" },
   { id: "foot", label: "Feet" },
 ] as const;
 

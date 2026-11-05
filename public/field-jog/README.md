@@ -53,21 +53,21 @@ Don't engrave the deck. The first print tore out everywhere the type was
 cut into the top skin. FDM will not hold a shallow indent on a face this
 thin.
 
-The top 52 mm of the deck rises from 16 mm to 22 mm. That cap is the
-battery door. A leaded 2×AA holder is 59 × 33 × 15 mm, and a 16 mm shell
-cannot hold it. The playing surface stays 16 mm so it still sits flush
-with a Sidekick. The door is the lid of the cap. Two M2s in the side
-margins hold it. Pull the knob off before lifting the door.
+The top 52 mm of the deck rises from 16 mm to 22 mm, and that rise is
+part of the top shell. There is no separate battery door. A leaded 2×AA
+holder is 59 × 33 × 15 mm, and a 16 mm shell cannot hold it, so the cells
+sit in a pocket that opens downward. Pull the knob off, then lift the
+top. Four 5 × 20 × 2 mm magnets in the tray meet four in the lid.
 
-The pocket under the door is 60 × 34.5 mm and 16 mm clear above the
-floor, so the 15 mm holder drops in without the door crushing the
-springs. It stops 10 mm short of the inside of the end wall. A jack body
+The pocket is 60 × 34.5 mm. The cells hang into the tray and the roof
+over them is 4 mm of the top shell, so the springs are not crushed. It
+stops about 10 mm short of the inside of the end wall. A jack body
 longer than that will hit the cells. The screen tapes to the underside
-of the door, in the air above the cells. The DevKit moves to the left,
+of the roof, in the air above the cells. The DevKit moves to the left,
 under the platter, and its USB reaches the back-panel window on a short
 lead. There is still no charger.
 
-The plate has one opening, cut to the glass: 30.5 × 11.85 mm. The module
+The roof has one opening, cut to the glass: 30.5 × 11.85 mm. The module
 behind it is 40 × 12.85 mm, so about half a millimeter of board shows past
 the glass on the short sides and that lip is what keeps it from falling
 through. Tape it to the underside, pins bent down into the bay. It is the
@@ -168,7 +168,7 @@ The orange pieces are 0.6 mm. Print them slow, on a clean plate.
 
 ## Bill of materials
 
-- 4× M2.5×12 self-tapping screws (pan head). Pilots in the bosses are 2.15 mm. Heads sit in the four corner counterbores.
+- 8× 5 × 20 × 2 mm magnets. Four in the tray, four in the lid, at the same four corners. The pocket is 21 × 6 × 2.5 mm. The extra 0.5 mm on each side is wiggle room. The extra 0.5 mm of depth is glue behind the magnet. Press each one flush with the mating face. Opposite poles face each other, or the case will push apart.
 - 1× 683ZZ bearing, 3×7×3 mm. Press into the platter well from above. It should sit about 0.4 mm below the floor of the well. If it stands proud, it will scrape.
 - 1× M3×6 button head. This is the axle. Head hides in the pocket on the underside of the platter. Shank points down through the bearing. An M3×12 puts the magnet in the floor.
 - 1× 6×2.5 mm **diametric** magnet, glued to the end of that M3, for the AS5600.

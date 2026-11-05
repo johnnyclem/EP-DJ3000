@@ -4,10 +4,9 @@
 // Not a TE product, and not a copy of the Frisk Fader / Scratch Ninja STL.
 //
 // Default size 88 x 240. The playing surface is 16 mm, same as an EP-133
-// and an EP-136, so the cases sit flush. The top 52 mm rises to 22 mm.
-// That cap is the battery door: a 59 x 33 x 15 mm 2xAA holder will not
-// fit in a 16 mm shell. The 683ZZ lives in a sleeve that hangs below the
-// deck, and the fader lock rides in the cavity under it.
+// and an EP-136, so the cases sit flush. The top 52 mm rises to 22 mm so
+// the 2xAA holder fits. That rise is part of the top shell, not a door.
+// The two halves close on four pairs of 5 x 20 x 2 mm magnets.
 //
 // OpenSCAD customizer: change `part` to export one piece.
 //   openscad -D 'part="top"' -o top.stl field-jog.scad
@@ -15,7 +14,7 @@
 // Print the top and the platter face-up. See README.md.
 
 /* [Export] */
-part = "all"; // [all, section, top, bottom, platter, fader, fader_lock, knob, button, loop, flange, plus, faceplate, foot]
+part = "all"; // [all, section, top, bottom, platter, fader, fader_lock, knob, button, loop, flange, plus, foot]
 
 /* [Body] */
 W = 88;
@@ -88,17 +87,36 @@ platter_cx = W / 2;
 platter_cy = 148;
 fader_cx = W / 2;
 
-// Raised cap over the top end, like a TE battery hump. The rest stays 16 mm.
+// Raised cap over the top end. Same piece as the deck. The cells come out
+// when the top shell comes off.
 bump_y0 = 188;
 bump_h = 22;
 
-// Door, flush with the cap. Two M2s in the side margins, clear of the cells.
+// 5 x 20 x 2 mm magnets, four in the tray and four in the lid. The pocket
+// is 0.5 mm large on every side in plan. Depth is the magnet plus 0.5 mm
+// of glue behind it, so the faces sit flush and touch when the case closes.
+mag_l = 20;
+mag_w = 5;
+mag_t = 2;
+mag_clear = 0.5;
+mag_glue = 0.5;
+mag_pocket_l = mag_l + 2 * mag_clear;   // 21
+mag_pocket_w = mag_w + 2 * mag_clear;   // 6
+mag_pocket_d = mag_t + mag_glue;        // 2.5
+// Long axis across the case, just inside each short end.
+mag_pockets = [
+    [6, 4.6],
+    [W - 6 - mag_pocket_l, 4.6],
+    [6, H - 4.6 - mag_pocket_w],
+    [W - 6 - mag_pocket_l, H - 4.6 - mag_pocket_w]
+];
+
+// Door outline, kept so the OLED stays where the vinyl expects it.
 plate_t = 1.6;
 plate_x0 = 3;
 plate_y0 = 188;
 plate_w = 82;
 plate_h = 46;
-plate_screws = [[7, 208], [81, 204]];
 
 // Measured module, not the catalog 0.91" drawing. Glass is 30.5 x 11.85.
 // The PCB is 40 x 12.85 and tapes to the underside of the door, in the
@@ -209,6 +227,18 @@ module foot_positions() {
     translate([W - foot_inset, H - foot_inset]) children();
 }
 
+// Posts the magnets sit in. Fused to the short wall.
+module magnet_posts() {
+    for (p = mag_pockets) {
+        x0 = p[0] - 1.2;
+        x1 = p[0] + mag_pocket_l + 1.2;
+        y0 = p[1] < H / 2 ? wall - eps : p[1] - 1.2;
+        y1 = p[1] < H / 2 ? p[1] + mag_pocket_w + 1.2 : H - wall + eps;
+        translate([x0, y0, floor_t])
+            cube([x1 - x0, y1 - y0, tray_h - floor_t]);
+    }
+}
+
 // Local rib so a pin has a real bore. The side wall alone is only 2.6 mm.
 module technic_ribs() {
     rib_x = technic_depth + 1.4 - wall;
@@ -250,10 +280,8 @@ module bottom() {
                 translate([wall, wall, floor_t])
                     rounded_box(W - 2 * wall, H - 2 * wall, tray_h, max(0.8, R - wall + 0.4));
             }
-            // screw bosses, flush with the rim
-            screw_positions()
-                translate([0, 0, floor_t - eps])
-                    cylinder(d = boss_d, h = tray_h - floor_t + eps, $fn = 32);
+            // Magnet posts, one per corner. The pocket opens on the rim.
+            magnet_posts();
             // AS5600 pad. Top of pad is the board seat (solder wires, no tall headers).
             translate([platter_cx - encoder_pad_w / 2,
                        platter_cy - encoder_pad_d / 2,
@@ -279,10 +307,10 @@ module bottom() {
             button_nests();
         }
 
-        // M2.5 pilots, blind, from the rim down
-        screw_positions()
-            translate([0, 0, tray_h - pilot_depth])
-                cylinder(d = pilot_d, h = pilot_depth + eps, $fn = 18);
+        // Magnet pockets, opening on the rim. Glue goes in the bottom 0.5 mm.
+        for (p = mag_pockets)
+            translate([p[0], p[1], tray_h - mag_pocket_d])
+                cube([mag_pocket_l, mag_pocket_w, mag_pocket_d + eps]);
 
         // M2 pilots in the encoder pad. Blind, and they stop inside the floor.
         for (dx = [-8, 8])
@@ -347,10 +375,6 @@ module top_plate() {
             // Sleeve drops into the tray so a 3 mm bearing fits in a 16 mm case.
             translate([platter_cx, platter_cy, ledge_z])
                 cylinder(d = bearing_d + 6.4, h = body_h - well_d - ledge_z, $fn = 48);
-            // M2 bosses under the battery-plate screws. Hang into the tray.
-            for (p = plate_screws)
-                translate([p[0], p[1], tray_h - 4])
-                    cylinder(d = 5.4, h = 4 + eps, $fn = 24);
             // Button guides. The cap stops on the boss, so the face of the
             // deck never takes the blow. Hidden under the cap.
             for (p = [[play_x, play_y], [cue_x, cue_y], [in_x, in_y], [out_x, out_y], [rev_x, rev_y]])
@@ -392,30 +416,25 @@ module top_plate() {
             translate([p[0], p[1], tray_h - eps])
                 cylinder(d = led_d, h = skin + 2 * eps, $fn = 20);
 
+        // Magnet pockets in the underside of the lid, matching the tray.
+        for (p = mag_pockets)
+            translate([p[0], p[1], tray_h - eps])
+                cube([mag_pocket_l, mag_pocket_w, mag_pocket_d + eps]);
+
         // pot / knob bushing, through the cap
         translate([knob_x, knob_y, tray_h - eps])
             cylinder(d = 7.3, h = bump_h - tray_h + 2 * eps, $fn = 36);
 
-        // screw counterbores, from the face
-        screw_positions() {
-            translate([0, 0, body_h - cbore_h])
-                cylinder(d = cbore_d, h = cbore_h + eps, $fn = 24);
-            translate([0, 0, tray_h - eps])
-                cylinder(d = 2.8, h = skin + 2 * eps, $fn = 18);
-        }
-
-        // Door rebate, flush with the top of the cap.
-        translate([plate_x0, plate_y0, bump_h - plate_t])
-            cube([plate_w, plate_h, plate_t + eps]);
-
-        // 2xAA holder. Opens into the tray when the door comes off.
+        // Cells. Open downward only. The roof is the top shell.
         translate([holder_x0, holder_y0, tray_h - eps])
-            cube([holder_l, holder_w, bump_h - tray_h + 2 * eps]);
+            cube([holder_l, holder_w, 6.2]);
 
-        // Plate screws, from the rebate into the solid side of the cap.
-        for (p = plate_screws)
-            translate([p[0], p[1], bump_h - plate_t - 8])
-                cylinder(d = 1.8, h = 8 + eps, $fn = 16);
+        // OLED. Glass through the roof, board pocket just under it so the
+        // 40 x 12.85 module stops on the lip and cannot fall through.
+        translate([plate_x0 + oled_cx - 20.3, plate_y0 + oled_cy - 6.7, tray_h + 6])
+            cube([40.6, 13.4, 1.8]);
+        translate([plate_x0 + oled_cx - oled_w / 2, plate_y0 + oled_cy - oled_h / 2, tray_h + 6])
+            cube([oled_w, oled_h, bump_h]);
     }
 }
 
@@ -615,12 +634,6 @@ module faceplate() {
         // Pot bushing. Pull the knob off, then lift the plate.
         translate([knob_x - plate_x0, knob_y - plate_y0, -eps])
             cylinder(d = 13, h = plate_t + 2 * eps, $fn = 36);
-        for (p = plate_screws) {
-            translate([p[0] - plate_x0, p[1] - plate_y0, plate_t - 0.7])
-                cylinder(d = 4.0, h = 0.9, $fn = 20);
-            translate([p[0] - plate_x0, p[1] - plate_y0, -eps])
-                cylinder(d = 2.2, h = plate_t + 2 * eps, $fn = 16);
-        }
         // OLED aperture. Sharp rectangle, no bezel. Yellow band faces the jack end.
         translate([oled_cx - oled_w / 2, oled_cy - oled_h / 2, -eps])
             cube([oled_w, oled_h, plate_t + 2 * eps]);
@@ -655,9 +668,6 @@ module assembly_solids() {
         for (p = [[in_x + 11, in_y], [out_x + 11, out_y]])
             translate([p[0], p[1], body_h - 0.4])
                 cylinder(d = 2.6, h = 1.1, $fn = 20);
-    color([0.94, 0.94, 0.92])
-        translate([plate_x0, plate_y0, bump_h - plate_t])
-            faceplate();
     color([0.18, 0.18, 0.18])
         foot_positions()
             translate([0, 0, -1.45])

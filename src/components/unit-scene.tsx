@@ -67,7 +67,6 @@ const PIECES: Piece[] = [
     ],
   },
   { id: "plus", file: "plus.stl", color: ORANGE, poses: [{ position: [44, 148, 18.4] }] },
-  { id: "plate", file: "faceplate.stl", color: "#f4f4f0", poses: [{ position: [3, 188, 20.4] }] },
   {
     id: "foot",
     file: "foot.stl",

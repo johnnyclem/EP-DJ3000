@@ -47,9 +47,10 @@ function Home() {
         The long edge matches the EP row, and the width matches a Sidekick. The 76 mm
         platter is centered, with 6 mm of deck on each side. The knob sits above it.
         It is 16 mm thick where it meets the row, the same as a K.O. II and a Sidekick.
-        The top 52 mm rises to 22 mm so a 2×AA holder fits under the door.
+        The top 52 mm rises to 22 mm so a 2×AA holder fits. That rise is part of
+        the top shell. The two halves close on four pairs of magnets.
         The deck is not engraved. Type tore out of the first print, so the lettering
-        is vinyl, cut 1:1 for a Cricut. The faceplate carries the name, the port row
+        is vinyl, cut 1:1 for a Cricut. The raised end carries the name, the port row
         and the tempo label. The buttons are labeled on the deck.
         Pin holes are 16, 25, 48, 216 and 224 mm from the fader end, 8 mm off the
         bottom, on both long sides.

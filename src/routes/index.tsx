@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, Link } from "@tanstack/react-router";
 import { ViewerPanel } from "@/components/viewer-panel";
 import { RenderGallery } from "@/components/render-gallery";
 
@@ -72,6 +72,15 @@ function Home() {
           <a className="text-fg underline" href="/field-jog/stl/wide-six-platter.stl" target="_blank" rel="noreferrer">152 mm</a>
         </p>
       </section>
+
+      <Link
+        to="/four"
+        className="flex flex-col gap-1 border border-line px-4 py-4"
+      >
+        <span className="font-mono text-xs tracking-widest text-accent uppercase">Next in the row</span>
+        <span className="text-lg font-semibold">Four</span>
+        <span className="text-sm text-muted">A four-track recorder on its own page. Same brick, five faders, a 3.2 inch screen.</span>
+      </Link>
 
       <a
         href="/field-jog/field-jog.zip"

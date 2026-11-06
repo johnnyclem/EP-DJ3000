@@ -1,4 +1,4 @@
-import { c as Color, d as Loader, f as SRGBColorSpace, l as FileLoader, o as BufferAttribute, p as Vector3, s as BufferGeometry, u as Float32BufferAttribute } from "./@react-three/drei+[...].mjs";
+import { c as BufferGeometry, d as Float32BufferAttribute, f as Loader, g as Vector3, h as SRGBColorSpace, l as Color, s as BufferAttribute, u as FileLoader } from "./@react-three/drei+[...].mjs";
 //#region node_modules/three/examples/jsm/loaders/STLLoader.js
 /**
 * A loader for the STL format, as created by Solidworks and other CAD programs.

@@ -1,0 +1,44 @@
+[
+  {
+    "name": "faders-12",
+    "w": 70.15,
+    "h": 143.15,
+    "print": "resin"
+  },
+  {
+    "name": "faders-34",
+    "w": 63.5,
+    "h": 143.15,
+    "print": "resin"
+  },
+  {
+    "name": "master",
+    "w": 36.150000000000006,
+    "h": 143.15,
+    "print": "resin"
+  },
+  {
+    "name": "transport-l",
+    "w": 80.15,
+    "h": 19.0,
+    "print": "resin"
+  },
+  {
+    "name": "transport-r",
+    "w": 90.15,
+    "h": 19.0,
+    "print": "resin"
+  },
+  {
+    "name": "screen",
+    "w": 131.15,
+    "h": 72.15,
+    "print": "resin"
+  },
+  {
+    "name": "ear-r",
+    "w": 39.150000000000006,
+    "h": 72.15,
+    "print": "resin"
+  }
+]

@@ -61642,6 +61642,65 @@ function Canvas(props) {
 	return /*#__PURE__*/ (0, import_jsx_runtime.jsx)(h, { children: /*#__PURE__*/ (0, import_jsx_runtime.jsx)(CanvasImpl, { ...props }) });
 }
 //#endregion
+//#region node_modules/three-stdlib/utils/BufferGeometryUtils.js
+function toCreasedNormals(geometry, creaseAngle = Math.PI / 3) {
+	const creaseDot = Math.cos(creaseAngle);
+	const hashMultiplier = (1 + 1e-10) * 100;
+	const verts = [
+		new Vector3(),
+		new Vector3(),
+		new Vector3()
+	];
+	const tempVec1 = new Vector3();
+	const tempVec2 = new Vector3();
+	const tempNorm = new Vector3();
+	const tempNorm2 = new Vector3();
+	function hashVertex(v) {
+		return `${~~(v.x * hashMultiplier)},${~~(v.y * hashMultiplier)},${~~(v.z * hashMultiplier)}`;
+	}
+	const resultGeometry = geometry.index ? geometry.toNonIndexed() : geometry;
+	const posAttr = resultGeometry.attributes.position;
+	const vertexMap = {};
+	for (let i = 0, l = posAttr.count / 3; i < l; i++) {
+		const i3 = 3 * i;
+		const a = verts[0].fromBufferAttribute(posAttr, i3 + 0);
+		const b = verts[1].fromBufferAttribute(posAttr, i3 + 1);
+		const c = verts[2].fromBufferAttribute(posAttr, i3 + 2);
+		tempVec1.subVectors(c, b);
+		tempVec2.subVectors(a, b);
+		const normal = new Vector3().crossVectors(tempVec1, tempVec2).normalize();
+		for (let n = 0; n < 3; n++) {
+			const vert = verts[n];
+			const hash = hashVertex(vert);
+			if (!(hash in vertexMap)) vertexMap[hash] = [];
+			vertexMap[hash].push(normal);
+		}
+	}
+	const normAttr = new BufferAttribute(new Float32Array(posAttr.count * 3), 3, false);
+	for (let i = 0, l = posAttr.count / 3; i < l; i++) {
+		const i3 = 3 * i;
+		const a = verts[0].fromBufferAttribute(posAttr, i3 + 0);
+		const b = verts[1].fromBufferAttribute(posAttr, i3 + 1);
+		const c = verts[2].fromBufferAttribute(posAttr, i3 + 2);
+		tempVec1.subVectors(c, b);
+		tempVec2.subVectors(a, b);
+		tempNorm.crossVectors(tempVec1, tempVec2).normalize();
+		for (let n = 0; n < 3; n++) {
+			const vert = verts[n];
+			const otherNormals = vertexMap[hashVertex(vert)];
+			tempNorm2.set(0, 0, 0);
+			for (let k = 0, lk = otherNormals.length; k < lk; k++) {
+				const otherNorm = otherNormals[k];
+				if (tempNorm.dot(otherNorm) > creaseDot) tempNorm2.add(otherNorm);
+			}
+			tempNorm2.normalize();
+			normAttr.setXYZ(i3 + n, tempNorm2.x, tempNorm2.y, tempNorm2.z);
+		}
+	}
+	resultGeometry.setAttribute("normal", normAttr);
+	return resultGeometry;
+}
+//#endregion
 //#region node_modules/three-stdlib/controls/EventDispatcher.js
 var __defProp$1 = Object.defineProperty;
 var __defNormalProp$1 = (obj, key, value) => key in obj ? __defProp$1(obj, key, {
@@ -62512,4 +62571,68 @@ var OrbitControls = /* @__PURE__ */ import_react.forwardRef(({ makeDefault, came
 	}, restProps));
 });
 //#endregion
-export { Box3 as a, Color as c, Loader as d, SRGBColorSpace as f, require_react as g, require_jsx_runtime as h, useLoader as i, FileLoader as l, require_with_selector as m, Canvas as n, BufferAttribute as o, Vector3 as p, useFrame as r, BufferGeometry as s, OrbitControls as t, Float32BufferAttribute as u };
+//#region node_modules/@react-three/drei/core/RoundedBox.js
+var eps = 1e-5;
+function createShape(width, height, radius0) {
+	const shape = new Shape();
+	const radius = radius0 - eps;
+	shape.absarc(eps, eps, eps, -Math.PI / 2, -Math.PI, true);
+	shape.absarc(eps, height - radius * 2, eps, Math.PI, Math.PI / 2, true);
+	shape.absarc(width - radius * 2, height - radius * 2, eps, Math.PI / 2, 0, true);
+	shape.absarc(width - radius * 2, eps, eps, 0, -Math.PI / 2, true);
+	return shape;
+}
+var RoundedBox = /* @__PURE__ */ import_react.forwardRef(function RoundedBox({ args: [width = 1, height = 1, depth = 1] = [], radius = .05, steps = 1, smoothness = 4, bevelSegments = 4, creaseAngle = .4, children, ...rest }, ref) {
+	return /*#__PURE__*/ import_react.createElement("mesh", _extends({ ref }, rest), /*#__PURE__*/ import_react.createElement(RoundedBoxGeometry, {
+		args: [
+			width,
+			height,
+			depth
+		],
+		radius,
+		steps,
+		smoothness,
+		bevelSegments,
+		creaseAngle
+	}), children);
+});
+var RoundedBoxGeometry = /* @__PURE__ */ import_react.forwardRef(function RoundedBoxGeometry({ args: [width = 1, height = 1, depth = 1] = [], radius = .05, steps = 1, smoothness = 4, bevelSegments = 4, creaseAngle = .4, ...rest }, ref) {
+	const shape = import_react.useMemo(() => createShape(width, height, radius), [
+		width,
+		height,
+		radius
+	]);
+	const params = import_react.useMemo(() => ({
+		depth: depth - radius * 2,
+		bevelEnabled: true,
+		bevelSegments: bevelSegments * 2,
+		steps,
+		bevelSize: radius - eps,
+		bevelThickness: radius,
+		curveSegments: smoothness
+	}), [
+		depth,
+		radius,
+		smoothness,
+		bevelSegments,
+		steps
+	]);
+	const geomRef = import_react.useRef(null);
+	import_react.useLayoutEffect(() => {
+		if (geomRef.current) {
+			geomRef.current.center();
+			toCreasedNormals(geomRef.current, creaseAngle);
+		}
+	}, [
+		shape,
+		params,
+		creaseAngle
+	]);
+	import_react.useImperativeHandle(ref, () => geomRef.current);
+	return /*#__PURE__*/ import_react.createElement("extrudeGeometry", _extends({
+		ref: geomRef,
+		args: [shape, params]
+	}, rest));
+});
+//#endregion
+export { require_with_selector as _, useLoader as a, BufferGeometry as c, Float32BufferAttribute as d, Loader as f, Vector3 as g, SRGBColorSpace as h, useFrame as i, Color as l, Quaternion as m, OrbitControls as n, Box3 as o, Matrix4 as p, Canvas as r, BufferAttribute as s, RoundedBox as t, FileLoader as u, require_jsx_runtime as v, require_react as y };

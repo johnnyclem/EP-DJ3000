@@ -1,0 +1,693 @@
+import { i as __toESM } from "../_runtime.mjs";
+import { v as require_jsx_runtime, y as require_react } from "../_libs/@react-three/drei+[...].mjs";
+import { y as Link } from "../_libs/@tanstack/react-router+[...].mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/routes-CxlL2bZs.js
+var import_react = /* @__PURE__ */ __toESM(require_react());
+var import_jsx_runtime = require_jsx_runtime();
+var VIEW_ITEMS = [
+	{
+		id: "unit",
+		label: "Unit"
+	},
+	{
+		id: "bottom",
+		label: "Tray"
+	},
+	{
+		id: "top",
+		label: "Deck"
+	},
+	{
+		id: "platter",
+		label: "Platter"
+	},
+	{
+		id: "fader",
+		label: "Fader"
+	},
+	{
+		id: "lock",
+		label: "Lock"
+	},
+	{
+		id: "knob",
+		label: "Knob"
+	},
+	{
+		id: "button",
+		label: "Cue / Play"
+	},
+	{
+		id: "loop",
+		label: "Loop"
+	},
+	{
+		id: "flange",
+		label: "Clips"
+	},
+	{
+		id: "plus",
+		label: "Plus"
+	},
+	{
+		id: "foot",
+		label: "Feet"
+	}
+];
+var FACES = [
+	{
+		id: "left",
+		label: "Left"
+	},
+	{
+		id: "right",
+		label: "Right"
+	},
+	{
+		id: "back",
+		label: "Back"
+	},
+	{
+		id: "top",
+		label: "Top"
+	}
+];
+var GEAR_CHOICES = [
+	{
+		id: "none",
+		label: "None"
+	},
+	{
+		id: "jog",
+		label: "Jog"
+	},
+	{
+		id: "ko",
+		label: "K.O. II"
+	},
+	{
+		id: "riddim",
+		label: "Riddim"
+	},
+	{
+		id: "mixer",
+		label: "Mixer"
+	},
+	{
+		id: "pedal",
+		label: "Pedal"
+	},
+	{
+		id: "ting",
+		label: "Ting"
+	}
+];
+var EMPTY_SLOTS = {
+	left: null,
+	right: "riddim",
+	back: null,
+	top: null
+};
+function slotKey(slots) {
+	return FACES.map((face) => slots[face.id] ?? "-").join(".");
+}
+function ViewerPanel() {
+	const [mode, setMode] = (0, import_react.useState)("rig");
+	const [unitFocus, setUnitFocus] = (0, import_react.useState)("unit");
+	const [layout, setLayout] = (0, import_react.useState)("twin");
+	const [slots, setSlots] = (0, import_react.useState)(EMPTY_SLOTS);
+	const [activeFace, setActiveFace] = (0, import_react.useState)("right");
+	const [spin, setSpin] = (0, import_react.useState)(true);
+	const [fitTick, setFitTick] = (0, import_react.useState)(0);
+	const [ready, setReady] = (0, import_react.useState)(false);
+	const [Scene, setScene] = (0, import_react.useState)(null);
+	(0, import_react.useEffect)(() => {
+		let live = true;
+		import("./unit-scene-DJ8YsA89.mjs").then((mod) => {
+			if (live) setScene(() => mod.UnitScene);
+		});
+		return () => {
+			live = false;
+		};
+	}, []);
+	const onReady = (0, import_react.useCallback)(() => setReady(true), []);
+	const onInteract = (0, import_react.useCallback)(() => setSpin(false), []);
+	const onPickFace = (0, import_react.useCallback)((face) => setActiveFace(face), []);
+	function assign(next) {
+		setSlots((prev) => {
+			const slotsNext = {
+				...prev,
+				[activeFace]: next
+			};
+			if (next) {
+				for (const face of FACES) if (face.id !== activeFace && slotsNext[face.id] === next) slotsNext[face.id] = null;
+			}
+			return slotsNext;
+		});
+		setFitTick((n) => n + 1);
+	}
+	const faceLabel = FACES.find((face) => face.id === activeFace)?.label ?? "Right";
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
+		className: "flex flex-col gap-3",
+		children: [
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "relative h-viewer w-full touch-none overflow-hidden border border-line bg-surface",
+				children: [Scene ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Scene, {
+					mode,
+					focus: unitFocus,
+					slots,
+					activeFace,
+					watch: `${mode}:${unitFocus}:${layout}:${slotKey(slots)}:${fitTick}`,
+					spin,
+					layout,
+					onReady,
+					onInteract,
+					onPickFace
+				}) : null, ready ? null : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+					className: "pointer-events-none absolute inset-0 flex items-center justify-center text-sm text-muted",
+					children: "Loading the model"
+				})]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "flex items-center justify-between gap-3",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+					className: "min-w-0 text-sm text-muted",
+					children: mode === "wide" ? layout === "twin" ? "176 × 240.5. Two 76 mm platters, a pitch fader each, hot cues, and one crossfader." : "176 × 240.5. One 152 mm platter. Cue, play, loop and the tempo fader sit in the space around it." : mode === "rig" ? `${faceLabel}. Pick what snaps on.` : "Drag to turn. Pinch to zoom."
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+					type: "button",
+					className: "h-11 shrink-0 border border-line px-3 font-mono text-xs tracking-wide text-fg uppercase",
+					onClick: () => {
+						setSpin(true);
+						setFitTick((n) => n + 1);
+					},
+					children: "Reset"
+				})]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+				className: "flex gap-2",
+				children: [
+					["rig", "Setup"],
+					["unit", "Parts"],
+					["wide", "Wide"]
+				].map(([item, label]) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+					type: "button",
+					"aria-pressed": mode === item,
+					onClick: () => setMode(item),
+					className: mode === item ? "h-11 flex-1 bg-fg font-mono text-xs tracking-wide text-bg uppercase" : "h-11 flex-1 border border-line font-mono text-xs tracking-wide text-fg uppercase",
+					children: label
+				}, item))
+			}),
+			mode === "wide" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+				className: "flex gap-2",
+				children: [["twin", "Twin 3"], ["six", "One 6"]].map(([item, label]) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+					type: "button",
+					"aria-pressed": layout === item,
+					onClick: () => {
+						setLayout(item);
+						setSpin(true);
+						setFitTick((n) => n + 1);
+					},
+					className: layout === item ? "h-11 flex-1 bg-accent font-mono text-xs tracking-wide text-accent-fg uppercase" : "h-11 flex-1 border border-line font-mono text-xs tracking-wide text-fg uppercase",
+					children: label
+				}, item))
+			}) : null,
+			mode === "rig" ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+				className: "grid grid-cols-4 gap-2",
+				children: FACES.map((item) => {
+					const selected = item.id === activeFace;
+					const filled = slots[item.id] != null;
+					return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+						type: "button",
+						"aria-pressed": selected,
+						onClick: () => setActiveFace(item.id),
+						className: selected ? "h-11 bg-accent font-mono text-xs tracking-wide text-accent-fg uppercase" : "h-11 border border-line font-mono text-xs tracking-wide text-fg uppercase",
+						children: [item.label, filled ? " ·" : ""]
+					}, item.id);
+				})
+			}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+				className: "flex gap-2 overflow-x-auto pb-1",
+				children: GEAR_CHOICES.map((item) => {
+					const selected = item.id === "none" ? slots[activeFace] == null : slots[activeFace] === item.id;
+					return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						type: "button",
+						"aria-pressed": selected,
+						onClick: () => assign(item.id === "none" ? null : item.id),
+						className: selected ? "h-11 shrink-0 bg-accent px-3 font-mono text-xs tracking-wide text-accent-fg uppercase" : "h-11 shrink-0 border border-line px-3 font-mono text-xs tracking-wide text-fg uppercase",
+						children: item.label
+					}, item.id);
+				})
+			})] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+				className: "flex gap-2 overflow-x-auto pb-1",
+				children: VIEW_ITEMS.map((item) => {
+					const selected = item.id === unitFocus;
+					return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+						type: "button",
+						"aria-pressed": selected,
+						onClick: () => setUnitFocus(item.id),
+						className: selected ? "h-11 shrink-0 bg-accent px-3 font-mono text-xs tracking-wide text-accent-fg uppercase" : "h-11 shrink-0 border border-line px-3 font-mono text-xs tracking-wide text-fg uppercase",
+						children: item.label
+					}, item.id);
+				})
+			})
+		]
+	});
+}
+var RENDERS = [
+	{
+		src: "/field-jog/renders/dark.jpg",
+		alt: "Scratch deck on a dark field, platter and orange knob"
+	},
+	{
+		src: "/field-jog/renders/top.jpg",
+		alt: "Top view of the scratch deck with cue, fader, and rev"
+	},
+	{
+		src: "/field-jog/renders/angle.jpg",
+		alt: "Three-quarter view of the grey scratch deck"
+	},
+	{
+		src: "/field-jog/renders/three.jpg",
+		alt: "Angled view showing the side pin holes and MIDI label"
+	},
+	{
+		src: "/field-jog/renders/detail.jpg",
+		alt: "Close view of the platter, orange plus, and knurled knob"
+	},
+	{
+		src: "/field-jog/renders/side.jpg",
+		alt: "Side profile of the deck, platter, and fader cap"
+	},
+	{
+		src: "/field-jog/renders/pair.jpg",
+		alt: "Scratch deck beside a K.O. II Sidekick mixer"
+	}
+];
+function RenderGallery() {
+	const [index, setIndex] = (0, import_react.useState)(0);
+	const shot = RENDERS[index];
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
+		className: "flex flex-col gap-3",
+		children: [
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
+				className: "font-mono text-xs tracking-widest text-muted uppercase",
+				children: "Renders"
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("img", {
+				src: shot.src,
+				alt: shot.alt,
+				className: "w-full border border-line bg-fg"
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
+				className: "flex gap-2 overflow-x-auto pb-1",
+				children: RENDERS.map((item, i) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+					type: "button",
+					"aria-pressed": i === index,
+					"aria-label": item.alt,
+					onClick: () => setIndex(i),
+					className: `h-16 w-16 shrink-0 border ${i === index ? "border-accent" : "border-line"}`,
+					children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("img", {
+						src: item.src,
+						alt: "",
+						className: "h-full w-full object-cover"
+					})
+				}, item.src))
+			})
+		]
+	});
+}
+var PARTS = [
+	[
+		"top.stl",
+		"Deck",
+		"Grey"
+	],
+	[
+		"bottom.stl",
+		"Tray",
+		"Grey"
+	],
+	[
+		"platter.stl",
+		"Platter",
+		"Black"
+	],
+	[
+		"fader.stl",
+		"Fader cap",
+		"Black"
+	],
+	[
+		"fader_lock.stl",
+		"Fader lock",
+		"Black"
+	],
+	[
+		"knob.stl",
+		"Knob",
+		"Orange"
+	],
+	[
+		"button.stl",
+		"Button ×2",
+		"Black"
+	],
+	[
+		"loop.stl",
+		"Loop button ×3",
+		"Black"
+	],
+	[
+		"flange.stl",
+		"Button clip ×5",
+		"Black"
+	],
+	[
+		"plus.stl",
+		"Platter mark",
+		"Orange"
+	],
+	[
+		"tab.stl",
+		"USB tab",
+		"Orange"
+	],
+	[
+		"bar.stl",
+		"Name bar",
+		"Orange"
+	],
+	[
+		"foot.stl",
+		"Foot ×4",
+		"TPU"
+	]
+];
+function Home() {
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("main", {
+		className: "mx-auto flex min-h-screen max-w-lg flex-col gap-8 px-5 py-8",
+		children: [
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("header", {
+				className: "flex flex-col gap-3",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "font-mono text-xs tracking-widest text-accent uppercase",
+						children: "Unofficial companion"
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h1", {
+						className: "text-4xl leading-none font-semibold tracking-tight",
+						children: "Field Jog"
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "text-base leading-relaxed text-muted",
+						children: "A scratch-deck shell in the Sidekick footprint. 88 mm wide, 240 mm long, grey deck, orange marks, black jog and fader. Setup snaps gear onto the amp. Wide is the same deck at the K.O. II size, 176 × 240.5, with the controls that did not fit in 88 mm."
+					})
+				]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(ViewerPanel, {}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(RenderGallery, {}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("dl", {
+				className: "grid grid-cols-3 divide-x divide-line border border-line",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Spec, {
+						k: "Height",
+						v: "240 mm"
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Spec, {
+						k: "Width",
+						v: "88 mm"
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Spec, {
+						k: "Thick",
+						v: "16 / 22"
+					})
+				]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+				className: "text-sm leading-relaxed text-muted",
+				children: "The long edge matches the EP row, and the width matches a Sidekick. The 76 mm platter is centered, with 6 mm of deck on each side. The knob sits above it. It is 16 mm thick where it meets the row, the same as a K.O. II and a Sidekick. The top 52 mm rises to 22 mm so a 2×AA holder fits. That rise is part of the top shell. The two halves close on four pairs of magnets. The deck is not engraved. Type tore out of the first print, so the lettering is vinyl, cut 1:1 for a Cricut. The raised end carries the name, the port row and the tempo label. The buttons are labeled on the deck. Pin holes are 16, 25, 48, 216 and 224 mm from the fader end, 8 mm off the bottom, on both long sides."
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
+				className: "flex flex-col gap-2 text-sm leading-relaxed",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
+						className: "font-mono text-xs tracking-widest text-muted uppercase",
+						children: "Wide shells"
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "text-muted",
+						children: "176 × 240.5 × 16.3 mm. Twin is two 76 mm platters. Six is one 152 mm platter. Print the top face up and the tray cavity up."
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+						className: "flex flex-wrap gap-x-4 gap-y-2",
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
+								className: "text-fg underline",
+								href: "/field-jog/wide.scad",
+								target: "_blank",
+								rel: "noreferrer",
+								children: "SCAD"
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
+								className: "text-fg underline",
+								href: "/field-jog/stl/wide-twin-top.stl",
+								target: "_blank",
+								rel: "noreferrer",
+								children: "Twin top"
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
+								className: "text-fg underline",
+								href: "/field-jog/stl/wide-twin-bottom.stl",
+								target: "_blank",
+								rel: "noreferrer",
+								children: "Twin tray"
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
+								className: "text-fg underline",
+								href: "/field-jog/stl/wide-twin-platter.stl",
+								target: "_blank",
+								rel: "noreferrer",
+								children: "76 mm"
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
+								className: "text-fg underline",
+								href: "/field-jog/stl/wide-six-top.stl",
+								target: "_blank",
+								rel: "noreferrer",
+								children: "Six top"
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
+								className: "text-fg underline",
+								href: "/field-jog/stl/wide-six-bottom.stl",
+								target: "_blank",
+								rel: "noreferrer",
+								children: "Six tray"
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
+								className: "text-fg underline",
+								href: "/field-jog/stl/wide-six-platter.stl",
+								target: "_blank",
+								rel: "noreferrer",
+								children: "152 mm"
+							})
+						]
+					})
+				]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Link, {
+				to: "/four",
+				className: "flex flex-col gap-1 border border-line px-4 py-4",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+						className: "font-mono text-xs tracking-widest text-accent uppercase",
+						children: "Next in the row"
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+						className: "text-lg font-semibold",
+						children: "Four"
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+						className: "text-sm text-muted",
+						children: "A four-track recorder on its own page. Same brick, five faders, a 3.2 inch screen."
+					})
+				]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
+				href: "/field-jog/field-jog.zip",
+				target: "_blank",
+				rel: "noreferrer",
+				className: "flex h-12 items-center justify-center bg-accent font-semibold text-accent-fg",
+				children: "Download print files"
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
+				className: "flex flex-col gap-3",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
+						className: "font-mono text-xs tracking-widest text-muted uppercase",
+						children: "Vinyl"
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("img", {
+						src: "/field-jog/silk/preview.png",
+						alt: "Vinyl lettering laid out on the deck, jacks at the top",
+						className: "w-full border border-line"
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "text-sm leading-relaxed text-muted",
+						children: "Cut this in black vinyl. The screen, the knob and the platter stay clear. On the mat file the left piece is the deck and the right piece is the faceplate. A 10 mm bar sits in the gap. If the import comes in small, scale it until that bar is 10 mm."
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+						className: "flex flex-wrap gap-4 font-mono text-xs tracking-wide text-accent uppercase",
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
+								href: "/field-jog/silk/mat-cut.svg",
+								target: "_blank",
+								rel: "noreferrer",
+								children: "Mat"
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
+								href: "/field-jog/silk/deck-cut.svg",
+								target: "_blank",
+								rel: "noreferrer",
+								children: "Deck"
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
+								href: "/field-jog/silk/faceplate-cut.svg",
+								target: "_blank",
+								rel: "noreferrer",
+								children: "Faceplate"
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
+								href: "/field-jog/silk/deck-guide.svg",
+								target: "_blank",
+								rel: "noreferrer",
+								children: "Deck guide"
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
+								href: "/field-jog/silk/faceplate-guide.svg",
+								target: "_blank",
+								rel: "noreferrer",
+								children: "Plate guide"
+							})
+						]
+					})
+				]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
+				className: "flex flex-col gap-3",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
+					className: "font-mono text-xs tracking-widest text-muted uppercase",
+					children: "Parts"
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("ul", {
+					className: "divide-y divide-line border border-line",
+					children: PARTS.map(([file, name, color]) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("li", {
+						className: "flex items-center justify-between gap-3 px-3 py-3",
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+							className: "flex flex-col",
+							children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+								className: "text-sm",
+								children: name
+							}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+								className: "font-mono text-xs text-muted",
+								children: color
+							})]
+						}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
+							href: `/field-jog/stl/${file}`,
+							target: "_blank",
+							rel: "noreferrer",
+							className: "font-mono text-xs tracking-wide text-accent uppercase",
+							children: "STL"
+						})]
+					}, file))
+				})]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
+				className: "flex flex-col gap-2 text-sm leading-relaxed text-muted",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
+						className: "font-mono text-xs tracking-widest uppercase",
+						children: "Also in the zip"
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", { children: "OpenSCAD source, a Pro Micro MIDI sketch, and the print notes. Face-up, no supports, 0.2 mm layers." }),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+						className: "flex gap-4",
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
+								className: "text-fg underline",
+								href: "/field-jog/field-jog.scad",
+								target: "_blank",
+								rel: "noreferrer",
+								children: "SCAD"
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
+								className: "text-fg underline",
+								href: "/field-jog/field_jog.ino",
+								target: "_blank",
+								rel: "noreferrer",
+								children: "Firmware"
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
+								className: "text-fg underline",
+								href: "/field-jog/README.md",
+								target: "_blank",
+								rel: "noreferrer",
+								children: "Notes"
+							})
+						]
+					})
+				]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
+				className: "flex flex-col gap-2 text-sm leading-relaxed",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
+						className: "font-mono text-xs tracking-widest text-muted uppercase",
+						children: "ECM sleeve"
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+						className: "text-muted",
+						children: "A 96 × 18.8 mm handheld shell for an ECM-77B head. The capsule slides in from the tip and the cable leaves the back. The orange button is a cap."
+					}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
+						className: "flex gap-4",
+						children: [
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
+								className: "text-fg underline",
+								href: "/ecm-handy/body.stl",
+								target: "_blank",
+								rel: "noreferrer",
+								children: "Body"
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
+								className: "text-fg underline",
+								href: "/ecm-handy/button.stl",
+								target: "_blank",
+								rel: "noreferrer",
+								children: "Button"
+							}),
+							/* @__PURE__ */ (0, import_jsx_runtime.jsx)("a", {
+								className: "text-fg underline",
+								href: "/ecm-handy/ecm-handy.scad",
+								target: "_blank",
+								rel: "noreferrer",
+								children: "SCAD"
+							})
+						]
+					})
+				]
+			})
+		]
+	});
+}
+function Spec({ k, v }) {
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+		className: "flex flex-col gap-1 px-3 py-3",
+		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("dt", {
+			className: "font-mono text-xs tracking-widest text-muted uppercase",
+			children: k
+		}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("dd", {
+			className: "text-lg font-semibold",
+			children: v
+		})]
+	});
+}
+//#endregion
+export { Home as component };

@@ -57,6 +57,22 @@ function Home() {
         bottom, on both long sides.
       </p>
 
+      <section className="flex flex-col gap-2 text-sm leading-relaxed">
+        <h2 className="font-mono text-xs tracking-widest text-muted uppercase">Wide shells</h2>
+        <p className="text-muted">
+          176 × 240.5 × 16.3 mm. Twin is two 76 mm platters. Six is one 152 mm platter. Print the top face up and the tray cavity up.
+        </p>
+        <p className="flex flex-wrap gap-x-4 gap-y-2">
+          <a className="text-fg underline" href="/field-jog/wide.scad" target="_blank" rel="noreferrer">SCAD</a>
+          <a className="text-fg underline" href="/field-jog/stl/wide-twin-top.stl" target="_blank" rel="noreferrer">Twin top</a>
+          <a className="text-fg underline" href="/field-jog/stl/wide-twin-bottom.stl" target="_blank" rel="noreferrer">Twin tray</a>
+          <a className="text-fg underline" href="/field-jog/stl/wide-twin-platter.stl" target="_blank" rel="noreferrer">76 mm</a>
+          <a className="text-fg underline" href="/field-jog/stl/wide-six-top.stl" target="_blank" rel="noreferrer">Six top</a>
+          <a className="text-fg underline" href="/field-jog/stl/wide-six-bottom.stl" target="_blank" rel="noreferrer">Six tray</a>
+          <a className="text-fg underline" href="/field-jog/stl/wide-six-platter.stl" target="_blank" rel="noreferrer">152 mm</a>
+        </p>
+      </section>
+
       <a
         href="/field-jog/field-jog.zip"
         target="_blank"

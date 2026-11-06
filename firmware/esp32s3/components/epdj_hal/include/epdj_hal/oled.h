@@ -1,5 +1,5 @@
-// SSD1306 128x32 on the AS5600's I2C bus (address 0x3C, else 0x3D). A full frame is 512 bytes, about 12 ms at
-// 400 kHz, so this runs once at boot, before the 1 kHz engine task exists. Nothing here is called from that task.
+// SSD1306 128x32 on the AS5600's I2C bus (address 0x3C, else 0x3D). A frame is 512 bytes, so this runs once
+// at boot, before the 1 kHz engine task exists. Nothing here is called from that task.
 #pragma once
 #include <cstdint>
 

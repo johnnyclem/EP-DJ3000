@@ -73,6 +73,8 @@
 #include "esp_idf_version.h"
 #include "esp_log.h"
 #include "esp_random.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "sdkconfig.h"
 
 using namespace epdj;
@@ -325,6 +327,11 @@ extern "C" void app_main(void) {
     }
   }
   const hal::OledBringup oled = hal::oledBringup(g_i2c, g_cfg.deck() == proto::Deck::A ? 'A' : 'B', encLine);
+  if (ledOn) {
+    // Long enough to read before the engine task takes the LED: green answered, red did not.
+    g_led.set(oled.present ? hal::StatusLed::Rgb{0, 180, 0} : hal::StatusLed::Rgb{180, 0, 0});
+    vTaskDelay(pdMS_TO_TICKS(600));
+  }
   if (!oled.present && g_i2c.ok()) {
     ESP_LOGW(TAG, "oled stayed blank: no SSD1306 on SDA GPIO%d SCL GPIO%d", pins::kI2cSda, pins::kI2cScl);
   }

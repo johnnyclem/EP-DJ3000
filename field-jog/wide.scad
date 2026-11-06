@@ -33,6 +33,15 @@ platter_clear = 0.55;
 bearing_d = 7.15;
 bearing_h = 3.0;
 shaft_hole = 5.6;
+// Snap cup for a 6 x 2.5 mm diametric magnet. Bottom face lands 2.7 mm
+// above the encoder pad. The barb springs open under the sleeve.
+mag_bottom = 6.2;
+lip_h = 0.45;
+mag_cav_h = 2.55;
+stem_od = 7.7;
+barb_od = 8.9;
+barb_z0 = 9.3;
+barb_h = 0.9;
 
 /* [Faders] */
 // 75 x 9 mm body, 60 mm travel, the same pot as the narrow deck.
@@ -258,10 +267,10 @@ module top_plate() {
             ledge = 1.3;
             bearing_drop = 0.3;
             ledge_z = body_h - well_d - bearing_drop - bearing_h - ledge;
-            translate([p[0], p[1], ledge_z + ledge])
-                cylinder(d = bearing_d, h = bearing_h + bearing_drop + 0.4, $fn = 36);
             translate([p[0], p[1], ledge_z - eps])
-                cylinder(d = shaft_hole, h = ledge + 2 * eps, $fn = 24);
+                cylinder(d = 8.2, h = body_h - ledge_z + 1, $fn = 40);
+            translate([p[0], p[1], body_h - well_d - 0.8])
+                cylinder(d1 = 8.2, d2 = 9.6, h = 0.8, $fn = 40);
         }
 
         for (s = pitch_list()) {
@@ -319,18 +328,39 @@ module top_plate() {
 }
 
 module platter_solid(d) {
+    pz = body_h - well_d;
+    mouth = mag_bottom - lip_h;
     difference() {
-        cylinder(d = d, h = platter_t, $fn = 120);
+        union() {
+            translate([0, 0, pz])
+                cylinder(d = d, h = platter_t, $fn = 120);
+            translate([0, 0, mouth])
+                cylinder(d = stem_od, h = pz - mouth, $fn = 64);
+            translate([0, 0, barb_z0])
+                cylinder(d = barb_od, h = barb_h, $fn = 64);
+            translate([0, 0, barb_z0 + barb_h])
+                cylinder(d1 = barb_od, d2 = stem_od, h = 0.6, $fn = 64);
+            translate([0, 0, mouth])
+                cylinder(d1 = stem_od - 1.2, d2 = stem_od, h = 0.5, $fn = 48);
+        }
         arm = d > 100 ? 22 : 13;
-        translate([0, 0, platter_t - 0.7])
+        translate([0, 0, pz + platter_t - 0.7])
             linear_extrude(0.8) {
                 square([arm, 3.2], center = true);
                 square([3.2, arm], center = true);
             }
-        translate([0, 0, -eps])
-            cylinder(d = 6.8, h = 2.15, $fn = 28);
+        translate([0, 0, mouth - eps])
+            cylinder(d1 = stem_od - 1.4, d2 = 5.6, h = lip_h + eps, $fn = 48);
+        translate([0, 0, mag_bottom - eps])
+            cylinder(d = 6.15, h = mag_cav_h + eps, $fn = 48);
+        translate([0, 0, barb_z0 + barb_h])
+            cylinder(d = 4.4, h = pz - (barb_z0 + barb_h) + eps, $fn = 36);
+        for (a = [0, 120, 240])
+            rotate([0, 0, a])
+                translate([-0.6, 0, 8.9])
+                    cube([1.2, stem_od, pz - 8.9]);
         for (gr = d > 100 ? [36, 52, 66] : [18, 26, 33])
-            translate([0, 0, platter_t - 0.32])
+            translate([0, 0, pz + platter_t - 0.32])
                 difference() {
                     cylinder(d = gr * 2 + 0.9, h = 0.4, $fn = 80);
                     translate([0, 0, -eps])
@@ -362,14 +392,14 @@ if (part == "all") {
     color([0.84, 0.84, 0.80]) top_plate();
     color([0.1, 0.1, 0.11])
         for (p = platter_list())
-            translate([p[0], p[1], body_h - well_d])
+            translate([p[0], p[1], 0])
                 platter_solid(p[2]);
 } else if (part == "top") {
     translate([0, 0, -tray_h]) top_plate();
 } else if (part == "bottom") {
     bottom();
 } else if (part == "platter") {
-    platter_solid(platter_list()[0][2]);
+    translate([0, 0, -(mag_bottom - lip_h)]) platter_solid(platter_list()[0][2]);
 } else if (part == "cue") {
     round_cap(layout == "twin" ? 18 : 20, 5.2);
 } else if (part == "loop") {

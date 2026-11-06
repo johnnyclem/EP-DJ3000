@@ -386,14 +386,12 @@ module top_plate() {
         translate([platter_cx, platter_cy, body_h - well_d])
             cylinder(d = platter_d + platter_clear, h = well_d + eps, $fn = 96);
 
-        // 683ZZ pocket, open up into the well so the bearing drops in from the top
-        // and stops on the ledge. The race ends bearing_drop below the platter.
-        translate([platter_cx, platter_cy, ledge_z + ledge])
-            cylinder(d = bearing_d, h = bearing_h + bearing_drop + 0.02, $fn = 48);
-
-        // ledge bore under the bearing, for the M3 shank
+        // The stem is 7.7 mm. It snaps through this bore. The barb opens
+        // in the tray, under the sleeve, so the platter cannot lift off.
         translate([platter_cx, platter_cy, ledge_z - eps])
-            cylinder(d = shaft_hole, h = ledge + 2 * eps, $fn = 32);
+            cylinder(d = 8.2, h = body_h - ledge_z + 1, $fn = 48);
+        translate([platter_cx, platter_cy, body_h - well_d - 0.8])
+            cylinder(d1 = 8.2, d2 = 9.6, h = 0.8, $fn = 48);
 
         // crossfader slot. Narrow: only the 1.2 mm lever comes through.
         translate([fader_cx, 0, tray_h - eps])
@@ -439,9 +437,18 @@ module top_plate() {
 }
 
 // ---------- platter ----------
-// Modeled in world space. Plus pocket and grip rings on the top face.
-// Button-head M3 is captured in a pocket on the underside; the shank
-// points down through the 683ZZ and carries the diametric magnet.
+// The 6 x 2.5 mm diametric magnet press-fits into a cup on the stem.
+// A lip at the mouth is tighter than the magnet, so it clicks in and
+// stays. Three slots let the barb squeeze through the 8.2 mm bore and
+// spring open under the sleeve. No glue, and no magnet on the screw.
+
+mag_bottom = 6.2;
+lip_h = 0.45;
+mag_cav_h = 2.55;
+stem_od = 7.7;
+barb_od = 8.9;
+barb_z0 = 9.3;
+barb_h = 0.9;
 
 module plus_2d(arm, stroke) {
     square([arm, stroke], center = true);
@@ -450,9 +457,20 @@ module plus_2d(arm, stroke) {
 
 module platter() {
     pz = body_h - well_d;
+    mouth = mag_bottom - lip_h;
     difference() {
-        translate([platter_cx, platter_cy, pz])
-            cylinder(d = platter_d, h = platter_t, $fn = 120);
+        union() {
+            translate([platter_cx, platter_cy, pz])
+                cylinder(d = platter_d, h = platter_t, $fn = 120);
+            translate([platter_cx, platter_cy, mouth])
+                cylinder(d = stem_od, h = pz - mouth, $fn = 64);
+            translate([platter_cx, platter_cy, barb_z0])
+                cylinder(d = barb_od, h = barb_h, $fn = 64);
+            translate([platter_cx, platter_cy, barb_z0 + barb_h])
+                cylinder(d1 = barb_od, d2 = stem_od, h = 0.6, $fn = 64);
+            translate([platter_cx, platter_cy, mouth])
+                cylinder(d1 = stem_od - 1.2, d2 = stem_od, h = 0.5, $fn = 48);
+        }
 
         // grip rings
         for (gr = [18, 26, 33])
@@ -463,15 +481,23 @@ module platter() {
                         cylinder(d = gr * 2 - 0.9, h = 0.4 + 2 * eps, $fn = 96);
                 }
 
-        // orange plus pocket
         translate([platter_cx, platter_cy, pz + platter_t - 0.75])
             linear_extrude(0.8)
                 plus_2d(15, 3.3);
 
-        // M3 button-head pocket, opens downward. No hole through the label face.
-        // 6.8 mm bridges on the bed if you print the platter face-up.
-        translate([platter_cx, platter_cy, pz - eps])
-            cylinder(d = 6.8, h = 2.15, $fn = 36);
+        // Snap cup. Chamfer, then a lip, then the cavity the magnet sits in.
+        translate([platter_cx, platter_cy, mouth - eps])
+            cylinder(d1 = stem_od - 1.4, d2 = 5.6, h = lip_h + eps, $fn = 48);
+        translate([platter_cx, platter_cy, mag_bottom - eps])
+            cylinder(d = 6.15, h = mag_cav_h + eps, $fn = 48);
+        // Hollow behind the barb so the three fingers can flex.
+        translate([platter_cx, platter_cy, barb_z0 + barb_h])
+            cylinder(d = 4.4, h = pz - (barb_z0 + barb_h) + eps, $fn = 36);
+        translate([platter_cx, platter_cy, 0])
+            for (a = [0, 120, 240])
+                rotate([0, 0, a])
+                    translate([-0.6, 0, 8.9])
+                        cube([1.2, stem_od, pz - 8.9]);
     }
 }
 
@@ -679,9 +705,9 @@ module ghosts() {
     color([0.75, 0.75, 0.78, 0.55])
         translate([platter_cx, platter_cy, body_h - well_d - 0.4 - bearing_h])
             cylinder(d = 7, h = bearing_h, $fn = 32);
-    // diametric magnet on the axle, target zone
+    // diametric magnet, pressed into the cup
     color([0.85, 0.15, 0.12, 0.8])
-        translate([platter_cx, platter_cy, body_h - well_d - 0.3 - bearing_h - 1.3 - 2.6])
+        translate([platter_cx, platter_cy, mag_bottom])
             cylinder(d = 6, h = 2.5, $fn = 24);
 }
 

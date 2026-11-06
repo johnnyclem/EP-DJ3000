@@ -113,11 +113,7 @@ which is where the chip is, so the magnet hit the board. The pad is now
 3.5 mm, for a headerless breakout. Measure yours. A thicker module needs
 the pad lower still, or it hits the magnet again.
 
-The axle is an M3×6, not an M3×12. A 12 mm shank from the underside of
-the platter ends at about z = 3 mm, which is in the pad and the floor.
-M3×6 ends just below the bearing, and the 2.5 mm magnet glued on the tip
-sits roughly 2 mm above a chip on the 3.5 mm pad. Shim with tape if your
-breakout is thinner.
+The magnet is no longer glued to a screw. The platter stem is the axle. It snaps through an 8.2 mm bore, and the 6 × 2.5 mm magnet clicks into a lipped cup on the end of that stem, about 2.7 mm above the pad. The 683ZZ does not fit this stem. The bore is the bearing. PETG will hold the barb better than PLA.
 
 ## Technic pins
 
@@ -169,9 +165,7 @@ The orange pieces are 0.6 mm. Print them slow, on a clean plate.
 ## Bill of materials
 
 - 8× 5 × 20 × 2 mm magnets. Four in the tray, four in the lid, at the same four corners. The pocket is 21 × 6 × 2.5 mm. The extra 0.5 mm on each side is wiggle room. The extra 0.5 mm of depth is glue behind the magnet. Press each one flush with the mating face. Opposite poles face each other, or the case will push apart.
-- 1× 683ZZ bearing, 3×7×3 mm. Press into the platter well from above. It should sit about 0.4 mm below the floor of the well. If it stands proud, it will scrape.
-- 1× M3×6 button head. This is the axle. Head hides in the pocket on the underside of the platter. Shank points down through the bearing. An M3×12 puts the magnet in the floor.
-- 1× 6×2.5 mm **diametric** magnet, glued to the end of that M3, for the AS5600.
+- 1× 6×2.5 mm **diametric** magnet. Press it into the cup on the underside of the platter until it clicks past the lip. It should sit about 2.7 mm above the encoder pad. To get it out, flex one of the three fingers and push from the lip. The old 683ZZ is not used. The stem runs in the 8.2 mm bore.
 - 1× AS5600 breakout, headerless. Two M2 holes, 16 mm apart, on the pad under the platter. The pad top is at 3.5 mm. The chip wants 1–3 mm of air under the magnet. Measure the module before printing. A tall one will not fit.
 - 1× dual-gang slide pot, 75 × 9 mm, 60 mm travel, B103 (10 k linear). One gang is the crossfader. Bend the pins flat.
 - 2× 6×6 mm tactile switches. Glue them under the button holes so the actuator passes into the stem.
@@ -184,15 +178,14 @@ The crossfader is a real slide pot, not the printed magnet block. The one that f
 
 ## Assembly
 
-1. Press the 683ZZ into the deck.
-2. Drop the M3 button head into the platter pocket, shank down, through the bearing. A tiny dot of threadlocker on the head so it stays in the platter and spins with it. Glue the diametric magnet to the shank end.
-3. Screw the AS5600 to the pad, chip up, under the magnet.
-4. Slide pot into the cradle, lever up through the slot. Bend the pins flat into the floor channel. Push the printed cap onto the tang.
-5. Glue the tactiles under the button holes. Push the caps on.
-6. Pot in the corner hole, knob on the shaft.
-7. DevKit in the lip, native USB at the window. Flash over the UART port before the deck is closed.
-8. Four screws from the face into the bosses.
-9. Glue the orange plus, the bar, and the USB tab. Press the feet in.
+1. Press the platter stem through the hole until the barb snaps open under the deck. If it will not start, run an 8.5 mm drill through the bore. PETG flexes. PLA may crack. In that case, shave the barb down and use a dot of glue. Then press the diametric magnet into the cup until it clicks.
+2. Screw the AS5600 to the pad, chip up, under the magnet.
+3. Slide pot into the cradle, lever up through the slot. Bend the pins flat into the floor channel. Push the printed cap onto the tang.
+4. Glue the tactiles under the button holes. Push the caps on.
+5. Pot in the corner hole, knob on the shaft.
+6. DevKit in the lip, native USB at the window. Flash over the UART port before the deck is closed.
+7. Four screws from the face into the bosses.
+8. Glue the orange plus, the bar, and the USB tab. Press the feet in.
 
 ## Firmware
 

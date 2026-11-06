@@ -1,7 +1,7 @@
 import { i as __toESM } from "../_runtime.mjs";
 import { v as require_jsx_runtime, y as require_react } from "../_libs/@react-three/drei+[...].mjs";
 import { y as Link } from "../_libs/@tanstack/react-router+[...].mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/routes-CxlL2bZs.js
+//#region node_modules/.nitro/vite/services/ssr/assets/routes-C4ayf5eo.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var VIEW_ITEMS = [
@@ -282,15 +282,33 @@ var RENDERS = [
 		alt: "Scratch deck beside a K.O. II Sidekick mixer"
 	}
 ];
-function RenderGallery() {
+var WIDE_RENDERS = [
+	{
+		src: "/field-jog/renders/wide/twin.jpg",
+		alt: "Twin deck, two platters, pads, and three faders"
+	},
+	{
+		src: "/field-jog/renders/wide/six.jpg",
+		alt: "Single platter deck, pads along the top, orange knob"
+	},
+	{
+		src: "/field-jog/renders/wide/six-front.jpg",
+		alt: "Single platter deck, cue pads and pitch fader along the front"
+	},
+	{
+		src: "/field-jog/renders/wide/underside.jpg",
+		alt: "Underside with the speaker grille, USB-C, and card slot"
+	}
+];
+function RenderGallery({ title = "Renders", renders = RENDERS }) {
 	const [index, setIndex] = (0, import_react.useState)(0);
-	const shot = RENDERS[index];
+	const shot = renders[index] ?? renders[0];
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
 		className: "flex flex-col gap-3",
 		children: [
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("h2", {
 				className: "font-mono text-xs tracking-widest text-muted uppercase",
-				children: "Renders"
+				children: title
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("img", {
 				src: shot.src,
@@ -299,7 +317,7 @@ function RenderGallery() {
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
 				className: "flex gap-2 overflow-x-auto pb-1",
-				children: RENDERS.map((item, i) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+				children: renders.map((item, i) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 					type: "button",
 					"aria-pressed": i === index,
 					"aria-label": item.alt,
@@ -492,6 +510,10 @@ function Home() {
 						]
 					})
 				]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(RenderGallery, {
+				title: "Wide",
+				renders: WIDE_RENDERS
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Link, {
 				to: "/four",

@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { ViewerPanel } from "@/components/viewer-panel";
-import { RenderGallery } from "@/components/render-gallery";
+import { RenderGallery, WIDE_RENDERS } from "@/components/render-gallery";
 
 export const Route = createFileRoute("/")({ component: Home });
 
@@ -72,6 +72,8 @@ function Home() {
           <a className="text-fg underline" href="/field-jog/stl/wide-six-platter.stl" target="_blank" rel="noreferrer">152 mm</a>
         </p>
       </section>
+
+      <RenderGallery title="Wide" renders={WIDE_RENDERS} />
 
       <Link
         to="/four"

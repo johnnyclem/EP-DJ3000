@@ -10,6 +10,20 @@ const ORANGE = "#f05a1a";
 const SLOT = "#1a1a1c";
 
 export type WideLayout = "twin" | "six";
+export type WidePart = "unit" | "case" | "platter" | "fader" | "pads" | "knob";
+
+export const WIDE_PARTS = [
+  { id: "unit", label: "Unit" },
+  { id: "case", label: "Case" },
+  { id: "platter", label: "Platter" },
+  { id: "fader", label: "Fader" },
+  { id: "pads", label: "Pads" },
+  { id: "knob", label: "Knob" },
+] as const;
+
+function show(focus: WidePart, part: WidePart) {
+  return focus === "unit" || focus === part;
+}
 
 function mat(color: string, roughness = 0.5) {
   return <meshStandardMaterial color={color} roughness={roughness} metalness={0.04} />;
@@ -150,7 +164,7 @@ function Shell() {
   );
 }
 
-function Twin() {
+function Twin({ focus }: { focus: WidePart }) {
   const decks = [
     { x: 46, cue: 40, play: 66, inn: 40, out: 66, pads: [36, 50, 64, 78], pitch: 18 },
     { x: 130, cue: 136, play: 110, inn: 136, out: 110, pads: [98, 112, 126, 140], pitch: 158 },
@@ -159,57 +173,69 @@ function Twin() {
     <group>
       {decks.map((d) => (
         <group key={d.x}>
-          <Platter x={d.x} y={158} d={76} />
-          <Cap x={d.cue} y={40} d={18} h={5} />
-          <Cap x={d.play} y={40} d={18} h={5} color="#1c1c1e" />
-          <Cap x={d.inn} y={76} d={12} h={3.2} />
-          <Cap x={d.out} y={76} d={12} h={3.2} />
-          <Led x={d.inn} y={88} />
-          <Led x={d.out} y={88} />
-          <Pitch x={d.pitch} y0={24} y1={108} />
-          {d.pads.map((x) => (
-            <RoundedBox key={x} args={[11, 11, 2.2]} radius={0.8} smoothness={2} position={[x, 100, T + 1.1]}>
+          {show(focus, "platter") ? <Platter x={d.x} y={158} d={76} /> : null}
+          {show(focus, "pads") ? (
+            <>
+              <Cap x={d.cue} y={40} d={18} h={5} />
+              <Cap x={d.play} y={40} d={18} h={5} color="#1c1c1e" />
+              <Cap x={d.inn} y={76} d={12} h={3.2} />
+              <Cap x={d.out} y={76} d={12} h={3.2} />
+              <Led x={d.inn} y={88} />
+              <Led x={d.out} y={88} />
+              {d.pads.map((x) => (
+                <RoundedBox key={x} args={[11, 11, 2.2]} radius={0.8} smoothness={2} position={[x, 100, T + 1.1]}>
+                  {mat("#2c2c2e", 0.5)}
+                </RoundedBox>
+              ))}
+            </>
+          ) : null}
+          {show(focus, "fader") ? <Pitch x={d.pitch} y0={24} y1={108} /> : null}
+        </group>
+      ))}
+      {show(focus, "fader") ? <Crossfader /> : null}
+      {show(focus, "case") ? <Screen x={88} y={220} w={78} /> : null}
+      {show(focus, "knob") ? <Cap x={158} y={218} d={16} h={8} color={ORANGE} /> : null}
+    </group>
+  );
+}
+
+function Six({ focus }: { focus: WidePart }) {
+  return (
+    <group>
+      {show(focus, "platter") ? <Platter x={88} y={142} d={152.4} /> : null}
+      {show(focus, "pads") ? (
+        <>
+          <Cap x={28} y={30} d={20} h={5.5} />
+          <Cap x={54} y={30} d={20} h={5.5} />
+          <Cap x={28} y={52} d={12} h={3.2} color="#2c2c2e" />
+          {[100, 116, 132, 148].map((x) => (
+            <RoundedBox key={x} args={[12, 12, 2.2]} radius={0.8} smoothness={2} position={[x, 36, T + 1.1]}>
               {mat("#2c2c2e", 0.5)}
             </RoundedBox>
           ))}
-        </group>
-      ))}
-      <Crossfader />
-      <Screen x={88} y={220} w={78} />
-      <Cap x={158} y={218} d={16} h={8} color={ORANGE} />
+          <Cap x={22} y={214} d={12} h={3.2} />
+          <Cap x={22} y={196} d={12} h={3.2} />
+          <Led x={34} y={214} />
+          <Led x={34} y={196} />
+        </>
+      ) : null}
+      {show(focus, "fader") ? <Pitch x={166} y0={12} y1={60} /> : null}
+      {show(focus, "case") ? <Screen x={78} y={228} w={64} /> : null}
+      {show(focus, "knob") ? <Cap x={150} y={226} d={14} h={7} color={ORANGE} /> : null}
     </group>
   );
 }
 
-function Six() {
+export function WideDeck({ layout, focus = "unit" }: { layout: WideLayout; focus?: WidePart }) {
   return (
     <group>
-      <Platter x={88} y={142} d={152.4} />
-      <Cap x={28} y={30} d={20} h={5.5} />
-      <Cap x={54} y={30} d={20} h={5.5} />
-      <Cap x={28} y={52} d={12} h={3.2} color="#2c2c2e" />
-      {[100, 116, 132, 148].map((x) => (
-        <RoundedBox key={x} args={[12, 12, 2.2]} radius={0.8} smoothness={2} position={[x, 36, T + 1.1]}>
-          {mat("#2c2c2e", 0.5)}
-        </RoundedBox>
-      ))}
-      <Pitch x={166} y0={12} y1={60} />
-      <Cap x={22} y={214} d={12} h={3.2} />
-      <Cap x={22} y={196} d={12} h={3.2} />
-      <Led x={34} y={214} />
-      <Led x={34} y={196} />
-      <Screen x={78} y={228} w={64} />
-      <Cap x={150} y={226} d={14} h={7} color={ORANGE} />
-    </group>
-  );
-}
-
-export function WideDeck({ layout }: { layout: WideLayout }) {
-  return (
-    <group>
-      <Shell />
-      <Jacks />
-      {layout === "twin" ? <Twin /> : <Six />}
+      {show(focus, "case") ? (
+        <>
+          <Shell />
+          <Jacks />
+        </>
+      ) : null}
+      {layout === "twin" ? <Twin focus={focus} /> : <Six focus={focus} />}
     </group>
   );
 }

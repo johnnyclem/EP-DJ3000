@@ -7,7 +7,7 @@ import type { Group, PerspectiveCamera } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import type { FaceId, Slots, ViewId } from "./viewer-parts";
 import { Rig, jogPose } from "./rig";
-import { WideDeck, type WideLayout } from "./wide-deck";
+import { WideDeck, type WideLayout, type WidePart } from "./wide-deck";
 
 const GREY = "#c8c8c2";
 const DECK = "#d4d4ce";
@@ -159,6 +159,7 @@ function Scene({
   watch,
   spin,
   layout,
+  wideFocus,
   onReady,
   onPickFace,
 }: {
@@ -169,6 +170,7 @@ function Scene({
   watch: string;
   spin: boolean;
   layout: WideLayout;
+  wideFocus: WidePart;
   onReady: () => void;
   onPickFace: (face: FaceId) => void;
 }) {
@@ -193,7 +195,7 @@ function Scene({
               <Assembly focus={focus} />
             </Suspense>
           ) : null}
-          {mode === "wide" ? <WideDeck layout={layout} /> : null}
+          {mode === "wide" ? <WideDeck layout={layout} focus={wideFocus} /> : null}
           {mode === "rig" && jog && jogFace ? (
             <Suspense fallback={null}>
               <group position={jog.position} quaternion={jog.quaternion}>
@@ -225,6 +227,7 @@ export function UnitScene({
   watch,
   spin,
   layout,
+  wideFocus,
   onReady,
   onInteract,
   onPickFace,
@@ -236,6 +239,7 @@ export function UnitScene({
   watch: string;
   spin: boolean;
   layout: WideLayout;
+  wideFocus: WidePart;
   onReady: () => void;
   onInteract: () => void;
   onPickFace: (face: FaceId) => void;
@@ -259,6 +263,7 @@ export function UnitScene({
         watch={watch}
         spin={spin}
         layout={layout}
+        wideFocus={wideFocus}
         onReady={onReady}
         onPickFace={onPickFace}
       />

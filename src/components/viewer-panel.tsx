@@ -9,7 +9,7 @@ import {
   type Slots,
   type ViewId,
 } from "./viewer-parts";
-import type { WideLayout } from "./wide-deck";
+import { WIDE_PARTS, type WideLayout, type WidePart } from "./wide-deck";
 
 type Mode = "rig" | "unit" | "wide";
 
@@ -21,6 +21,7 @@ type SceneProps = {
   watch: string;
   spin: boolean;
   layout: WideLayout;
+  wideFocus: WidePart;
   onReady: () => void;
   onInteract: () => void;
   onPickFace: (face: FaceId) => void;
@@ -34,6 +35,7 @@ export function ViewerPanel() {
   const [mode, setMode] = useState<Mode>("rig");
   const [unitFocus, setUnitFocus] = useState<ViewId>("unit");
   const [layout, setLayout] = useState<WideLayout>("twin");
+  const [wideFocus, setWideFocus] = useState<WidePart>("unit");
   const [slots, setSlots] = useState<Slots>(EMPTY_SLOTS);
   const [activeFace, setActiveFace] = useState<FaceId>("right");
   const [spin, setSpin] = useState(true);
@@ -79,9 +81,10 @@ export function ViewerPanel() {
             focus={unitFocus}
             slots={slots}
             activeFace={activeFace}
-            watch={`${mode}:${unitFocus}:${layout}:${slotKey(slots)}:${fitTick}`}
+            watch={`${mode}:${unitFocus}:${wideFocus}:${layout}:${slotKey(slots)}:${fitTick}`}
             spin={spin}
             layout={layout}
+            wideFocus={wideFocus}
             onReady={onReady}
             onInteract={onInteract}
             onPickFace={onPickFace}
@@ -96,9 +99,11 @@ export function ViewerPanel() {
       <div className="flex items-center justify-between gap-3">
         <p className="min-w-0 text-sm text-muted">
           {mode === "wide"
-            ? layout === "twin"
-              ? "176 × 240.5. Two 76 mm platters, a pitch fader each, hot cues, and one crossfader."
-              : "176 × 240.5. One 152 mm platter. Cue, play, loop and the tempo fader sit in the space around it."
+            ? wideFocus === "unit"
+              ? layout === "twin"
+                ? "176 × 240.5. Two 76 mm platters, a pitch fader each, hot cues, and one crossfader."
+                : "176 × 240.5. One 152 mm platter. Cue, play, loop and the tempo fader sit in the space around it."
+              : `${WIDE_PARTS.find((part) => part.id === wideFocus)?.label ?? "Part"}. The rest of the deck is hidden.`
             : mode === "rig"
               ? `${faceLabel}. Pick what snaps on.`
               : "Drag to turn. Pinch to zoom."}
@@ -210,6 +215,31 @@ export function ViewerPanel() {
             })}
           </div>
         </>
+      ) : mode === "wide" ? (
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {WIDE_PARTS.map((item) => {
+            const selected = item.id === wideFocus;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                aria-pressed={selected}
+                onClick={() => {
+                  setWideFocus(item.id);
+                  setSpin(true);
+                  setFitTick((n) => n + 1);
+                }}
+                className={
+                  selected
+                    ? "h-11 shrink-0 bg-accent px-3 font-mono text-xs tracking-wide text-accent-fg uppercase"
+                    : "h-11 shrink-0 border border-line px-3 font-mono text-xs tracking-wide text-fg uppercase"
+                }
+              >
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
       ) : (
         <div className="flex gap-2 overflow-x-auto pb-1">
           {VIEW_ITEMS.map((item) => {

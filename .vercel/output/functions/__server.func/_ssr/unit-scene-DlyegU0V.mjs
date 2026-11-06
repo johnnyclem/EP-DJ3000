@@ -1,14 +1,15 @@
 import { i as __toESM } from "../_runtime.mjs";
 import { a as useLoader, g as Vector3, i as useFrame, m as Quaternion, n as OrbitControls, o as Box3, p as Matrix4, r as Canvas, t as RoundedBox, v as require_jsx_runtime, y as require_react } from "../_libs/@react-three/drei+[...].mjs";
+import { n as WideDeck } from "./routes-9cQLrKgM.mjs";
 import { t as STLLoader } from "../_libs/three.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/unit-scene-DJ8YsA89.js
+//#region node_modules/.nitro/vite/services/ssr/assets/unit-scene-DlyegU0V.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
-var GREY$2 = "#d2d2cc";
+var GREY$1 = "#d2d2cc";
 var CREAM = "#e4dcc8";
 var GREEN = "#1f6b45";
-var BLACK$2 = "#141416";
-var ORANGE$2 = "#f05a1a";
+var BLACK$1 = "#141416";
+var ORANGE$1 = "#f05a1a";
 var BRICK = "#c8c8c2";
 var INK = "#2a2a28";
 var AMP_W = 229;
@@ -24,7 +25,7 @@ var GEAR = {
 			88,
 			16
 		],
-		color: GREY$2
+		color: GREY$1
 	},
 	ko: {
 		w: 176,
@@ -35,7 +36,7 @@ var GEAR = {
 			176,
 			16
 		],
-		color: GREY$2
+		color: GREY$1
 	},
 	riddim: {
 		w: 176,
@@ -57,7 +58,7 @@ var GEAR = {
 			88,
 			16
 		],
-		color: GREY$2
+		color: GREY$1
 	},
 	pedal: {
 		w: 176,
@@ -272,7 +273,7 @@ function Amp({ onPick, active }) {
 			smoothness: 2,
 			onClick: onPick(active),
 			children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("meshStandardMaterial", {
-				color: GREY$2,
+				color: GREY$1,
 				roughness: .48,
 				metalness: .04
 			})
@@ -346,7 +347,7 @@ function Amp({ onPick, active }) {
 				5,
 				4,
 				12
-			] }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("meshStandardMaterial", { color: ORANGE$2 })]
+			] }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("meshStandardMaterial", { color: ORANGE$1 })]
 		}),
 		[-1, 1].map((side) => [
 			70,
@@ -438,7 +439,7 @@ function Hit({ id, onPick, active, position, args }) {
 		position,
 		onClick: onPick(id),
 		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("boxGeometry", { args }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("meshStandardMaterial", {
-			color: ORANGE$2,
+			color: ORANGE$1,
 			transparent: true,
 			opacity: active === id ? .28 : .02,
 			depthWrite: false
@@ -483,7 +484,7 @@ function FaceMark({ gear, args, position, panel }) {
 	];
 	const faceW = side ? d : w;
 	const faceH = side ? h : panel === "up" ? d : h;
-	const screen = gear === "riddim" ? GREEN : gear === "ting" || gear === "pedal" ? ORANGE$2 : gear === "mixer" ? INK : BLACK$2;
+	const screen = gear === "riddim" ? GREEN : gear === "ting" || gear === "pedal" ? ORANGE$1 : gear === "mixer" ? INK : BLACK$1;
 	const screenArgs = side ? [
 		1.2,
 		faceW * .72,
@@ -533,7 +534,7 @@ function FaceMark({ gear, args, position, panel }) {
 					Math.min(8, faceW * .08),
 					1.4,
 					16
-				] }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("meshStandardMaterial", { color: ORANGE$2 })]
+				] }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("meshStandardMaterial", { color: ORANGE$1 })]
 			}) : null,
 			gear === "pedal" ? [-1, 1].map((pad) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("mesh", {
 				position: side ? [
@@ -559,7 +560,7 @@ function FaceMark({ gear, args, position, panel }) {
 					Math.min(24, faceW * .3),
 					8,
 					20
-				] }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("meshStandardMaterial", { color: BLACK$2 })]
+				] }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("meshStandardMaterial", { color: BLACK$1 })]
 			}, pad)) : null
 		]
 	});
@@ -626,552 +627,11 @@ function Brick({ position, args }) {
 			args[1] * .35,
 			args[2] * .55
 		] }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("meshStandardMaterial", {
-			color: ORANGE$2,
-			emissive: ORANGE$2,
+			color: ORANGE$1,
+			emissive: ORANGE$1,
 			emissiveIntensity: .25
 		})] })]
 	});
-}
-var W = 176;
-var H = 240.5;
-var T = 16.3;
-var GREY$1 = "#d4d4ce";
-var BLACK$1 = "#141416";
-var WELL = "#2a2a28";
-var ORANGE$1 = "#f05a1a";
-var SLOT = "#1a1a1c";
-function mat(color, roughness = .5) {
-	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("meshStandardMaterial", {
-		color,
-		roughness,
-		metalness: .04
-	});
-}
-function Platter({ x, y, d }) {
-	const rings = d > 100 ? [
-		34,
-		50,
-		64
-	] : [
-		16,
-		24,
-		31
-	];
-	const arm = d > 100 ? 22 : 12;
-	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("group", {
-		position: [
-			x,
-			y,
-			T
-		],
-		children: [
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("mesh", {
-				position: [
-					0,
-					0,
-					.2
-				],
-				rotation: [
-					Math.PI / 2,
-					0,
-					0
-				],
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("cylinderGeometry", { args: [
-					d / 2 + .5,
-					d / 2 + .5,
-					.35,
-					72
-				] }), mat(WELL, .7)]
-			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("mesh", {
-				position: [
-					0,
-					0,
-					2
-				],
-				rotation: [
-					Math.PI / 2,
-					0,
-					0
-				],
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("cylinderGeometry", { args: [
-					d / 2 - .4,
-					d / 2 - .4,
-					3.2,
-					72
-				] }), mat(BLACK$1, .42)]
-			}),
-			rings.map((r) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("mesh", {
-				position: [
-					0,
-					0,
-					3.35
-				],
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("torusGeometry", { args: [
-					r,
-					.32,
-					6,
-					48
-				] }), mat("#3a3a3c", .6)]
-			}, r)),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("mesh", {
-				position: [
-					0,
-					0,
-					3.5
-				],
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("boxGeometry", { args: [
-					arm,
-					2.2,
-					.5
-				] }), mat(ORANGE$1, .4)]
-			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("mesh", {
-				position: [
-					0,
-					0,
-					3.5
-				],
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("boxGeometry", { args: [
-					2.2,
-					arm,
-					.5
-				] }), mat(ORANGE$1, .4)]
-			})
-		]
-	});
-}
-function Cap({ x, y, d, h = 4, color = BLACK$1 }) {
-	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("mesh", {
-		position: [
-			x,
-			y,
-			T + h / 2
-		],
-		rotation: [
-			Math.PI / 2,
-			0,
-			0
-		],
-		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("cylinderGeometry", { args: [
-			d / 2,
-			d / 2,
-			h,
-			28
-		] }), mat(color, .45)]
-	});
-}
-function Led({ x, y }) {
-	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("mesh", {
-		position: [
-			x,
-			y,
-			16.8
-		],
-		rotation: [
-			Math.PI / 2,
-			0,
-			0
-		],
-		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("cylinderGeometry", { args: [
-			1.3,
-			1.3,
-			.8,
-			16
-		] }), mat(ORANGE$1, .3)]
-	});
-}
-function Pitch({ x, y0, y1 }) {
-	const mid = (y0 + y1) / 2;
-	const len = y1 - y0;
-	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("group", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(RoundedBox, {
-		args: [
-			3.4,
-			len,
-			1.1
-		],
-		radius: .5,
-		smoothness: 2,
-		position: [
-			x,
-			mid,
-			16.85
-		],
-		children: mat(SLOT, .6)
-	}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(RoundedBox, {
-		args: [
-			12,
-			16,
-			5
-		],
-		radius: 1,
-		smoothness: 2,
-		position: [
-			x,
-			y0 + len * .62,
-			19.5
-		],
-		children: mat("#c4c4be", .4)
-	})] });
-}
-function Crossfader() {
-	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("group", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(RoundedBox, {
-		args: [
-			88,
-			3.4,
-			1.1
-		],
-		radius: .5,
-		smoothness: 2,
-		position: [
-			88,
-			16,
-			16.85
-		],
-		children: mat(SLOT, .6)
-	}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(RoundedBox, {
-		args: [
-			18,
-			12,
-			6
-		],
-		radius: 1,
-		smoothness: 2,
-		position: [
-			88,
-			16,
-			19.900000000000002
-		],
-		children: mat(BLACK$1, .4)
-	})] });
-}
-function Screen({ x, y, w }) {
-	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("group", {
-		position: [
-			x,
-			y,
-			17
-		],
-		children: [
-			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(RoundedBox, {
-				args: [
-					w,
-					14,
-					1.1
-				],
-				radius: .6,
-				smoothness: 2,
-				children: mat("#0c0c0e", .35)
-			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("mesh", {
-				position: [
-					-w * .18,
-					1.6,
-					.6
-				],
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("boxGeometry", { args: [
-					w * .5,
-					3.2,
-					.3
-				] }), mat("#e6c15a", .4)]
-			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("mesh", {
-				position: [
-					-w * .18,
-					-2.4,
-					.6
-				],
-				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("boxGeometry", { args: [
-					w * .5,
-					3.2,
-					.3
-				] }), mat("#3d6fd4", .4)]
-			})
-		]
-	});
-}
-function Jacks() {
-	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("group", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("mesh", {
-		position: [
-			W / 2,
-			238.3,
-			8
-		],
-		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("boxGeometry", { args: [
-			12.5,
-			4.4,
-			3.4
-		] }), mat(SLOT, .5)]
-	}), [
-		52,
-		68,
-		108,
-		124
-	].map((x) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("mesh", {
-		position: [
-			x,
-			238.3,
-			8
-		],
-		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("cylinderGeometry", { args: [
-			2.3,
-			2.3,
-			4.4,
-			16
-		] }), mat(SLOT, .5)]
-	}, x))] });
-}
-function Shell() {
-	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("group", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(RoundedBox, {
-		args: [
-			W,
-			H,
-			T
-		],
-		radius: 3.2,
-		smoothness: 3,
-		position: [
-			W / 2,
-			H / 2,
-			T / 2
-		],
-		children: mat(GREY$1, .58)
-	}), [
-		16,
-		25,
-		48,
-		216,
-		224
-	].map((y) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("group", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("mesh", {
-		position: [
-			-.4,
-			y,
-			8
-		],
-		rotation: [
-			0,
-			0,
-			Math.PI / 2
-		],
-		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("cylinderGeometry", { args: [
-			2.2,
-			2.2,
-			2.4,
-			16
-		] }), mat(SLOT, .6)]
-	}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("mesh", {
-		position: [
-			176.4,
-			y,
-			8
-		],
-		rotation: [
-			0,
-			0,
-			Math.PI / 2
-		],
-		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("cylinderGeometry", { args: [
-			2.2,
-			2.2,
-			2.4,
-			16
-		] }), mat(SLOT, .6)]
-	})] }, y))] });
-}
-function Twin() {
-	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("group", { children: [
-		[{
-			x: 46,
-			cue: 40,
-			play: 66,
-			inn: 40,
-			out: 66,
-			pads: [
-				36,
-				50,
-				64,
-				78
-			],
-			pitch: 18
-		}, {
-			x: 130,
-			cue: 136,
-			play: 110,
-			inn: 136,
-			out: 110,
-			pads: [
-				98,
-				112,
-				126,
-				140
-			],
-			pitch: 158
-		}].map((d) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("group", { children: [
-			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Platter, {
-				x: d.x,
-				y: 158,
-				d: 76
-			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Cap, {
-				x: d.cue,
-				y: 40,
-				d: 18,
-				h: 5
-			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Cap, {
-				x: d.play,
-				y: 40,
-				d: 18,
-				h: 5,
-				color: "#1c1c1e"
-			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Cap, {
-				x: d.inn,
-				y: 76,
-				d: 12,
-				h: 3.2
-			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Cap, {
-				x: d.out,
-				y: 76,
-				d: 12,
-				h: 3.2
-			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Led, {
-				x: d.inn,
-				y: 88
-			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Led, {
-				x: d.out,
-				y: 88
-			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Pitch, {
-				x: d.pitch,
-				y0: 24,
-				y1: 108
-			}),
-			d.pads.map((x) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)(RoundedBox, {
-				args: [
-					11,
-					11,
-					2.2
-				],
-				radius: .8,
-				smoothness: 2,
-				position: [
-					x,
-					100,
-					17.400000000000002
-				],
-				children: mat("#2c2c2e", .5)
-			}, x))
-		] }, d.x)),
-		/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Crossfader, {}),
-		/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Screen, {
-			x: 88,
-			y: 220,
-			w: 78
-		}),
-		/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Cap, {
-			x: 158,
-			y: 218,
-			d: 16,
-			h: 8,
-			color: ORANGE$1
-		})
-	] });
-}
-function Six() {
-	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("group", { children: [
-		/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Platter, {
-			x: 88,
-			y: 142,
-			d: 152.4
-		}),
-		/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Cap, {
-			x: 28,
-			y: 30,
-			d: 20,
-			h: 5.5
-		}),
-		/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Cap, {
-			x: 54,
-			y: 30,
-			d: 20,
-			h: 5.5
-		}),
-		/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Cap, {
-			x: 28,
-			y: 52,
-			d: 12,
-			h: 3.2,
-			color: "#2c2c2e"
-		}),
-		[
-			100,
-			116,
-			132,
-			148
-		].map((x) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)(RoundedBox, {
-			args: [
-				12,
-				12,
-				2.2
-			],
-			radius: .8,
-			smoothness: 2,
-			position: [
-				x,
-				36,
-				17.400000000000002
-			],
-			children: mat("#2c2c2e", .5)
-		}, x)),
-		/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Pitch, {
-			x: 166,
-			y0: 12,
-			y1: 60
-		}),
-		/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Cap, {
-			x: 22,
-			y: 214,
-			d: 12,
-			h: 3.2
-		}),
-		/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Cap, {
-			x: 22,
-			y: 196,
-			d: 12,
-			h: 3.2
-		}),
-		/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Led, {
-			x: 34,
-			y: 214
-		}),
-		/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Led, {
-			x: 34,
-			y: 196
-		}),
-		/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Screen, {
-			x: 78,
-			y: 228,
-			w: 64
-		}),
-		/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Cap, {
-			x: 150,
-			y: 226,
-			d: 14,
-			h: 7,
-			color: ORANGE$1
-		})
-	] });
-}
-function WideDeck({ layout }) {
-	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("group", { children: [
-		/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Shell, {}),
-		/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Jacks, {}),
-		layout === "twin" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Twin, {}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Six, {})
-	] });
 }
 var GREY = "#c8c8c2";
 var DECK = "#d4d4ce";
@@ -1440,7 +900,7 @@ function Assembly({ focus }) {
 		})
 	}, `${piece.id}-${poseIndex}`)) : null) });
 }
-function Scene({ mode, focus, slots, activeFace, watch, spin, layout, onReady, onPickFace }) {
+function Scene({ mode, focus, slots, activeFace, watch, spin, layout, wideFocus, onReady, onPickFace }) {
 	(0, import_react.useEffect)(() => {
 		onReady();
 	}, [onReady]);
@@ -1486,7 +946,10 @@ function Scene({ mode, focus, slots, activeFace, watch, spin, layout, onReady, o
 						fallback: null,
 						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Assembly, { focus })
 					}) : null,
-					mode === "wide" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(WideDeck, { layout }) : null,
+					mode === "wide" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(WideDeck, {
+						layout,
+						focus: wideFocus
+					}) : null,
 					mode === "rig" && jog && jogFace ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(import_react.Suspense, {
 						fallback: null,
 						children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)("group", {
@@ -1519,7 +982,7 @@ function Scene({ mode, focus, slots, activeFace, watch, spin, layout, onReady, o
 		})
 	] });
 }
-function UnitScene({ mode, focus, slots, activeFace, watch, spin, layout, onReady, onInteract, onPickFace }) {
+function UnitScene({ mode, focus, slots, activeFace, watch, spin, layout, wideFocus, onReady, onInteract, onPickFace }) {
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Canvas, {
 		dpr: [1, 1.75],
 		camera: {
@@ -1549,6 +1012,7 @@ function UnitScene({ mode, focus, slots, activeFace, watch, spin, layout, onRead
 			watch,
 			spin,
 			layout,
+			wideFocus,
 			onReady,
 			onPickFace
 		})

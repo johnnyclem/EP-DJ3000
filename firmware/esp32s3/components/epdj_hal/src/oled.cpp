@@ -63,16 +63,22 @@ void drawText(uint8_t* fb, int page, const char* text) {
 }
 
 bool tx(i2c_master_dev_handle_t dev, const uint8_t* data, size_t n) {
-  return i2c_master_transmit(dev, data, n, 50) == ESP_OK;
+  return i2c_master_transmit(dev, data, n, 100) == ESP_OK;
 }
 
-bool cmd(i2c_master_dev_handle_t dev, uint8_t c) {
-  const uint8_t b[2] = {0x00, c};
-  return tx(dev, b, sizeof b);
+// One transaction, control byte 0x00, then the command bytes. A 0xD5/0x8D/0xDA and its argument have to
+// travel together. The 0.91" yellow/blue modules ignore a parameter that shows up in the next start, so the
+// charge pump never enables and the glass stays black while every ACK still succeeds.
+bool cmds(i2c_master_dev_handle_t dev, const uint8_t* c, size_t n) {
+  uint8_t buf[48];
+  if (n + 1 > sizeof buf) return false;
+  buf[0] = 0x00;
+  std::memcpy(buf + 1, c, n);
+  return tx(dev, buf, n + 1);
 }
 
-// 128x32 SSD1306, charge pump on. Each byte is its own command transaction: a 0x00 control byte applies to
-// the single byte that follows, not to a run of commands.
+// 128x32 SSD1306, the 0.91" yellow-over-blue glass. Charge pump on, COM pins sequential (0x02, not the
+// 128x64 value 0x12).
 bool initPanel(i2c_master_dev_handle_t dev) {
   const uint8_t seq[] = {
       0xAE,        // display off
@@ -80,26 +86,27 @@ bool initPanel(i2c_master_dev_handle_t dev) {
       0xA8, 0x1F,  // multiplex 1/32
       0xD3, 0x00,  // display offset
       0x40,        // start line 0
-      0x8D, 0x14,  // charge pump on (without this the glass stays dark)
+      0x8D, 0x14,  // charge pump on, from the panel's 3V3
       0x20, 0x00,  // horizontal addressing
       0xA1,        // segment remap
-      0xC8,        // COM scan direction
-      0xDA, 0x02,  // COM pins for a 128x32 panel
-      0x81, 0xCF,  // contrast
-      0xD9, 0xF1,  // precharge
+      0xC8,        // COM scan from COM[N-1] to COM0
+      0xDA, 0x02,  // COM pins, 128x32
+      0x81, 0x8F,  // contrast
+      0xD9, 0xF1,  // precharge, internal pump
       0xDB, 0x40,  // VCOMH
-      0xA4,        // RAM contents
+      0x2E,        // deactivate scroll
+      0xA4,        // follow RAM
       0xA6,        // not inverted
   };
-  for (uint8_t c : seq)
-    if (!cmd(dev, c)) return false;
-  vTaskDelay(pdMS_TO_TICKS(100));  // charge pump needs a moment before the panel is switched on
-  return cmd(dev, 0xAF);
+  if (!cmds(dev, seq, sizeof seq)) return false;
+  vTaskDelay(pdMS_TO_TICKS(100));  // the pump needs this before the panel is switched on
+  const uint8_t on[] = {0xAF};
+  return cmds(dev, on, sizeof on);
 }
 
 bool push(i2c_master_dev_handle_t dev, const uint8_t* fb) {
-  if (!cmd(dev, 0x21) || !cmd(dev, 0) || !cmd(dev, kWidth - 1)) return false;
-  if (!cmd(dev, 0x22) || !cmd(dev, 0) || !cmd(dev, kPages - 1)) return false;
+  const uint8_t window[] = {0x21, 0x00, static_cast<uint8_t>(kWidth - 1), 0x22, 0x00, static_cast<uint8_t>(kPages - 1)};
+  if (!cmds(dev, window, sizeof window)) return false;
   uint8_t pkt[1 + kWidth];
   pkt[0] = 0x40;
   for (int page = 0; page < kPages; ++page) {
@@ -126,12 +133,13 @@ OledBringup oledBringup(I2cBus& bus, char deck, const char* line2) {
   i2c_device_config_t dc = {};
   dc.dev_addr_length = I2C_ADDR_BIT_LEN_7;
   dc.device_address = addr;
-  dc.scl_speed_hz = 400000;
+  dc.scl_speed_hz = 100000;  // the 0.91" modules drop bytes at 400 kHz on a long lead
   i2c_master_dev_handle_t dev = nullptr;
   if (i2c_master_bus_add_device(bus.handle(), &dc, &dev) != ESP_OK) return out;
 
   uint8_t fb[kFrame];
   std::memset(fb, 0, sizeof fb);
+  std::memset(fb, 0xFF, kWidth);  // page 0 is the yellow band: a solid row, so a dark glass is not a blank font
   char deckLine[12];
   std::snprintf(deckLine, sizeof deckLine, "DECK %c", deck);
   drawText(fb, 0, "EP-DJ3000");

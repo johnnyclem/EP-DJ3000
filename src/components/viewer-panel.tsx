@@ -9,14 +9,18 @@ import {
   type Slots,
   type ViewId,
 } from "./viewer-parts";
+import type { WideLayout } from "./wide-deck";
+
+type Mode = "rig" | "unit" | "wide";
 
 type SceneProps = {
-  mode: "unit" | "rig";
+  mode: Mode;
   focus: ViewId;
   slots: Slots;
   activeFace: FaceId;
   watch: string;
   spin: boolean;
+  layout: WideLayout;
   onReady: () => void;
   onInteract: () => void;
   onPickFace: (face: FaceId) => void;
@@ -27,8 +31,9 @@ function slotKey(slots: Slots) {
 }
 
 export function ViewerPanel() {
-  const [mode, setMode] = useState<"unit" | "rig">("rig");
+  const [mode, setMode] = useState<Mode>("rig");
   const [unitFocus, setUnitFocus] = useState<ViewId>("unit");
+  const [layout, setLayout] = useState<WideLayout>("twin");
   const [slots, setSlots] = useState<Slots>(EMPTY_SLOTS);
   const [activeFace, setActiveFace] = useState<FaceId>("right");
   const [spin, setSpin] = useState(true);
@@ -74,8 +79,9 @@ export function ViewerPanel() {
             focus={unitFocus}
             slots={slots}
             activeFace={activeFace}
-            watch={`${mode}:${unitFocus}:${slotKey(slots)}:${fitTick}`}
+            watch={`${mode}:${unitFocus}:${layout}:${slotKey(slots)}:${fitTick}`}
             spin={spin}
+            layout={layout}
             onReady={onReady}
             onInteract={onInteract}
             onPickFace={onPickFace}
@@ -89,7 +95,13 @@ export function ViewerPanel() {
       </div>
       <div className="flex items-center justify-between gap-3">
         <p className="min-w-0 text-sm text-muted">
-          {mode === "rig" ? `${faceLabel}. Pick what snaps on.` : "Drag to turn. Pinch to zoom."}
+          {mode === "wide"
+            ? layout === "twin"
+              ? "176 × 240.5. Two 76 mm platters, a pitch fader each, hot cues, and one crossfader."
+              : "176 × 240.5. One 152 mm platter. Cue, play, loop and the tempo fader sit in the space around it."
+            : mode === "rig"
+              ? `${faceLabel}. Pick what snaps on.`
+              : "Drag to turn. Pinch to zoom."}
         </p>
         <button
           type="button"
@@ -103,7 +115,13 @@ export function ViewerPanel() {
         </button>
       </div>
       <div className="flex gap-2">
-        {(["rig", "unit"] as const).map((item) => (
+        {(
+          [
+            ["rig", "Setup"],
+            ["unit", "Parts"],
+            ["wide", "Wide"],
+          ] as const
+        ).map(([item, label]) => (
           <button
             key={item}
             type="button"
@@ -115,10 +133,38 @@ export function ViewerPanel() {
                 : "h-11 flex-1 border border-line font-mono text-xs tracking-wide text-fg uppercase"
             }
           >
-            {item === "rig" ? "Setup" : "Jog parts"}
+            {label}
           </button>
         ))}
       </div>
+      {mode === "wide" ? (
+        <div className="flex gap-2">
+          {(
+            [
+              ["twin", "Twin 3"],
+              ["six", "One 6"],
+            ] as const
+          ).map(([item, label]) => (
+            <button
+              key={item}
+              type="button"
+              aria-pressed={layout === item}
+              onClick={() => {
+                setLayout(item);
+                setSpin(true);
+                setFitTick((n) => n + 1);
+              }}
+              className={
+                layout === item
+                  ? "h-11 flex-1 bg-accent font-mono text-xs tracking-wide text-accent-fg uppercase"
+                  : "h-11 flex-1 border border-line font-mono text-xs tracking-wide text-fg uppercase"
+              }
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      ) : null}
       {mode === "rig" ? (
         <>
           <div className="grid grid-cols-4 gap-2">

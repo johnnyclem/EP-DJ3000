@@ -7,6 +7,7 @@ import type { Group, PerspectiveCamera } from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import type { FaceId, Slots, ViewId } from "./viewer-parts";
 import { Rig, jogPose } from "./rig";
+import { WideDeck, type WideLayout } from "./wide-deck";
 
 const GREY = "#c8c8c2";
 const DECK = "#d4d4ce";
@@ -157,15 +158,17 @@ function Scene({
   activeFace,
   watch,
   spin,
+  layout,
   onReady,
   onPickFace,
 }: {
-  mode: "unit" | "rig";
+  mode: "unit" | "rig" | "wide";
   focus: ViewId;
   slots: Slots;
   activeFace: FaceId;
   watch: string;
   spin: boolean;
+  layout: WideLayout;
   onReady: () => void;
   onPickFace: (face: FaceId) => void;
 }) {
@@ -190,6 +193,7 @@ function Scene({
               <Assembly focus={focus} />
             </Suspense>
           ) : null}
+          {mode === "wide" ? <WideDeck layout={layout} /> : null}
           {mode === "rig" && jog && jogFace ? (
             <Suspense fallback={null}>
               <group position={jog.position} quaternion={jog.quaternion}>
@@ -206,7 +210,7 @@ function Scene({
         makeDefault
         enableDamping
         dampingFactor={0.08}
-        autoRotate={mode === "unit" && spin}
+        autoRotate={(mode === "unit" || mode === "wide") && spin}
         autoRotateSpeed={0.45}
       />
     </>
@@ -220,16 +224,18 @@ export function UnitScene({
   activeFace,
   watch,
   spin,
+  layout,
   onReady,
   onInteract,
   onPickFace,
 }: {
-  mode: "unit" | "rig";
+  mode: "unit" | "rig" | "wide";
   focus: ViewId;
   slots: Slots;
   activeFace: FaceId;
   watch: string;
   spin: boolean;
+  layout: WideLayout;
   onReady: () => void;
   onInteract: () => void;
   onPickFace: (face: FaceId) => void;
@@ -252,6 +258,7 @@ export function UnitScene({
         activeFace={activeFace}
         watch={watch}
         spin={spin}
+        layout={layout}
         onReady={onReady}
         onPickFace={onPickFace}
       />

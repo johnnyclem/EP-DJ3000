@@ -29,7 +29,8 @@ function Home() {
         <p className="text-base leading-relaxed text-muted">
           A scratch-deck shell in the Sidekick footprint. 88 mm wide, 240 mm long,
           grey deck, orange marks, black jog and fader. Setup snaps gear onto the
-          amp: left, right, back, and top.
+          amp. Wide is the same deck at the K.O. II size, 176 × 240.5, with the
+          controls that did not fit in 88 mm.
         </p>
       </header>
 

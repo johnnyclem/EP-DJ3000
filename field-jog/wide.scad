@@ -73,10 +73,12 @@ technic_ys = [16, 25, 48, 216, 224];
 
 jack_d = 6.3;
 jack_z = 7.4;
-jack_xs = [24, 40, 128, 144];
+// Clear of the corner magnets. The posts occupy x 7–30 and x 146–169.
+// A jack in those spans dead-ends in the post.
+jack_xs = [52, 68, 108, 124];
 usb_w = 12.5;
 usb_h = 4.6;
-usb_x = 164;
+usb_x = W / 2;
 usb_z0 = 4.3;
 
 encoder_pad_top = 3.5;
@@ -212,12 +214,14 @@ module bottom() {
             for (dx = [-8, 8])
                 translate([p[0] + dx, p[1], 0.7])
                     cylinder(d = 2.1, h = encoder_pad_top - 0.7 + eps, $fn = 14);
-        translate([usb_x - usb_w / 2, H - wall - 1, usb_z0])
-            cube([usb_w, wall + 2, usb_h]);
+        // USB-C and the four jacks, through the rear wall into open cavity.
+        // The corner magnet posts stop at x 30 and x 146, so this row is clear.
+        translate([usb_x - usb_w / 2, H - wall - 3, usb_z0])
+            cube([usb_w, wall + 6, usb_h]);
         for (x = jack_xs)
-            translate([x, H - wall - 0.2, jack_z])
+            translate([x, H - wall - 3, jack_z])
                 rotate([-90, 0, 0])
-                    cylinder(d = jack_d, h = wall + 0.6, $fn = 24);
+                    cylinder(d = jack_d, h = wall + 6, $fn = 24);
         translate([W / 2, -0.4, jack_z])
             rotate([-90, 0, 0])
                 cylinder(d = jack_d, h = wall + 0.8, $fn = 24);

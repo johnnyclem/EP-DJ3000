@@ -111,13 +111,17 @@ function Screen({ x, y, w }: { x: number; y: number; w: number }) {
 }
 
 function Jacks() {
-  const xs = [24, 40, 128, 144, 164];
+  const xs = [52, 68, 108, 124];
   return (
     <group>
+      <mesh position={[W / 2, H - 2.2, 8]}>
+        <boxGeometry args={[12.5, 4.4, 3.4]} />
+        {mat(SLOT, 0.5)}
+      </mesh>
       {xs.map((x) => (
         <mesh key={x} position={[x, H - 2.2, 8]}>
           <cylinderGeometry args={[2.3, 2.3, 4.4, 16]} />
-          {mat(x === 164 ? "#3a3a3c" : SLOT, 0.5)}
+          {mat(SLOT, 0.5)}
         </mesh>
       ))}
     </group>

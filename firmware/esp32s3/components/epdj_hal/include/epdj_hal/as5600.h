@@ -1,6 +1,7 @@
-// AS5600 12-bit magnetic encoder (the default platter: a diametric magnet on the free-spinning platter's axle). 400 kHz,
-// address 0x36. The register map, the CONF word and the retry timing are pure headers (as5600_regs.h, encoder_retry.h)
-// with host tests; this class is the part that touches the I2C driver.
+// Platter encoder. The class name is As5600 because the protocol, the caps bit and the engine all still say AS5600
+// (a free-spinning platter, 12-bit angle). The chip on the board is a MagnTek MT6701: address 0x06, 14-bit angle in
+// registers 0x03/0x04, no AS5600 CONF and no STATUS magnet nibble. readAngle() returns the top 12 of those 14 bits.
+// 400 kHz. The retry timing is encoder_retry.h. This class is the part that touches the I2C driver.
 #pragma once
 #include <atomic>
 #include <cstdint>
@@ -8,6 +9,7 @@
 #include "epdj_hal/as5600_regs.h"
 #include "epdj_hal/encoder_retry.h"
 #include "epdj_hal/i2c_bus.h"
+#include "epdj_hal/mt6701_regs.h"
 #include "epdj_hal/sensor_budget.h"
 
 namespace epdj {
@@ -15,11 +17,10 @@ namespace hal {
 
 class As5600 {
  public:
-  static constexpr uint8_t kAddress = as5600::kAddress;
+  static constexpr uint8_t kAddress = mt6701::kAddress;
 
   // Registers the chip with the bus driver (no bus traffic, so this works for a chip that is not there yet), probes it, and
-  // if it answers: reads the magnet status (polled for up to ~25 ms, so an AGC that is still settling is not reported as
-  // a missing magnet), writes CONF and reads it back, and times the angle read. Returns whether the chip answered.
+  // if it answers: times the angle read. Returns whether the chip answered.
   // Not answering is not final: readAngle() asks again every 500 ms (encoder_retry.h). Logs nothing: main.cpp prints the
   // one boot line that says what was found, the diagnostics task the later events.
   bool begin(I2cBus& bus);
@@ -37,9 +38,14 @@ class As5600 {
   uint16_t conf() const { return confRead_; }
   bool confOk() const { return confKnown_ && as5600::confMatches(as5600::kScratchConfWord, confRead_); }
 
-  // The register the angle comes from: ANGLE (0x0E, filtered) by default, RAW ANGLE (0x0C) with EPDJ_AS5600_FILTERED_ANGLE off.
+  // The MT6701 has no AS5600 CONF register and no STATUS magnet nibble. These stay false so the boot log does not
+  // warn about a write this chip cannot take.
+  static bool writesConf() { return false; }
+  static bool reportsMagnet() { return false; }
+
+  // Angle comes from MT6701 register 0x03 (two bytes). The AS5600 filtered/raw switch does not apply.
   static bool filteredAngle();
-  static uint8_t angleRegister() { return as5600::angleRegister(filteredAngle()); }
+  static uint8_t angleRegister() { return mt6701::kRegAngle; }
 
   // Mean duration of one angle read, measured when the chip first answered at boot (0 = not measurable, or it did not
   // answer then). The 1 kHz loop spends this much of every millisecond waiting for the bus; main.cpp takes it off the ADC's
@@ -58,8 +64,6 @@ class As5600 {
 
  private:
   bool readReg(uint8_t reg, uint8_t* out, size_t n, int timeoutMs);
-  void applyConf(int timeoutMs);
-  void readMagnet(unsigned polls);
 
   i2c_master_dev_handle_t dev_ = nullptr;
   EncoderRetry retry_;

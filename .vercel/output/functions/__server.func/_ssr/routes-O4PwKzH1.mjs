@@ -1,7 +1,7 @@
 import { i as __toESM } from "../_runtime.mjs";
 import { t as RoundedBox, v as require_jsx_runtime, y as require_react } from "../_libs/@react-three/drei+[...].mjs";
 import { y as Link } from "../_libs/@tanstack/react-router+[...].mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/routes-DTeVGVIl.js
+//#region node_modules/.nitro/vite/services/ssr/assets/routes-O4PwKzH1.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var __defProp = Object.defineProperty;
@@ -805,7 +805,7 @@ function ViewerPanel() {
 	const [Scene, setScene] = (0, import_react.useState)(null);
 	(0, import_react.useEffect)(() => {
 		let live = true;
-		import("./unit-scene-BTQQEsXv.mjs").then((mod) => {
+		import("./unit-scene-61YriOhc.mjs").then((mod) => {
 			if (live) setScene(() => mod.UnitScene);
 		});
 		return () => {
@@ -1137,7 +1137,7 @@ function Home() {
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 				className: "text-sm leading-relaxed text-muted",
-				children: "The long edge matches the EP row, and the width matches a Sidekick. The 76 mm platter is centered, with 6 mm of deck on each side. The knob sits above it. It is 16 mm thick where it meets the row, the same as a K.O. II and a Sidekick. The top 52 mm rises to 22 mm so a 2×AA holder fits. That rise is part of the top shell. The two halves close on four pairs of magnets. The deck is not engraved. Type tore out of the first print, so the lettering is vinyl, cut 1:1 for a Cricut. The raised end carries the name, the port row and the tempo label. The buttons are labeled on the deck. Pin holes are 16, 25, 48, 216 and 224 mm from the fader end, 8 mm off the bottom, on both long sides."
+				children: "The long edge matches the EP row, and the width matches a Sidekick. The 76 mm platter is centered, with 6 mm of deck on each side. The knob sits above it. It is 16 mm thick where it meets the row, the same as a K.O. II and a Sidekick. The top 52 mm rises to 22 mm so a 2×AA holder fits. That rise is part of the top shell. The two halves close on four pairs of magnets. The deck is not engraved. Type tore out of the first print, so the lettering is vinyl, cut 1:1 for a Cricut. The raised end carries the name, the port row and the tempo label. The buttons are labeled on the deck. The platter encoder is a MagnTek MT6701 on a 26 mm pad. Four M2 holes, 17.5 mm apart. Pin holes are 16, 25, 48, 216 and 224 mm from the fader end, 8 mm off the bottom, on both long sides."
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("section", {
 				className: "flex flex-col gap-2 text-sm leading-relaxed",
@@ -1148,7 +1148,7 @@ function Home() {
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 						className: "text-muted",
-						children: "176 × 240.5 × 16.3 mm. Twin is two 76 mm platters. Six is one 152 mm platter. Print the top face up and the tray cavity up. IN, OUT and the other toggles are a 12×12×7.3 mm switch. Its own cap comes through the hole. CUE and PLAY stay printed plungers. The microSD slot is on the underside, 28 mm from the left and 18 mm in from the jack end. Orbit under the model to see it."
+						children: "176 × 240.5 × 16.3 mm. Twin is two 76 mm platters. Six is one 152 mm platter. Print the top face up and the tray cavity up. IN, OUT and the other toggles are a 12×12×7.3 mm switch. Its own cap comes through the hole. CUE and PLAY stay printed plungers. Each platter sits over a MagnTek MT6701. The pad is 26 mm square, four M2 holes on a 17.5 mm square. Solder VDD, GND, SCL and SDA. Leave Analog/PWM open, and do not fit a pin header. The microSD slot is on the underside, 28 mm from the left and 18 mm in from the jack end. Orbit under the model to see it."
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
 						className: "flex flex-wrap gap-x-4 gap-y-2",

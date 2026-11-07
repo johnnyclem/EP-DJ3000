@@ -1,8 +1,8 @@
 import { i as __toESM } from "../_runtime.mjs";
 import { a as useLoader, g as Vector3, i as useFrame, m as Quaternion, n as OrbitControls, o as Box3, p as Matrix4, r as Canvas, t as RoundedBox, v as require_jsx_runtime, y as require_react } from "../_libs/@react-three/drei+[...].mjs";
-import { n as WideDeck } from "./routes-DTeVGVIl.mjs";
+import { n as WideDeck } from "./routes-O4PwKzH1.mjs";
 import { t as STLLoader } from "../_libs/three.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/unit-scene-BTQQEsXv.js
+//#region node_modules/.nitro/vite/services/ssr/assets/unit-scene-61YriOhc.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var GREY$1 = "#d2d2cc";

@@ -126,9 +126,11 @@ oled_h = 11.85;
 oled_cx = 28;   // plate-local
 oled_cy = 22;
 
-encoder_pad_top = 3.5;   // headerless AS5600. 6.2 left 1.9 mm and the chip hit the magnet
-encoder_pad_w = 26;
-encoder_pad_d = 20;
+encoder_pad_top = 3.5;   // headerless MT6701. Measured board is 23 mm square, 1.6 mm plus a SOP-8
+encoder_pad_w = 26;      // 1.5 mm of land around the 23 mm board
+encoder_pad_d = 26;
+encoder_hole_d = 2.2;    // M2. The photo reads about 2.1; FDM prints small
+encoder_hole_pitch = 17.5;
 
 // Headerless ESP32-S3-DevKitC-1, parked on the left under the platter.
 // The battery cap owns the top end, so the board's own USB no longer
@@ -282,7 +284,7 @@ module bottom() {
             }
             // Magnet posts, one per corner. The pocket opens on the rim.
             magnet_posts();
-            // AS5600 pad. Top of pad is the board seat (solder wires, no tall headers).
+            // MT6701 pad. Top of the pad is the board seat. Solder wires, no pin header.
             translate([platter_cx - encoder_pad_w / 2,
                        platter_cy - encoder_pad_d / 2,
                        floor_t - eps])
@@ -312,10 +314,12 @@ module bottom() {
             translate([p[0], p[1], tray_h - mag_pocket_d])
                 cube([mag_pocket_l, mag_pocket_w, mag_pocket_d + eps]);
 
-        // M2 pilots in the encoder pad. Blind, and they stop inside the floor.
-        for (dx = [-8, 8])
-            translate([platter_cx + dx, platter_cy, 0.7])
-                cylinder(d = 2.1, h = encoder_pad_top - 0.7 + eps, $fn = 16);
+        // Four M2 pilots, 17.5 mm square, centered on the chip. Blind: they stop inside the floor.
+        for (sx = [-1, 1])
+            for (sy = [-1, 1])
+                translate([platter_cx + sx * encoder_hole_pitch / 2,
+                           platter_cy + sy * encoder_hole_pitch / 2, 0.7])
+                    cylinder(d = encoder_hole_d, h = encoder_pad_top - 0.7 + eps, $fn = 16);
 
         // USB-C window in the top end wall, lined up with the DevKit's native port.
         translate([W / 2 - usb_w / 2, H - wall - 1, usb_z0])

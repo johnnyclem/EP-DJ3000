@@ -12,8 +12,8 @@ part choices are suggestions, and the mechanical consequences for the printed sh
 | 683ZZ bearing, 3 x 7 x 3 mm | 1 | pressed into the deck, as in the Field Jog README |
 | M3 button-head screw | 1 | the axle; head in the platter's pocket, shank down through the bearing. Shell commit 15417b6 moved the shell's list from M3 x 12 to **M3 x 6** and lowered the AS5600 pad to 3.5 mm. The margin is thin on paper (a gap of -0.1 to +0.7 mm depending on where the head seats; the head height used is from memory), so **buy an M3 x 5 as well as an M3 x 6** and test-fit: [cross-check in `README.md`](README.md#stack-up-cross-check-on-paper-shell-15417b6-nothing-measured) |
 | 6 x 2.5 mm **diametric** magnet | 1 | glued to the shank's end. **Diametrically** magnetised (poles on opposite sides of the round face); an axial magnet (poles on the flat faces) gives the AS5600 nothing to measure. Field Jog's own list says "diametric" for the AS5600 and "axial is fine" for the fader lock: do not mix the two up |
-| AS5600 breakout | 1 | I2C, address 0x36 (not an AS5600L). **Check its 3.3 V / 5 V strap before powering it from 3V3**: many are strapped for 5 V (`WIRING.md`). Solder wires, no tall pin headers; two M2 holes 16 mm apart on the SCAD pad, so the breakout's own holes must match that spacing (measure yours). **Measure its PCB and chip height**: the 3.5 mm pad assumes a 1.6 mm board plus a 1.5 mm chip (both from memory); a thicker module needs `encoder_pad_top` lowered |
-| M2 screws | 2 | the AS5600 board to its pad |
+| MT6701 breakout | 1 | MagnTek, I2C address 0x06 (the protocol still names the platter source AS5600). VDD, GND, SDA GPIO21, SCL GPIO47, Analog/PWM open. 3.3 V, no pin header. Four M2 holes on a 17.5 mm square; the SCAD pad is 26 mm square with its top at 3.5 mm. Board measured at 23 mm square from the photo next to the old pad |
+| M2 screws | 4 | the MT6701 board to its pad |
 | 2 x 6 x 6 mm tactile switches, vertical 9 mm 10 k pot for the knob | 2, 1 | CUE/REV and the orange knob, as in the Field Jog. The shell has three more stems (PLAY, LOOP IN, LOOP OUT) that nothing reads: see below |
 
 ## Replaced

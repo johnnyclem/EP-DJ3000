@@ -96,8 +96,10 @@ usb_x = W / 2;
 usb_z0 = 4.3;
 
 encoder_pad_top = 3.5;
-encoder_pad_w = 26;
-encoder_pad_d = 20;
+encoder_pad_w = 26;       // MT6701 board is 23 mm square
+encoder_pad_d = 26;
+encoder_hole_d = 2.2;
+encoder_hole_pitch = 17.5;
 
 $fn = 48;
 
@@ -229,9 +231,11 @@ module bottom() {
         }
         magnet_pockets(tray_h - mag_pocket_d);
         for (p = platter_list())
-            for (dx = [-8, 8])
-                translate([p[0] + dx, p[1], 0.7])
-                    cylinder(d = 2.1, h = encoder_pad_top - 0.7 + eps, $fn = 14);
+            for (sx = [-1, 1])
+                for (sy = [-1, 1])
+                    translate([p[0] + sx * encoder_hole_pitch / 2,
+                               p[1] + sy * encoder_hole_pitch / 2, 0.7])
+                        cylinder(d = encoder_hole_d, h = encoder_pad_top - 0.7 + eps, $fn = 14);
         // USB-C and the four jacks, through the rear wall into open cavity.
         // The corner magnet posts stop at x 30 and x 146, so this row is clear.
         translate([usb_x - usb_w / 2, H - wall - 3, usb_z0])

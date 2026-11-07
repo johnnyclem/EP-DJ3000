@@ -129,23 +129,13 @@ void logPlatter() {
 
   char enc[200];
   if (encoder) {
-    char conf[40];
-    if (!g_as5600.confKnown()) {
-      std::snprintf(conf, sizeof conf, "conf=?");
-    } else if (g_as5600.confOk()) {
-      std::snprintf(conf, sizeof conf, "conf=0x%04X", static_cast<unsigned>(g_as5600.conf()));
-    } else {
-      std::snprintf(conf, sizeof conf, "conf=0x%04X (wrote 0x%04X)", static_cast<unsigned>(g_as5600.conf()),
-                    static_cast<unsigned>(hal::as5600::kScratchConfWord));
-    }
-    std::snprintf(enc, sizeof enc, "answered at 0x%02X, magnet %s, %s, angle reg 0x%02X (%s), read %u us", hal::As5600::kAddress,
-                  hal::sensor_budget::magnetText(g_as5600.magnet()), conf, static_cast<unsigned>(hal::As5600::angleRegister()),
-                  hal::As5600::filteredAngle() ? "filtered" : "raw", g_as5600.readUs());
+    std::snprintf(enc, sizeof enc, "MT6701 answered at 0x%02X, 14-bit angle reg 0x%02X (top 12 bits), read %u us",
+                  hal::As5600::kAddress, static_cast<unsigned>(hal::As5600::angleRegister()), g_as5600.readUs());
   } else {
-    std::snprintf(enc, sizeof enc, "NOT answering at 0x%02X (SDA GPIO%d, SCL GPIO%d)%s", hal::As5600::kAddress, pins::kI2cSda,
-                  pins::kI2cScl, g_as5600.canRetry() ? ", asking again every 500 ms" : "");
+    std::snprintf(enc, sizeof enc, "MT6701 NOT answering at 0x%02X (SDA GPIO%d, SCL GPIO%d)%s", hal::As5600::kAddress,
+                  pins::kI2cSda, pins::kI2cScl, g_as5600.canRetry() ? ", asking again every 500 ms" : "");
   }
-  ESP_LOGI(TAG, "platter: source %s | AS5600 %s | touch pads wired: %u%s", platterText(source), enc, pads,
+  ESP_LOGI(TAG, "platter: source %s | %s | touch pads wired: %u%s", platterText(source), enc, pads,
            pads == 1 ? " (GPIO4 = hold pad)" : (pads == 0 ? " (no hold pad)" : ""));
 
   if (source == proto::PlatterSource::As5600 && !encoder) {
@@ -156,16 +146,16 @@ void logPlatter() {
 #endif
     if (g_as5600.canRetry()) {
       ESP_LOGW(TAG, "!!! platterSource is AS5600 but no encoder answered (%s): JOG IS SILENT until one does. It is asked again every 500 ms, "
-                    "so fixing the wiring is enough, no reboot. Check the I2C wiring (SDA GPIO%d, SCL GPIO%d, 3V3, GND), the breakout's "
-                    "3.3 V/5 V strap and the magnet gap (1-3 mm) !!!",
+                    "so fixing the wiring is enough, no reboot. Check the I2C wiring (SDA GPIO%d, SCL GPIO%d, 3V3, GND). "
+                    "The chip is an MT6701 at 0x06. Leave Analog/PWM open. Magnet gap is about 1 mm off the SOP-8 !!!",
                why, pins::kI2cSda, pins::kI2cScl);
     } else {
       ESP_LOGW(TAG, "!!! platterSource is AS5600 but no encoder answered (%s): JOG WILL BE SILENT. Check the I2C wiring (SDA GPIO%d, SCL GPIO%d, "
-                    "3V3, GND), the breakout's 3.3 V/5 V strap and the magnet gap (1-3 mm), then reboot !!!",
+                    "3V3, GND). The chip is an MT6701 at 0x06. Leave Analog/PWM open. Then reboot !!!",
                why, pins::kI2cSda, pins::kI2cScl);
     }
   }
-  if (encoder && !g_as5600.confOk()) {
+  if (encoder && hal::As5600::writesConf() && !g_as5600.confOk()) {
     if (g_as5600.confKnown()) {
       ESP_LOGW(TAG, "AS5600 CONF reads back 0x%04X after writing 0x%04X: the chip did not take the filter settings (a burned configuration "
                     "or a bus fault). Jog still works with whatever the chip does",
@@ -174,14 +164,14 @@ void logPlatter() {
       ESP_LOGW(TAG, "AS5600 CONF could not be written or read back (I2C error): the filter settings are whatever the chip powered up with");
     }
   }
-  if (encoder && g_as5600.magnet() != Magnet::Ok) {
+  if (encoder && hal::As5600::reportsMagnet() && g_as5600.magnet() != Magnet::Ok) {
     ESP_LOGW(TAG, "AS5600 magnet %s (STATUS 0x%02X): %s", hal::sensor_budget::magnetText(g_as5600.magnet()), g_as5600.status(),
              g_as5600.magnet() == Magnet::TooStrong ? "move it away from the chip (gap 1-3 mm)"
              : g_as5600.magnet() == Magnet::Unknown ? "the status register could not be read"
                                                     : "move it closer, centre it on the chip, and check it is diametrically magnetised");
   }
   if (encoder && source != proto::PlatterSource::As5600) {
-    ESP_LOGW(TAG, "an AS5600 answered but platterSource is %s, so the encoder is ignored (a config saved before contract v1.3 keeps "
+    ESP_LOGW(TAG, "an encoder answered but platterSource is %s, so it is ignored (a config saved before contract v1.3 keeps "
                   "TOUCH_RING: LOAD_DEFAULTS and SAVE_CONFIG, or set platterSource 0)",
              platterText(source));
   }

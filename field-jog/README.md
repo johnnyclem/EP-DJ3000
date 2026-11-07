@@ -71,8 +71,8 @@ The roof has one opening, cut to the glass: 30.5 × 11.85 mm. The module
 behind it is 40 × 12.85 mm, so about half a millimeter of board shows past
 the glass on the short sides and that lip is what keeps it from falling
 through. Tape it to the underside, pins bent down into the bay. It is the
-128×32 yellow-over-blue I2C panel. It shares I2C with the AS5600 (display
-`0x3C`, encoder `0x36`).
+128×32 yellow-over-blue I2C panel. It shares I2C with the MT6701 (display
+`0x3C`, encoder `0x06`).
 
 ## One board
 
@@ -108,10 +108,12 @@ open. The window is the native USB port only.
 
 ## Encoder
 
-The AS5600 pad used to sit at 6.2 mm. That left 1.9 mm under the magnet,
-which is where the chip is, so the magnet hit the board. The pad is now
-3.5 mm, for a headerless breakout. Measure yours. A thicker module needs
-the pad lower still, or it hits the magnet again.
+The encoder is a MagnTek MT6701, a 23 mm square board measured against this
+pad's old 26 × 20 print. The pad is now 26 mm square, top still at 3.5 mm,
+with four M2 holes on a 17.5 mm square. Solder VDD, GND, SCL and SDA.
+Leave Analog/PWM open. Do not fit a pin header. The SOP-8 sits on a 1.6 mm
+board, so the chip face is about 1 mm under the magnet. A taller module
+needs the pad lower.
 
 The magnet is no longer glued to a screw. The platter stem is the axle. It snaps through an 8.2 mm bore, and the 6 × 2.5 mm magnet clicks into a lipped cup on the end of that stem, about 2.7 mm above the pad. The 683ZZ does not fit this stem. The bore is the bearing. PETG will hold the barb better than PLA.
 
@@ -166,7 +168,7 @@ The orange pieces are 0.6 mm. Print them slow, on a clean plate.
 
 - 8× 5 × 20 × 2 mm magnets. Four in the tray, four in the lid, at the same four corners. The pocket is 21 × 6 × 2.5 mm. The extra 0.5 mm on each side is wiggle room. The extra 0.5 mm of depth is glue behind the magnet. Press each one flush with the mating face. Opposite poles face each other, or the case will push apart.
 - 1× 6×2.5 mm **diametric** magnet. Press it into the cup on the underside of the platter until it clicks past the lip. It should sit about 2.7 mm above the encoder pad. To get it out, flex one of the three fingers and push from the lip. The old 683ZZ is not used. The stem runs in the 8.2 mm bore.
-- 1× AS5600 breakout, headerless. Two M2 holes, 16 mm apart, on the pad under the platter. The pad top is at 3.5 mm. The chip wants 1–3 mm of air under the magnet. Measure the module before printing. A tall one will not fit.
+- 1× MT6701 breakout (MagnTek, marked 6701). 23 mm square, four M2 holes on a 17.5 mm square. Headerless. VDD, GND, SCL, SDA. Analog/PWM stays open. The pad top is at 3.5 mm. The chip face wants about 0.5–3 mm of air under the magnet.
 - 1× dual-gang slide pot, 75 × 9 mm, 60 mm travel, B103 (10 k linear). One gang is the crossfader. Bend the pins flat.
 - 2× 6×6 mm tactile switches, under CUE and PLAY. Glue them so the actuator passes into the stem.
 - 3× 12×12×7.3 mm tactile switches, round cap Ø6.9, for IN, OUT and REV. The ears run left to right. The cap comes through the 7.6 mm hole and sits about 1 mm proud. No printed cap on these.
@@ -180,7 +182,7 @@ The crossfader is a real slide pot, not the printed magnet block. The one that f
 ## Assembly
 
 1. Press the platter stem through the hole until the barb snaps open under the deck. If it will not start, run an 8.5 mm drill through the bore. PETG flexes. PLA may crack. In that case, shave the barb down and use a dot of glue. Then press the diametric magnet into the cup until it clicks.
-2. Screw the AS5600 to the pad, chip up, under the magnet.
+2. Screw the MT6701 to the pad, chip up, centered under the magnet. Four M2 screws.
 3. Slide pot into the cradle, lever up through the slot. Bend the pins flat into the floor channel. Push the printed cap onto the tang.
 4. Glue the two 6 mm tactiles under CUE and PLAY, then push the printed caps on. Seat the three 12 mm toggles up into the pockets, cap through the hole.
 5. Pot in the corner hole, knob on the shaft.

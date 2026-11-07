@@ -43,7 +43,7 @@ wait
 [ -f "$out/harness.o" ] || g++ $flags -I"$core/test" -c "$core/test/harness_main.cpp" -o "$out/harness.o"
 
 rc=0
-for t in test_output_pump test_pacing_and_range test_sensor_budget test_as5600_conf test_encoder_retry; do
+for t in test_output_pump test_pacing_and_range test_sensor_budget test_as5600_conf test_mt6701 test_encoder_retry; do
   echo "== $t"
   # shellcheck disable=SC2086
   g++ $flags $warn $inc "$here/$t.cpp" "$out"/core_*.o "$out/harness.o" -o "$out/$t"

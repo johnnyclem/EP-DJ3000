@@ -43,7 +43,7 @@ bool answers(i2c_master_bus_handle_t bus, uint8_t addr) {
 }
 
 bool anyDevice(i2c_master_bus_handle_t bus) {
-  return answers(bus, 0x3C) || answers(bus, 0x3D) || answers(bus, 0x36);
+  return answers(bus, 0x3C) || answers(bus, 0x3D) || answers(bus, 0x06);
 }
 
 // Drop the previous master and claim `sda`/`scl`. A failed open leaves the bus null.
@@ -109,7 +109,7 @@ bool I2cBus::begin() {
 // A one-byte write, not i2c_master_probe. On this IDF the probe is only START+STOP, and that transaction
 // never completes here (the wait expires with no NACK and no done), so a chip that is present looks absent
 // and the panel is never initialised. Writing 0x00 is harmless: the SSD1306 treats it as a command control
-// byte, the AS5600 treats it as "next read is the angle register".
+// byte, the MT6701 treats it as a register pointer (0x00, not the angle). The probe only checks the ACK.
 bool I2cBus::probe(uint8_t addr7) {
   if (bus_ == nullptr) return false;
   i2c_device_config_t dc = {};

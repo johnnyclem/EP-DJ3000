@@ -26,7 +26,7 @@ with a multimeter), and set `self_powered` / `vbus_monitor_io` in `usb_device.cp
 | 15 | I2S BCK | to PCM5102A BCK |
 | 16 | I2S WS (LRCK) | to PCM5102A LCK |
 | 17 | I2S DOUT | to PCM5102A DIN |
-| 21 | I2C SDA | **AS5600** (the default platter's encoder; also the optional codec probe) |
+| 21 | I2C SDA | **MT6701** platter encoder (address 0x06) and the OLED |
 | 47 | I2C SCL | same. In the VDD_SPI power domain: see the header-table check below. |
 | 40 | TRS MIDI TX | UART1, 31250 baud, through the output stage below |
 | 41 | TRS MIDI RX | UART1, from the optocoupler |
@@ -54,7 +54,7 @@ The headers expose GPIO 0-21 and 35-48; **GPIO 22-34 are not broken out.** Every
 | DAC-present strap | 14 | yes | |
 | I2S BCK, WS, DOUT | 15, 16, 17 | yes | |
 | microSD CLK, CMD, D0 | 18, 39, 42 | yes | 39 and 42 are JTAG pins (caveat 1) |
-| AS5600 SDA, SCL | 21, 47 | yes | 47 is in the flash/PSRAM supply domain (caveat 2) |
+| MT6701 SDA, SCL | 21, 47 | yes | 47 is in the flash/PSRAM supply domain (caveat 2) |
 | TRS MIDI TX, RX | 40, 41 | yes | JTAG pins (caveat 1) |
 | Status LED | 38 (v1.1) or 48 (v1.0) | yes | the guide lists the RGB LED on GPIO48 for v1.0; 48 is in the supply domain too |
 
@@ -213,7 +213,47 @@ With a card in, CUE and REV belong to the browser and are not sent as MIDI:
 
 A redraw of the glass takes the I2C bus for about 50 ms, so the platter read drops a few ticks at that moment. It only redraws when the line changes.
 
-## AS5600 (the default platter: free-spinning on a bearing)
+## MT6701 (the platter encoder)
+
+The protocol still calls the platter source `AS5600`. The part on the board is a MagnTek MT6701 (14-bit, I2C address
+**0x06**). Mechanics: `field-jog/README.md`. A 6 × 2.5 mm **diametric** magnet in the platter stem, chip up, about 1 mm
+of air between the SOP-8 and the magnet. The pad top is 3.5 mm. No pin header.
+
+| MT6701 breakout | Connect to | Note |
+|---|---|---|
+| VDD | DevKit 3V3 | 3.3–5 V chip. Use 3.3 V. Not 5 V: the board's pull-ups would then put 5 V on GPIO21/47. |
+| GND | GND | |
+| SCL | GPIO47 | |
+| SDA | GPIO21 | |
+| Analog/PWM | not connected | |
+
+There is no 3.3/5 V strap and no DIR pin on this board. Clockwise that reads backwards is `jogInvert`, not a wire.
+
+**I2C.** Address **0x06** (7-bit). The bus scan accepts the OLED (`0x3C`/`0x3D`) or this encoder. 400 kHz. The firmware
+reads register `0x03` (two bytes) and keeps the top 12 of the 14-bit angle, so one turn is still 4096 counts. It does not
+write a configuration register: this chip has no AS5600 CONF, and no STATUS magnet nibble. A bad magnet shows up as an
+angle that does not move, not as a magnet warning.
+
+**Bring-up: what the boot log should say**
+
+```
+platter: source AS5600 | MT6701 answered at 0x06, 14-bit angle reg 0x03 (top 12 bits), read <N> us | touch pads wired: 1 (GPIO4 = hold pad)
+```
+
+`source AS5600` is the protocol name for a free-spinning platter. The part that answered is the MT6701.
+
+| It says | It means | Do |
+|---|---|---|
+| `MT6701 answered at 0x06` | the chip ACKed | turn the platter: `sens:` `angle=` moves through a full turn (0..4095) |
+| `MT6701 NOT answering at 0x06 (...), asking again every 500 ms` | nothing ACKed | SDA GPIO21, SCL GPIO47, 3V3 on VDD, GND. Analog/PWM stays open. No reboot needed |
+| `encoder: stopped answering at 0x06` / `answering again` | two failed reads, then a good one | a loose wire; jog resumes with no jump |
+| `sens: ... angle=(bad)` | the last read failed | a loose wire |
+| angle barely moves over a full turn | magnet missing, axial, or too far | diametric 6×2.5, about 1 mm off the chip, centered |
+
+The paragraphs below this line are the old AS5600 CONF notes. They are not what this board does. Do not expect `conf=0x1C00`
+or `magnet detected`.
+
+## AS5600 notes (not this board)
 
 Mechanics are `field-jog/README.md` and `field-jog/field-jog.scad`: 683ZZ bearing, an M3x6 axle, a 6 x 2.5 mm **diametric** magnet
 on the shank's end, the AS5600 breakout on the pad under the platter, chip up, **1 to 3 mm** from the magnet (`PLATTER.md`). Shell

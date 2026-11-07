@@ -52,6 +52,7 @@ function Home() {
         The deck is not engraved. Type tore out of the first print, so the lettering
         is vinyl, cut 1:1 for a Cricut. The raised end carries the name, the port row
         and the tempo label. The buttons are labeled on the deck.
+        The platter encoder is a MagnTek MT6701 on a 26 mm pad. Four M2 holes, 17.5 mm apart.
         Pin holes are 16, 25, 48, 216 and 224 mm from the fader end, 8 mm off the
         bottom, on both long sides.
       </p>
@@ -61,6 +62,7 @@ function Home() {
         <p className="text-muted">
           176 × 240.5 × 16.3 mm. Twin is two 76 mm platters. Six is one 152 mm platter. Print the top face up and the tray cavity up.
           IN, OUT and the other toggles are a 12×12×7.3 mm switch. Its own cap comes through the hole. CUE and PLAY stay printed plungers.
+          Each platter sits over a MagnTek MT6701. The pad is 26 mm square, four M2 holes on a 17.5 mm square. Solder VDD, GND, SCL and SDA. Leave Analog/PWM open, and do not fit a pin header.
           The microSD slot is on the underside, 28 mm from the left and 18 mm in from the jack end. Orbit under the model to see it.
         </p>
         <p className="flex flex-wrap gap-x-4 gap-y-2">

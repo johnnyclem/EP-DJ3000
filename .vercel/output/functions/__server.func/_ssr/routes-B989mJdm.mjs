@@ -1,7 +1,7 @@
 import { i as __toESM } from "../_runtime.mjs";
 import { t as RoundedBox, v as require_jsx_runtime, y as require_react } from "../_libs/@react-three/drei+[...].mjs";
 import { y as Link } from "../_libs/@tanstack/react-router+[...].mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/routes-BViQ00wP.js
+//#region node_modules/.nitro/vite/services/ssr/assets/routes-B989mJdm.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var __defProp = Object.defineProperty;
@@ -19,7 +19,6 @@ var H = 240.5;
 var T = 16.3;
 var GREY = "#d4d4ce";
 var BLACK = "#141416";
-var WELL = "#2a2a28";
 var ORANGE = "#f05a1a";
 var SLOT = "#1a1a1c";
 var WIDE_PARTS = [
@@ -80,7 +79,7 @@ function Platter({ x, y, d }) {
 				position: [
 					0,
 					0,
-					.2
+					1.2
 				],
 				rotation: [
 					Math.PI / 2,
@@ -88,17 +87,17 @@ function Platter({ x, y, d }) {
 					0
 				],
 				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("cylinderGeometry", { args: [
-					d / 2 + .5,
-					d / 2 + .5,
-					.35,
+					d / 2 - .3,
+					d / 2 - .3,
+					3.8,
 					72
-				] }), mat(WELL, .7)]
+				] }), mat(BLACK, .42)]
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("mesh", {
 				position: [
 					0,
 					0,
-					2
+					-5.62
 				],
 				rotation: [
 					Math.PI / 2,
@@ -106,17 +105,95 @@ function Platter({ x, y, d }) {
 					0
 				],
 				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("cylinderGeometry", { args: [
-					d / 2 - .4,
-					d / 2 - .4,
+					3.85,
+					3.85,
+					9.85,
+					40
+				] }), mat(BLACK, .5)]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("mesh", {
+				position: [
+					0,
+					0,
+					-6.55
+				],
+				rotation: [
+					Math.PI / 2,
+					0,
+					0
+				],
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("cylinderGeometry", { args: [
+					4.45,
+					4.45,
+					.9,
+					32
+				] }), mat(BLACK, .55)]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("mesh", {
+				position: [
+					0,
+					0,
+					-6
+				],
+				rotation: [
+					Math.PI / 2,
+					0,
+					0
+				],
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("cylinderGeometry", { args: [
+					3.85,
+					4.45,
+					.6,
+					32
+				] }), mat(BLACK, .55)]
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("mesh", {
+				position: [
+					0,
+					0,
+					-10.7
+				],
+				rotation: [
+					Math.PI / 2,
+					0,
+					0
+				],
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("cylinderGeometry", { args: [
+					2.7,
 					3.2,
-					72
-				] }), mat(BLACK, .42)]
+					.55,
+					28
+				] }), mat(SLOT, .7)]
+			}),
+			[
+				0,
+				120,
+				240
+			].map((deg) => {
+				const a = deg * Math.PI / 180;
+				return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("mesh", {
+					position: [
+						Math.sin(a) * 3.2,
+						Math.cos(a) * 3.2,
+						-4.2
+					],
+					rotation: [
+						0,
+						0,
+						-a
+					],
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("boxGeometry", { args: [
+						.7,
+						1.4,
+						5.2
+					] }), mat("#2a2a2c", .8)]
+				}, deg);
 			}),
 			rings.map((r) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("mesh", {
 				position: [
 					0,
 					0,
-					3.35
+					3.2
 				],
 				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("torusGeometry", { args: [
 					r,
@@ -129,24 +206,24 @@ function Platter({ x, y, d }) {
 				position: [
 					0,
 					0,
-					3.5
+					3.25
 				],
 				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("boxGeometry", { args: [
 					arm,
 					2.2,
-					.5
+					.45
 				] }), mat(ORANGE, .4)]
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("mesh", {
 				position: [
 					0,
 					0,
-					3.5
+					3.25
 				],
 				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("boxGeometry", { args: [
 					2.2,
 					arm,
-					.5
+					.45
 				] }), mat(ORANGE, .4)]
 			})
 		]
@@ -719,7 +796,7 @@ function ViewerPanel() {
 	const [Scene, setScene] = (0, import_react.useState)(null);
 	(0, import_react.useEffect)(() => {
 		let live = true;
-		import("./unit-scene-BmAULR-R.mjs").then((mod) => {
+		import("./unit-scene-DKMdvPKE.mjs").then((mod) => {
 			if (live) setScene(() => mod.UnitScene);
 		});
 		return () => {

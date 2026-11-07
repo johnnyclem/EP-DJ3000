@@ -5,7 +5,6 @@ const H = 240.5;
 const T = 16.3;
 const GREY = "#d4d4ce";
 const BLACK = "#141416";
-const WELL = "#2a2a28";
 const ORANGE = "#f05a1a";
 const SLOT = "#1a1a1c";
 
@@ -32,28 +31,51 @@ function mat(color: string, roughness = 0.5) {
 function Platter({ x, y, d }: { x: number; y: number; d: number }) {
   const rings = d > 100 ? [34, 50, 64] : [16, 24, 31];
   const arm = d > 100 ? 22 : 12;
+  // Same snap stem as the half-size platter. Local z is the top of the case.
+  // Disc underside at -0.7, magnet mouth at -10.55, barb at -7.
   return (
     <group position={[x, y, T]}>
-      <mesh position={[0, 0, 0.2]} rotation={[Math.PI / 2, 0, 0]}>
-        <cylinderGeometry args={[d / 2 + 0.5, d / 2 + 0.5, 0.35, 72]} />
-        {mat(WELL, 0.7)}
-      </mesh>
-      <mesh position={[0, 0, 2]} rotation={[Math.PI / 2, 0, 0]}>
-        <cylinderGeometry args={[d / 2 - 0.4, d / 2 - 0.4, 3.2, 72]} />
+      <mesh position={[0, 0, 1.2]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[d / 2 - 0.3, d / 2 - 0.3, 3.8, 72]} />
         {mat(BLACK, 0.42)}
       </mesh>
+      <mesh position={[0, 0, -5.62]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[3.85, 3.85, 9.85, 40]} />
+        {mat(BLACK, 0.5)}
+      </mesh>
+      <mesh position={[0, 0, -6.55]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[4.45, 4.45, 0.9, 32]} />
+        {mat(BLACK, 0.55)}
+      </mesh>
+      <mesh position={[0, 0, -6.0]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[3.85, 4.45, 0.6, 32]} />
+        {mat(BLACK, 0.55)}
+      </mesh>
+      <mesh position={[0, 0, -10.7]} rotation={[Math.PI / 2, 0, 0]}>
+        <cylinderGeometry args={[2.7, 3.2, 0.55, 28]} />
+        {mat(SLOT, 0.7)}
+      </mesh>
+      {[0, 120, 240].map((deg) => {
+        const a = (deg * Math.PI) / 180;
+        return (
+          <mesh key={deg} position={[Math.sin(a) * 3.2, Math.cos(a) * 3.2, -4.2]} rotation={[0, 0, -a]}>
+            <boxGeometry args={[0.7, 1.4, 5.2]} />
+            {mat("#2a2a2c", 0.8)}
+          </mesh>
+        );
+      })}
       {rings.map((r) => (
-        <mesh key={r} position={[0, 0, 3.35]}>
+        <mesh key={r} position={[0, 0, 3.2]}>
           <torusGeometry args={[r, 0.32, 6, 48]} />
           {mat("#3a3a3c", 0.6)}
         </mesh>
       ))}
-      <mesh position={[0, 0, 3.5]}>
-        <boxGeometry args={[arm, 2.2, 0.5]} />
+      <mesh position={[0, 0, 3.25]}>
+        <boxGeometry args={[arm, 2.2, 0.45]} />
         {mat(ORANGE, 0.4)}
       </mesh>
-      <mesh position={[0, 0, 3.5]}>
-        <boxGeometry args={[2.2, arm, 0.5]} />
+      <mesh position={[0, 0, 3.25]}>
+        <boxGeometry args={[2.2, arm, 0.45]} />
         {mat(ORANGE, 0.4)}
       </mesh>
     </group>

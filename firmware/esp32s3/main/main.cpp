@@ -335,7 +335,7 @@ extern "C" void app_main(void) {
     vTaskDelay(pdMS_TO_TICKS(600));
   }
   if (!oled.present && g_i2c.ok()) {
-    ESP_LOGW(TAG, "oled stayed blank: no SSD1306 on SDA GPIO%d SCL GPIO%d", pins::kI2cSda, pins::kI2cScl);
+    ESP_LOGW(TAG, "oled stayed blank: no SSD1306 on SDA GPIO%d SCL GPIO%d", g_i2c.sda(), g_i2c.scl());
   }
 
   app::startEngineTask(&g_rt);

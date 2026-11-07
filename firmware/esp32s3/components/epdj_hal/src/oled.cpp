@@ -64,7 +64,10 @@ void drawText(uint8_t* fb, int page, const char* text) {
 }
 
 bool tx(i2c_master_dev_handle_t dev, const uint8_t* data, size_t n) {
-  return i2c_master_transmit(dev, data, n, 100) == ESP_OK;
+  const esp_err_t err = i2c_master_transmit(dev, data, n, 100);
+  if (err == ESP_OK) return true;
+  ESP_LOGE(TAG, "i2c write of %u bytes: %s", static_cast<unsigned>(n), esp_err_to_name(err));
+  return false;
 }
 
 // One transaction, control byte 0x00, then the command bytes. A 0xD5/0x8D/0xDA and its argument have to
@@ -78,31 +81,42 @@ bool cmds(i2c_master_dev_handle_t dev, const uint8_t* c, size_t n) {
   return tx(dev, buf, n + 1);
 }
 
+// One command per stop, argument in the same write. A single long write to this panel times out, and a
+// parameter that arrives after the next start is ignored, which leaves the charge pump off.
+bool command(i2c_master_dev_handle_t dev, const uint8_t* c, size_t n) {
+  if (cmds(dev, c, n)) return true;
+  ESP_LOGE(TAG, "command 0x%02X was not accepted", c[0]);
+  return false;
+}
+
 // 128x32 SSD1306, the 0.91" yellow-over-blue glass. Charge pump on, COM pins sequential (0x02, not the
 // 128x64 value 0x12).
 bool initPanel(i2c_master_dev_handle_t dev) {
-  const uint8_t seq[] = {
-      0xAE,        // display off
-      0xD5, 0x80,  // clock
-      0xA8, 0x1F,  // multiplex 1/32
-      0xD3, 0x00,  // display offset
-      0x40,        // start line 0
-      0x8D, 0x14,  // charge pump on, from the panel's 3V3
-      0x20, 0x00,  // horizontal addressing
-      0xA1,        // segment remap
-      0xC8,        // COM scan from COM[N-1] to COM0
-      0xDA, 0x02,  // COM pins, 128x32
-      0x81, 0x8F,  // contrast
-      0xD9, 0xF1,  // precharge, internal pump
-      0xDB, 0x40,  // VCOMH
-      0x2E,        // deactivate scroll
-      0xA4,        // follow RAM
-      0xA6,        // not inverted
-  };
-  if (!cmds(dev, seq, sizeof seq)) return false;
-  vTaskDelay(pdMS_TO_TICKS(100));  // the pump needs this before the panel is switched on
+  const uint8_t off[] = {0xAE};
+  const uint8_t clock[] = {0xD5, 0x80};
+  const uint8_t mux[] = {0xA8, 0x1F};
+  const uint8_t offset[] = {0xD3, 0x00};
+  const uint8_t start[] = {0x40};
+  const uint8_t pump[] = {0x8D, 0x14};
+  const uint8_t mode[] = {0x20, 0x00};
+  // The module sits upside down in the case. 0xA0 and 0xC0 turn the RAM 180 degrees from the usual 0xA1 / 0xC8.
+  const uint8_t remap[] = {0xA0};
+  const uint8_t scan[] = {0xC0};
+  const uint8_t com[] = {0xDA, 0x02};
+  const uint8_t contrast[] = {0x81, 0xFF};
+  const uint8_t precharge[] = {0xD9, 0xF1};
+  const uint8_t vcom[] = {0xDB, 0x40};
+  const uint8_t scroll[] = {0x2E};
+  const uint8_t ram[] = {0xA4};
+  const uint8_t normal[] = {0xA6};
   const uint8_t on[] = {0xAF};
-  return cmds(dev, on, sizeof on);
+  if (!command(dev, off, 1) || !command(dev, clock, 2) || !command(dev, mux, 2) || !command(dev, offset, 2) ||
+      !command(dev, start, 1) || !command(dev, pump, 2))
+    return false;
+  vTaskDelay(pdMS_TO_TICKS(100));  // the pump needs this before the panel is switched on
+  return command(dev, mode, 2) && command(dev, remap, 1) && command(dev, scan, 1) && command(dev, com, 2) &&
+         command(dev, contrast, 2) && command(dev, precharge, 2) && command(dev, vcom, 2) && command(dev, scroll, 1) &&
+         command(dev, ram, 1) && command(dev, normal, 1) && command(dev, on, 1);
 }
 
 bool push(i2c_master_dev_handle_t dev, const uint8_t* fb) {
@@ -143,8 +157,7 @@ OledBringup oledBringup(I2cBus& bus, char deck, const char* line2) {
   if (i2c_master_bus_add_device(bus.handle(), &dc, &dev) != ESP_OK) return out;
 
   uint8_t fb[kFrame];
-  std::memset(fb, 0, sizeof fb);
-  std::memset(fb, 0xFF, kWidth);  // page 0 is the yellow band: a solid row, so a dark glass is not a blank font
+  std::memset(fb, 0x00, sizeof fb);  // pixel on = yellow, so the glyphs are yellow on black
   char deckLine[12];
   std::snprintf(deckLine, sizeof deckLine, "DECK %c", deck);
   drawText(fb, 0, "EP-DJ3000");
@@ -158,7 +171,7 @@ OledBringup oledBringup(I2cBus& bus, char deck, const char* line2) {
     return out;
   }
   g_panel = dev;
-  ESP_LOGI(TAG, "SSD1306 at 0x%02X, 128x32, on SDA GPIO%d SCL GPIO%d", addr, pins::kI2cSda, pins::kI2cScl);
+  ESP_LOGI(TAG, "SSD1306 at 0x%02X, 128x32, on SDA GPIO%d SCL GPIO%d", addr, bus.sda(), bus.scl());
   out.present = true;
   out.address = addr;
   return out;

@@ -42,6 +42,19 @@ bool answers(i2c_master_bus_handle_t bus, uint8_t addr) {
   return err == ESP_OK;
 }
 
+bool anyDevice(i2c_master_bus_handle_t bus) {
+  return answers(bus, 0x3C) || answers(bus, 0x3D) || answers(bus, 0x36);
+}
+
+// Drop the previous master and claim `sda`/`scl`. A failed open leaves the bus null.
+bool reopen(i2c_master_bus_handle_t* bus, int sda, int scl) {
+  if (*bus != nullptr) {
+    i2c_del_master_bus(*bus);
+    *bus = nullptr;
+  }
+  return openBus(sda, scl, bus);
+}
+
 bool I2cBus::begin() {
   // Sample the wires before the I2C driver claims them. A 0 means that line is held low.
   const gpio_config_t idle = {
@@ -58,20 +71,39 @@ bool I2cBus::begin() {
   ESP_LOGW(TAG, "idle levels: SDA GPIO%d=%d  SCL GPIO%d=%d  (both should be 1)", pins::kI2cSda, sdaLevel,
            pins::kI2cScl, sclLevel);
 
-  if (!openBus(pins::kI2cSda, pins::kI2cScl, &bus_)) return false;
-  if (answers(bus_, 0x3C) || answers(bus_, 0x3D) || answers(bus_, 0x36)) return true;
-
-  // The holes are labelled, but a crossed pair still idles high and just never ACKs.
-  ESP_LOGW(TAG, "no device with SDA GPIO%d SCL GPIO%d; trying the pair crossed", pins::kI2cSda, pins::kI2cScl);
-  i2c_del_master_bus(bus_);
-  bus_ = nullptr;
-  if (!openBus(pins::kI2cScl, pins::kI2cSda, &bus_)) return false;
-  if (answers(bus_, 0x3C) || answers(bus_, 0x3D) || answers(bus_, 0x36)) {
-    ESP_LOGW(TAG, "answered with the wires crossed: SDA is on GPIO%d, SCL is on GPIO%d", pins::kI2cScl, pins::kI2cSda);
+  // A 0.91" module can still be in reset on the first scan. Ask the labelled pins again before swapping,
+  // and if nothing answers either way put those pins back. Leaving the swap in place made a late ACK
+  // look like a successful init on the wrong pair.
+  sda_ = pins::kI2cSda;
+  scl_ = pins::kI2cScl;
+  if (!reopen(&bus_, sda_, scl_)) return false;
+  if (anyDevice(bus_)) return true;
+  vTaskDelay(pdMS_TO_TICKS(200));
+  if (anyDevice(bus_)) {
+    ESP_LOGW(TAG, "answered on the second try, SDA GPIO%d SCL GPIO%d", sda_, scl_);
     return true;
   }
-  ESP_LOGW(TAG, "no device with the wires crossed either");
-  return true;
+
+  ESP_LOGW(TAG, "no device with SDA GPIO%d SCL GPIO%d; trying the pair crossed", sda_, scl_);
+  sda_ = pins::kI2cScl;
+  scl_ = pins::kI2cSda;
+  if (!reopen(&bus_, sda_, scl_)) return false;
+  bool crossed = anyDevice(bus_);
+  if (!crossed) {
+    vTaskDelay(pdMS_TO_TICKS(200));
+    crossed = anyDevice(bus_);
+  }
+  if (crossed) {
+    ESP_LOGW(TAG, "answered with the wires crossed: SDA is on GPIO%d, SCL is on GPIO%d. Swap those two wires",
+             sda_, scl_);
+    return true;
+  }
+
+  ESP_LOGW(TAG, "no device with the wires crossed either; restoring SDA GPIO%d SCL GPIO%d", pins::kI2cSda,
+           pins::kI2cScl);
+  sda_ = pins::kI2cSda;
+  scl_ = pins::kI2cScl;
+  return reopen(&bus_, sda_, scl_);
 }
 
 // A one-byte write, not i2c_master_probe. On this IDF the probe is only START+STOP, and that transaction

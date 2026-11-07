@@ -14,9 +14,13 @@ class I2cBus {
   // True if a device ACKs its address. Short timeout; never blocks the caller for long.
   bool probe(uint8_t addr7);
   i2c_master_bus_handle_t handle() const { return bus_; }
+  int sda() const { return sda_; }
+  int scl() const { return scl_; }
 
  private:
   i2c_master_bus_handle_t bus_ = nullptr;
+  int sda_ = 21;
+  int scl_ = 47;
 };
 
 }  // namespace hal

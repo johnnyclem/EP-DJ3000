@@ -177,7 +177,14 @@ neck_from_face = guide_h + skin + btn_travel;
 tip_l = 2.0;
 flange_d = 8.6;
 flange_t = 1.5;
-tact_body = 6.3;     // 6.0 mm body, a little clearance
+tact_body = 6.3;     // 6.0 mm body, a little clearance. CUE and PLAY only.
+// 12 x 12 x 7.3 mm round-cap tactile for the toggles (IN, OUT, REV).
+// Ears run along X, so a column 16 mm apart does not collide.
+// The cap is the button. Nothing is printed on top of it.
+tact12_ear = 15.6;
+tact12_w = 12.6;
+tact12_hole = 7.6;
+tact12_web = 1.2;
 nest_wall = 1.3;
 nest_rim = 1.5;
 nest_pad = 1.2;      // 5 mm switch. The tip is on the actuator at rest.
@@ -377,7 +384,7 @@ module top_plate() {
                 cylinder(d = bearing_d + 6.4, h = body_h - well_d - ledge_z, $fn = 48);
             // Button guides. The cap stops on the boss, so the face of the
             // deck never takes the blow. Hidden under the cap.
-            for (p = [[play_x, play_y], [cue_x, cue_y], [in_x, in_y], [out_x, out_y], [rev_x, rev_y]])
+            for (p = [[play_x, play_y], [cue_x, cue_y]])
                 translate([p[0], p[1], body_h])
                     cylinder(d = guide_d, h = guide_h, $fn = 40);
         }
@@ -404,12 +411,14 @@ module top_plate() {
                 cylinder(d = 2.2, h = skin + 2 * eps, $fn = 18);
 
         // Guided stem hole, through the boss and the skin, with a lead-in.
-        for (p = [[play_x, play_y], [cue_x, cue_y], [in_x, in_y], [out_x, out_y], [rev_x, rev_y]]) {
+        for (p = [[play_x, play_y], [cue_x, cue_y]]) {
             translate([p[0], p[1], tray_h - eps])
                 cylinder(d = stem_hole, h = skin + guide_h + 2 * eps, $fn = 28);
             translate([p[0], p[1], body_h + guide_h - 0.45])
                 cylinder(d1 = stem_hole, d2 = stem_hole + 1.6, h = 0.7, $fn = 28);
         }
+        for (p = [[in_x, in_y], [out_x, out_y], [rev_x, rev_y]])
+            tact12_pocket(p[0], p[1]);
         for (p = [[in_x + 11, in_y], [out_x + 11, out_y]])
             translate([p[0], p[1], tray_h - eps])
                 cylinder(d = led_d, h = skin + 2 * eps, $fn = 20);
@@ -606,6 +615,13 @@ module flange() {
     }
 }
 
+module tact12_pocket(x, y) {
+    translate([x - tact12_ear / 2, y - tact12_w / 2, tray_h - eps])
+        cube([tact12_ear, tact12_w, skin - tact12_web + eps]);
+    translate([x, y, body_h - tact12_web - eps])
+        cylinder(d = tact12_hole, h = tact12_web + 2 * eps, $fn = 36);
+}
+
 module button_nest(open_x) {
     outer = tact_body + 2 * nest_wall;
     translate([-outer / 2, -outer / 2, floor_t])
@@ -624,13 +640,21 @@ module button_nest(open_x) {
 }
 
 module button_nests() {
-    for (p = [[play_x, play_y, 1], [cue_x, cue_y, 1], [in_x, in_y, 1], [out_x, out_y, 1]])
+    for (p = [[play_x, play_y, 1], [cue_x, cue_y, 1]])
         translate([p[0], p[1], 0])
             button_nest(p[2]);
-    translate([rev_x, rev_y, 0])
-        button_nest(-1);
 }
 
+module tact12_shown(x, y) {
+    translate([x - 6, y - 6, body_h - tact12_web - 4.4])
+        cube([12, 12, 4.4]);
+    translate([x - 7.5, y - 5.2, body_h - tact12_web - 4.4])
+        cube([15, 1.2, 1.4]);
+    translate([x - 7.5, y + 4.0, body_h - tact12_web - 4.4])
+        cube([15, 1.2, 1.4]);
+    translate([x, y, body_h - 0.15])
+        cylinder(d = 6.9, h = 1.6, $fn = 36);
+}
 module button() { round_cap(play_d, play_h); }
 module loop_button() { round_cap(loop_d, loop_h); }
 
@@ -686,9 +710,11 @@ module assembly_solids() {
     color([0.12, 0.12, 0.13]) {
         cap_placed(play_x, play_y, play_d, play_h);
         cap_placed(cue_x, cue_y, play_d, play_h);
-        cap_placed(in_x, in_y, loop_d, loop_h);
-        cap_placed(out_x, out_y, loop_d, loop_h);
-        cap_placed(rev_x, rev_y, loop_d, loop_h);
+    }
+    color([0.16, 0.16, 0.17]) {
+        tact12_shown(in_x, in_y);
+        tact12_shown(out_x, out_y);
+        tact12_shown(rev_x, rev_y);
     }
     color([0.93, 0.40, 0.09])
         for (p = [[in_x + 11, in_y], [out_x + 11, out_y]])

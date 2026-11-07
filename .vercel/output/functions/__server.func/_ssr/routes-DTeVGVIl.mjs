@@ -1,7 +1,7 @@
 import { i as __toESM } from "../_runtime.mjs";
 import { t as RoundedBox, v as require_jsx_runtime, y as require_react } from "../_libs/@react-three/drei+[...].mjs";
 import { y as Link } from "../_libs/@tanstack/react-router+[...].mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/routes-B989mJdm.js
+//#region node_modules/.nitro/vite/services/ssr/assets/routes-DTeVGVIl.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var __defProp = Object.defineProperty;
@@ -247,6 +247,26 @@ function Cap({ x, y, d, h = 4, color = BLACK }) {
 			h,
 			28
 		] }), mat(color, .45)]
+	});
+}
+function Tact({ x, y }) {
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("mesh", {
+		position: [
+			x,
+			y,
+			17.1
+		],
+		rotation: [
+			Math.PI / 2,
+			0,
+			0
+		],
+		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("cylinderGeometry", { args: [
+			3.45,
+			3.45,
+			1.6,
+			28
+		] }), mat(BLACK, .45)]
 	});
 }
 function Led({ x, y }) {
@@ -529,17 +549,13 @@ function Twin({ focus }) {
 					h: 5,
 					color: "#1c1c1e"
 				}),
-				/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Cap, {
+				/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Tact, {
 					x: d.inn,
-					y: 76,
-					d: 12,
-					h: 3.2
+					y: 76
 				}),
-				/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Cap, {
+				/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Tact, {
 					x: d.out,
-					y: 76,
-					d: 12,
-					h: 3.2
+					y: 76
 				}),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Led, {
 					x: d.inn,
@@ -606,12 +622,9 @@ function Six({ focus }) {
 				d: 20,
 				h: 5.5
 			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Cap, {
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Tact, {
 				x: 28,
-				y: 52,
-				d: 12,
-				h: 3.2,
-				color: "#2c2c2e"
+				y: 52
 			}),
 			[
 				100,
@@ -633,17 +646,13 @@ function Six({ focus }) {
 				],
 				children: mat("#2c2c2e", .5)
 			}, x)),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Cap, {
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Tact, {
 				x: 22,
-				y: 214,
-				d: 12,
-				h: 3.2
+				y: 214
 			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Cap, {
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Tact, {
 				x: 22,
-				y: 196,
-				d: 12,
-				h: 3.2
+				y: 196
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Led, {
 				x: 34,
@@ -796,7 +805,7 @@ function ViewerPanel() {
 	const [Scene, setScene] = (0, import_react.useState)(null);
 	(0, import_react.useEffect)(() => {
 		let live = true;
-		import("./unit-scene-DKMdvPKE.mjs").then((mod) => {
+		import("./unit-scene-BTQQEsXv.mjs").then((mod) => {
 			if (live) setScene(() => mod.UnitScene);
 		});
 		return () => {
@@ -1061,13 +1070,8 @@ var PARTS = [
 		"Black"
 	],
 	[
-		"loop.stl",
-		"Loop button ×3",
-		"Black"
-	],
-	[
 		"flange.stl",
-		"Button clip ×5",
+		"Button clip ×2",
 		"Black"
 	],
 	[
@@ -1144,7 +1148,7 @@ function Home() {
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 						className: "text-muted",
-						children: "176 × 240.5 × 16.3 mm. Twin is two 76 mm platters. Six is one 152 mm platter. Print the top face up and the tray cavity up. The microSD slot is on the underside, 28 mm from the left and 18 mm in from the jack end. Orbit under the model to see it."
+						children: "176 × 240.5 × 16.3 mm. Twin is two 76 mm platters. Six is one 152 mm platter. Print the top face up and the tray cavity up. IN, OUT and the other toggles are a 12×12×7.3 mm switch. Its own cap comes through the hole. CUE and PLAY stay printed plungers. The microSD slot is on the underside, 28 mm from the left and 18 mm in from the jack end. Orbit under the model to see it."
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
 						className: "flex flex-wrap gap-x-4 gap-y-2",

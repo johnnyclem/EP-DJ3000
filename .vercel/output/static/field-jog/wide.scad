@@ -64,6 +64,11 @@ guide_h = 2.0;
 guide_d = 7.6;
 led_d = 3.1;
 knob_hole = 7.3;
+// 12 x 12 x 7.3 mm round-cap tactile. Ears along X. Cap is the button.
+tact12_ear = 15.6;
+tact12_w = 12.6;
+tact12_hole = 7.6;
+tact12_web = 1.2;
 
 mag_pocket_l = 21;
 mag_pocket_w = 6;
@@ -176,11 +181,15 @@ function platter_list() =
         ? [[46, 158, 76], [130, 158, 76]]
         : [[88, 142, 152.4]];
 
-function round_buttons() =
+function plunger_buttons() =
     layout == "twin"
-        ? [[40, 40, 18], [66, 40, 18], [110, 40, 18], [136, 40, 18],
-           [40, 76, 12], [66, 76, 12], [110, 76, 12], [136, 76, 12]]
-        : [[28, 30, 20], [54, 30, 20], [28, 52, 12], [22, 196, 12], [22, 214, 12]];
+        ? [[40, 40, 18], [66, 40, 18], [110, 40, 18], [136, 40, 18]]
+        : [[28, 30, 20], [54, 30, 20]];
+
+function toggle_buttons() =
+    layout == "twin"
+        ? [[40, 76], [66, 76], [110, 76], [136, 76]]
+        : [[28, 52], [22, 196], [22, 214]];
 
 function led_list() =
     layout == "twin"
@@ -246,6 +255,13 @@ module bearing_sleeve(x, y) {
         cylinder(d = bearing_d + 6.4, h = body_h - well_d - ledge_z, $fn = 40);
 }
 
+module tact12_pocket(x, y) {
+    translate([x - tact12_ear / 2, y - tact12_w / 2, tray_h - eps])
+        cube([tact12_ear, tact12_w, skin - tact12_web + eps]);
+    translate([x, y, body_h - tact12_web - eps])
+        cylinder(d = tact12_hole, h = tact12_web + 2 * eps, $fn = 36);
+}
+
 module top_plate() {
     sh = top_shrink;
     difference() {
@@ -253,7 +269,7 @@ module top_plate() {
             translate([sh, sh, tray_h])
                 rounded_box(W - 2 * sh, H - 2 * sh, skin, R);
             for (p = platter_list()) bearing_sleeve(p[0], p[1]);
-            for (b = round_buttons())
+            for (b = plunger_buttons())
                 translate([b[0], b[1], body_h])
                     cylinder(d = min(guide_d, b[2] - 2), h = guide_h, $fn = 28);
             for (b = pad_list())
@@ -297,12 +313,14 @@ module top_plate() {
                     cylinder(d = 2.2, h = skin + 2 * eps, $fn = 14);
         }
 
-        for (b = round_buttons()) {
+        for (b = plunger_buttons()) {
             translate([b[0], b[1], tray_h - eps])
                 cylinder(d = stem_hole, h = skin + guide_h + 2 * eps, $fn = 20);
             translate([b[0], b[1], body_h - 0.7])
                 cylinder(d = b[2] + 0.4, h = 0.7 + guide_h + eps, $fn = 36);
         }
+        for (b = toggle_buttons())
+            tact12_pocket(b[0], b[1]);
         for (b = pad_list()) {
             translate([b[0], b[1], tray_h - eps])
                 cylinder(d = stem_hole, h = skin + guide_h + 2 * eps, $fn = 18);

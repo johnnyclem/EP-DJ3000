@@ -91,6 +91,15 @@ function Cap({ x, y, d, h = 4, color = BLACK }: { x: number; y: number; d: numbe
   );
 }
 
+function Tact({ x, y }: { x: number; y: number }) {
+  return (
+    <mesh position={[x, y, T + 0.8]} rotation={[Math.PI / 2, 0, 0]}>
+      <cylinderGeometry args={[3.45, 3.45, 1.6, 28]} />
+      {mat(BLACK, 0.45)}
+    </mesh>
+  );
+}
+
 function Led({ x, y }: { x: number; y: number }) {
   return (
     <mesh position={[x, y, T + 0.5]} rotation={[Math.PI / 2, 0, 0]}>
@@ -205,8 +214,8 @@ function Twin({ focus }: { focus: WidePart }) {
             <>
               <Cap x={d.cue} y={40} d={18} h={5} />
               <Cap x={d.play} y={40} d={18} h={5} color="#1c1c1e" />
-              <Cap x={d.inn} y={76} d={12} h={3.2} />
-              <Cap x={d.out} y={76} d={12} h={3.2} />
+              <Tact x={d.inn} y={76} />
+              <Tact x={d.out} y={76} />
               <Led x={d.inn} y={88} />
               <Led x={d.out} y={88} />
               {d.pads.map((x) => (
@@ -234,14 +243,14 @@ function Six({ focus }: { focus: WidePart }) {
         <>
           <Cap x={28} y={30} d={20} h={5.5} />
           <Cap x={54} y={30} d={20} h={5.5} />
-          <Cap x={28} y={52} d={12} h={3.2} color="#2c2c2e" />
+          <Tact x={28} y={52} />
           {[100, 116, 132, 148].map((x) => (
             <RoundedBox key={x} args={[12, 12, 2.2]} radius={0.8} smoothness={2} position={[x, 36, T + 1.1]}>
               {mat("#2c2c2e", 0.5)}
             </RoundedBox>
           ))}
-          <Cap x={22} y={214} d={12} h={3.2} />
-          <Cap x={22} y={196} d={12} h={3.2} />
+          <Tact x={22} y={214} />
+          <Tact x={22} y={196} />
           <Led x={34} y={214} />
           <Led x={34} y={196} />
         </>

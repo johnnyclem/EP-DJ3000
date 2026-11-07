@@ -1,8 +1,8 @@
 import { i as __toESM } from "../_runtime.mjs";
 import { a as useLoader, g as Vector3, i as useFrame, m as Quaternion, n as OrbitControls, o as Box3, p as Matrix4, r as Canvas, t as RoundedBox, v as require_jsx_runtime, y as require_react } from "../_libs/@react-three/drei+[...].mjs";
-import { n as WideDeck } from "./routes-B989mJdm.mjs";
+import { n as WideDeck } from "./routes-DTeVGVIl.mjs";
 import { t as STLLoader } from "../_libs/three.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/unit-scene-DKMdvPKE.js
+//#region node_modules/.nitro/vite/services/ssr/assets/unit-scene-BTQQEsXv.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var GREY$1 = "#d2d2cc";
@@ -734,79 +734,18 @@ var PIECES = [
 		}]
 	},
 	{
-		id: "loop",
-		file: "loop.stl",
-		color: BLACK,
-		poses: [
-			{
-				position: [
-					17,
-					86,
-					23.2
-				],
-				rotation: [
-					Math.PI,
-					0,
-					0
-				]
-			},
-			{
-				position: [
-					17,
-					102,
-					23.2
-				],
-				rotation: [
-					Math.PI,
-					0,
-					0
-				]
-			},
-			{
-				position: [
-					71,
-					48,
-					23.2
-				],
-				rotation: [
-					Math.PI,
-					0,
-					0
-				]
-			}
-		]
-	},
-	{
 		id: "flange",
 		file: "flange.stl",
 		color: "#2a2a2c",
-		poses: [
-			{ position: [
-				17,
-				36,
-				9.85
-			] },
-			{ position: [
-				17,
-				60,
-				9.85
-			] },
-			{ position: [
-				17,
-				86,
-				9.85
-			] },
-			{ position: [
-				17,
-				102,
-				9.85
-			] },
-			{ position: [
-				71,
-				48,
-				9.85
-			] }
-		]
+		poses: [{ position: [
+			17,
+			36,
+			9.85
+		] }, { position: [
+			17,
+			60,
+			9.85
+		] }]
 	},
 	{
 		id: "plus",
@@ -884,10 +823,39 @@ function Fit({ watch, children }) {
 		children
 	});
 }
+var TOGGLES = [
+	[17, 86],
+	[17, 102],
+	[71, 48]
+];
+function Tacts() {
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("group", { children: TOGGLES.map(([x, y]) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("mesh", {
+		position: [
+			x,
+			y,
+			16.8
+		],
+		rotation: [
+			Math.PI / 2,
+			0,
+			0
+		],
+		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("cylinderGeometry", { args: [
+			3.45,
+			3.45,
+			1.6,
+			28
+		] }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("meshStandardMaterial", {
+			color: BLACK,
+			roughness: .45,
+			metalness: .05
+		})]
+	}, `${x}-${y}`)) });
+}
 function Assembly({ focus }) {
 	const geoms = useLoader(STLLoader, URLS);
 	const show = (id) => focus === "unit" || focus === "jog" || focus === "rig" || focus === id;
-	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("group", { children: PIECES.map((piece, index) => show(piece.id) ? piece.poses.map((pose, poseIndex) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("mesh", {
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("group", { children: [PIECES.map((piece, index) => show(piece.id) ? piece.poses.map((pose, poseIndex) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("mesh", {
 		geometry: geoms[index],
 		position: pose.position,
 		rotation: pose.rotation,
@@ -898,7 +866,7 @@ function Assembly({ focus }) {
 			flatShading: true,
 			side: 2
 		})
-	}, `${piece.id}-${poseIndex}`)) : null) });
+	}, `${piece.id}-${poseIndex}`)) : null), focus === "unit" || focus === "jog" || focus === "rig" || focus === "loop" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Tacts, {}) : null] });
 }
 function Scene({ mode, focus, slots, activeFace, watch, spin, layout, wideFocus, onReady, onPickFace }) {
 	(0, import_react.useEffect)(() => {

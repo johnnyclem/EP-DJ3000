@@ -12,8 +12,7 @@ const PARTS = [
   ["fader_lock.stl", "Fader lock", "Black"],
   ["knob.stl", "Knob", "Orange"],
   ["button.stl", "Button ×2", "Black"],
-  ["loop.stl", "Loop button ×3", "Black"],
-  ["flange.stl", "Button clip ×5", "Black"],
+  ["flange.stl", "Button clip ×2", "Black"],
   ["plus.stl", "Platter mark", "Orange"],
   ["tab.stl", "USB tab", "Orange"],
   ["bar.stl", "Name bar", "Orange"],
@@ -61,6 +60,7 @@ function Home() {
         <h2 className="font-mono text-xs tracking-widest text-muted uppercase">Wide shells</h2>
         <p className="text-muted">
           176 × 240.5 × 16.3 mm. Twin is two 76 mm platters. Six is one 152 mm platter. Print the top face up and the tray cavity up.
+          IN, OUT and the other toggles are a 12×12×7.3 mm switch. Its own cap comes through the hole. CUE and PLAY stay printed plungers.
           The microSD slot is on the underside, 28 mm from the left and 18 mm in from the jack end. Orbit under the model to see it.
         </p>
         <p className="flex flex-wrap gap-x-4 gap-y-2">

@@ -46,25 +46,12 @@ const PIECES: Piece[] = [
     ],
   },
   {
-    id: "loop",
-    file: "loop.stl",
-    color: BLACK,
-    poses: [
-      { position: [17, 86, 23.2], rotation: [Math.PI, 0, 0] },
-      { position: [17, 102, 23.2], rotation: [Math.PI, 0, 0] },
-      { position: [71, 48, 23.2], rotation: [Math.PI, 0, 0] },
-    ],
-  },
-  {
     id: "flange",
     file: "flange.stl",
     color: "#2a2a2c",
     poses: [
       { position: [17, 36, 9.85] },
       { position: [17, 60, 9.85] },
-      { position: [17, 86, 9.85] },
-      { position: [17, 102, 9.85] },
-      { position: [71, 48, 9.85] },
     ],
   },
   { id: "plus", file: "plus.stl", color: ORANGE, poses: [{ position: [44, 148, 18.4] }] },
@@ -121,6 +108,25 @@ function Fit({ watch, children }: { watch: string; children: React.ReactNode }) 
   return <group ref={ref}>{children}</group>;
 }
 
+const TOGGLES: [number, number][] = [
+  [17, 86],
+  [17, 102],
+  [71, 48],
+];
+
+function Tacts() {
+  return (
+    <group>
+      {TOGGLES.map(([x, y]) => (
+        <mesh key={`${x}-${y}`} position={[x, y, 16.8]} rotation={[Math.PI / 2, 0, 0]}>
+          <cylinderGeometry args={[3.45, 3.45, 1.6, 28]} />
+          <meshStandardMaterial color={BLACK} roughness={0.45} metalness={0.05} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
 function Assembly({ focus }: { focus: ViewId | "jog" | "rig" }) {
   const geoms = useLoader(STLLoader, URLS);
   const show = (id: Piece["id"]) => focus === "unit" || focus === "jog" || focus === "rig" || focus === id;
@@ -147,6 +153,7 @@ function Assembly({ focus }: { focus: ViewId | "jog" | "rig" }) {
             ))
           : null,
       )}
+      {focus === "unit" || focus === "jog" || focus === "rig" || focus === "loop" ? <Tacts /> : null}
     </group>
   );
 }

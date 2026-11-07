@@ -138,6 +138,11 @@ function Jacks() {
           {mat(SLOT, 0.5)}
         </mesh>
       ))}
+      {/* microSD mouth, underside, rear-left: 28 mm from the left, 18 mm in from the rear edge. */}
+      <mesh position={[34.3, H - 18, 0.35]}>
+        <boxGeometry args={[12.6, 14, 0.7]} />
+        {mat(SLOT, 0.45)}
+      </mesh>
     </group>
   );
 }

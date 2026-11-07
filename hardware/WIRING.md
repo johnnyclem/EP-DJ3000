@@ -30,6 +30,9 @@ with a multimeter), and set `self_powered` / `vbus_monitor_io` in `usb_device.cp
 | 47 | I2C SCL | same. In the VDD_SPI power domain: see the header-table check below. |
 | 40 | TRS MIDI TX | UART1, 31250 baud, through the output stage below |
 | 41 | TRS MIDI RX | UART1, from the optocoupler |
+| 18 | microSD CLK | SDMMC 1-bit. 10 kΩ to 3V3. |
+| 39 | microSD CMD | same. GPIO39 is a JTAG pin; fine unless a probe is attached. |
+| 42 | microSD D0 | same. GPIO42 is a JTAG pin, same caveat. |
 | 38 (v1.1) or 48 (v1.0) | Status LED | the DevKitC-1's on-board WS2812. **v1.1 boards, the current ones, have it on GPIO38; v1.0 on GPIO48.** Pick the revision in `menuconfig` (EP-DJ3000 > board revision, `EPDJ_BOARD_REV`); the default is v1.1. A wrong choice leaves the LED dark and nothing else changes. |
 
 Why these: fader and knob are on ADC1 because ADC2 cannot be used while the radio is on. GPIO4..11 are the S3's
@@ -50,6 +53,7 @@ The headers expose GPIO 0-21 and 35-48; **GPIO 22-34 are not broken out.** Every
 | CUE, REV | 12, 13 | yes | |
 | DAC-present strap | 14 | yes | |
 | I2S BCK, WS, DOUT | 15, 16, 17 | yes | |
+| microSD CLK, CMD, D0 | 18, 39, 42 | yes | 39 and 42 are JTAG pins (caveat 1) |
 | AS5600 SDA, SCL | 21, 47 | yes | 47 is in the flash/PSRAM supply domain (caveat 2) |
 | TRS MIDI TX, RX | 40, 41 | yes | JTAG pins (caveat 1) |
 | Status LED | 38 (v1.1) or 48 (v1.0) | yes | the guide lists the RGB LED on GPIO48 for v1.0; 48 is in the supply domain too |
@@ -57,8 +61,7 @@ The headers expose GPIO 0-21 and 35-48; **GPIO 22-34 are not broken out.** Every
 None of them is USB (GPIO19 D-, GPIO20 D+), the UART0 console (GPIO43, 44), a strapping pin (GPIO0, 3, 45, 46) or one of the
 octal flash/PSRAM pins (GPIO35, 36, 37, which the guide says are used internally on octal modules).
 
-**Still free and not special:** GPIO18, 39, 42, and GPIO5-11. GPIO5-11 are the experimental touch ring's sectors 1-7: idle with
-the AS5600 platter, taken if the ring is used.
+**Still free and not special:** GPIO5-11. Those are the experimental touch ring's sectors 1-7: idle with the AS5600 platter, taken if the ring is used. GPIO18, 39 and 42 are the microSD bus.
 
 Two caveats:
 
@@ -174,6 +177,41 @@ jack is not connected to the receiver; ground it only through the transmitter sh
 
 Not built, not scope-checked: before the first connection to the EP-133 verify the idle level on GPIO41 (high),
 the loop current (~5 mA, measured across the 33 Ω resistor), and the 31250 baud timing on a logic analyser.
+
+## microSD
+
+1-bit SDMMC, not SPI. Three GPIOs, and the card stays in SD mode because **DAT3 is pulled up and is not driven**.
+
+| Socket pin | Connect to |
+|---|---|
+| VDD | 3V3. Not 5 V. |
+| GND | GND |
+| CLK | GPIO18, and 10 kΩ to 3V3 |
+| CMD | GPIO39, and 10 kΩ to 3V3 |
+| DAT0 | GPIO42, and 10 kΩ to 3V3 |
+| DAT1, DAT2 | leave open |
+| DAT3 / CS | 10 kΩ to 3V3 only. Do not wire it to a GPIO. |
+| CD, WP | leave open |
+
+The shell is 16.3 mm, so use a push-push microSD socket about 1.8 mm tall (a Hirose DM3 series, or the same footprint from a module once you have desoldered the pins and kept the metal shell). It sits on the inside of the bottom skin, mouth facing down.
+
+Measured from the rear-left corner of the bottom face, jack end at the back:
+
+* mouth 12.6 × 1.5 mm
+* left edge of the mouth 28 mm from the left side
+* rear edge of the mouth 11 mm in from the rear edge (the body is 14 mm deep, so it ends 25 mm in)
+
+That clears the rear-left magnet pocket and the first TRS jack. On the 88 mm deck the jacks are closer together, so use the same offsets: 28 mm is between the second jack and the USB window only on the wide shell. On the 88 mm shell put the mouth at x = 8 mm, still 11 mm in from the rear, beside the corner magnet rather than under a jack.
+
+Files are 16-bit PCM WAV in the root of a FAT card, 8 kHz to 96 kHz, mono or stereo, up to 48 of them. 48 kHz is copied straight through. Anything else is held up to 48 kHz, not filtered. The glass shows `3/12` and the name.
+
+With a card in, CUE and REV belong to the browser and are not sent as MIDI:
+
+* CUE plays, pauses, or restarts the track on the glass
+* REV steps to the next file while it is stopped, and stops it while it is playing
+* hold REV for about a second, then let go, and the two buttons go back to the deck. Hold REV again to take them back.
+
+A redraw of the glass takes the I2C bus for about 50 ms, so the platter read drops a few ticks at that moment. It only redraws when the line changes.
 
 ## AS5600 (the default platter: free-spinning on a bearing)
 

@@ -51,6 +51,8 @@ std::atomic<int32_t> g_volumeSetting{0};
 std::atomic<bool> g_muteSetting{false};
 std::atomic<uint32_t> g_toneCmd{0};  // packTone(): changes on every request
 uint32_t g_toneGen = 0;               // engine task only
+std::atomic<LocalPull> g_local{nullptr};
+std::atomic<void*> g_localCtx{nullptr};
 
 // Published by the audio task for stats().
 std::atomic<bool> g_primed{false};
@@ -106,7 +108,22 @@ void audioTask(void*) {
       g_volume.setMute(mute);
     }
 
+    // A track from the card replaces the USB stream for this block. The callback runs here, so it may
+    // read the file. USB keeps its ring either way; a host that is also playing just overruns it.
+    bool playedLocal = false;
+    const LocalPull local = g_local.load(std::memory_order_acquire);
+    if (local != nullptr) {
+      void* ctx = g_localCtx.load(std::memory_order_relaxed);
+      const size_t n = local(buf, kBlock, ctx);
+      if (n > 0) {
+        if (n < kBlock) std::memset(buf + static_cast<size_t>(n) * 2, 0, (kBlock - n) * sizeof(int16_t) * 2);
+        g_volume.process(buf, kBlock);
+        playedLocal = true;
+      }
+    }
+
     // ---- stream state ----
+    if (!playedLocal) {
     const bool streaming = g_streaming.load(std::memory_order_acquire);
     if (streaming && state == State::Idle) {
       g_ring.discard(g_ring.readableFrames());  // consumer-side only: the USB interrupt may be writing
@@ -157,6 +174,7 @@ void audioTask(void*) {
       }
     }
     if (g_tone.active()) g_tone.render(buf, kBlock);  // the test tone replaces the stream
+    }
 
     // Blocks until the DMA ring has room: this call paces the whole loop at one block per millisecond.
     size_t written = 0;
@@ -227,6 +245,11 @@ bool testTone(bool on, uint16_t freqHz, uint8_t attenuationDb) {
   g_toneGen = (g_toneGen + 1) & 0x7Fu;
   g_toneCmd.store(packTone(on, freqHz, attenuationDb, g_toneGen), std::memory_order_release);
   return true;
+}
+
+void setLocalSource(LocalPull fn, void* ctx) {
+  g_localCtx.store(ctx, std::memory_order_relaxed);
+  g_local.store(fn, std::memory_order_release);
 }
 
 Stats stats() {

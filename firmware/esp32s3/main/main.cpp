@@ -66,6 +66,7 @@
 #include "epdj_hal/board_pins.h"
 #include "epdj_hal/i2c_bus.h"
 #include "epdj_hal/oled.h"
+#include "epdj_sd/sd_card.h"
 #include "epdj_hal/nvs_store.h"
 #include "epdj_hal/sensor_budget.h"
 #include "epdj_link/radio.h"
@@ -327,6 +328,7 @@ extern "C" void app_main(void) {
     }
   }
   const hal::OledBringup oled = hal::oledBringup(g_i2c, g_cfg.deck() == proto::Deck::A ? 'A' : 'B', encLine);
+  sd::start(g_i2c);
   if (ledOn) {
     // Long enough to read before the engine task takes the LED: green answered, red did not.
     g_led.set(oled.present ? hal::StatusLed::Rgb{0, 180, 0} : hal::StatusLed::Rgb{180, 0, 0});

@@ -17,5 +17,10 @@ struct OledBringup {
 // bus did not start or neither address ACKs. `deck` is 'A' or 'B'.
 OledBringup oledBringup(I2cBus& bus, char deck, const char* line2);
 
+// Redraws the glass with two lines (top is the yellow band). No-op until oledBringup has succeeded.
+// A frame is about 50 ms on the 100 kHz bus, and that bus is also the encoder's, so call it when the
+// text changes, not on a timer.
+void oledLines(const char* top, const char* bottom);
+
 }  // namespace hal
 }  // namespace epdj

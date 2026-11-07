@@ -1,7 +1,7 @@
 import { i as __toESM } from "../_runtime.mjs";
 import { t as RoundedBox, v as require_jsx_runtime, y as require_react } from "../_libs/@react-three/drei+[...].mjs";
 import { y as Link } from "../_libs/@tanstack/react-router+[...].mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/routes-9cQLrKgM.js
+//#region node_modules/.nitro/vite/services/ssr/assets/routes-BViQ00wP.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var __defProp = Object.defineProperty;
@@ -302,35 +302,50 @@ function Screen({ x, y, w }) {
 	});
 }
 function Jacks() {
-	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("group", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("mesh", {
-		position: [
-			W / 2,
-			238.3,
-			8
-		],
-		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("boxGeometry", { args: [
-			12.5,
-			4.4,
-			3.4
-		] }), mat(SLOT, .5)]
-	}), [
-		52,
-		68,
-		108,
-		124
-	].map((x) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("mesh", {
-		position: [
-			x,
-			238.3,
-			8
-		],
-		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("cylinderGeometry", { args: [
-			2.3,
-			2.3,
-			4.4,
-			16
-		] }), mat(SLOT, .5)]
-	}, x))] });
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("group", { children: [
+		/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("mesh", {
+			position: [
+				W / 2,
+				238.3,
+				8
+			],
+			children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("boxGeometry", { args: [
+				12.5,
+				4.4,
+				3.4
+			] }), mat(SLOT, .5)]
+		}),
+		[
+			52,
+			68,
+			108,
+			124
+		].map((x) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("mesh", {
+			position: [
+				x,
+				238.3,
+				8
+			],
+			children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("cylinderGeometry", { args: [
+				2.3,
+				2.3,
+				4.4,
+				16
+			] }), mat(SLOT, .5)]
+		}, x)),
+		/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("mesh", {
+			position: [
+				34.3,
+				222.5,
+				.35
+			],
+			children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("boxGeometry", { args: [
+				12.6,
+				14,
+				.7
+			] }), mat(SLOT, .45)]
+		})
+	] });
 }
 function Shell() {
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("group", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(RoundedBox, {
@@ -704,7 +719,7 @@ function ViewerPanel() {
 	const [Scene, setScene] = (0, import_react.useState)(null);
 	(0, import_react.useEffect)(() => {
 		let live = true;
-		import("./unit-scene-DlyegU0V.mjs").then((mod) => {
+		import("./unit-scene-BmAULR-R.mjs").then((mod) => {
 			if (live) setScene(() => mod.UnitScene);
 		});
 		return () => {
@@ -754,7 +769,7 @@ function ViewerPanel() {
 				className: "flex items-center justify-between gap-3",
 				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 					className: "min-w-0 text-sm text-muted",
-					children: mode === "wide" ? wideFocus === "unit" ? layout === "twin" ? "176 × 240.5. Two 76 mm platters, a pitch fader each, hot cues, and one crossfader." : "176 × 240.5. One 152 mm platter. Cue, play, loop and the tempo fader sit in the space around it." : `${WIDE_PARTS.find((part) => part.id === wideFocus)?.label ?? "Part"}. The rest of the deck is hidden.` : mode === "rig" ? `${faceLabel}. Pick what snaps on.` : "Drag to turn. Pinch to zoom."
+					children: mode === "wide" ? wideFocus === "unit" ? layout === "twin" ? "176 × 240.5. Two 76 mm platters. The card slot is the dark rectangle on the underside, rear-left." : "176 × 240.5. One 152 mm platter. The card slot is the dark rectangle on the underside, rear-left." : `${WIDE_PARTS.find((part) => part.id === wideFocus)?.label ?? "Part"}. The rest of the deck is hidden.` : mode === "rig" ? `${faceLabel}. Pick what snaps on.` : "Drag to turn. Pinch to zoom."
 				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 					type: "button",
 					className: "h-11 shrink-0 border border-line px-3 font-mono text-xs tracking-wide text-fg uppercase",
@@ -1052,7 +1067,7 @@ function Home() {
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 						className: "text-muted",
-						children: "176 × 240.5 × 16.3 mm. Twin is two 76 mm platters. Six is one 152 mm platter. Print the top face up and the tray cavity up."
+						children: "176 × 240.5 × 16.3 mm. Twin is two 76 mm platters. Six is one 152 mm platter. Print the top face up and the tray cavity up. The microSD slot is on the underside, 28 mm from the left and 18 mm in from the jack end. Orbit under the model to see it."
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
 						className: "flex flex-wrap gap-x-4 gap-y-2",

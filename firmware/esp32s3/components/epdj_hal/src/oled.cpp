@@ -43,6 +43,7 @@ constexpr Glyph kFont[] = {
     {'S', {0x26, 0x49, 0x49, 0x49, 0x32}}, {'T', {0x01, 0x01, 0x7F, 0x01, 0x01}},
     {'U', {0x3F, 0x40, 0x40, 0x40, 0x3F}}, {'W', {0x7F, 0x20, 0x18, 0x20, 0x7F}},
     {'Y', {0x03, 0x04, 0x78, 0x04, 0x03}},
+    {'/', {0x20, 0x10, 0x08, 0x04, 0x02}}, {'.', {0x00, 0x60, 0x60, 0x00, 0x00}},
 };
 
 const uint8_t* glyph(char ch) {
@@ -118,6 +119,10 @@ bool push(i2c_master_dev_handle_t dev, const uint8_t* fb) {
 
 }  // namespace
 
+namespace {
+i2c_master_dev_handle_t g_panel = nullptr;
+}
+
 OledBringup oledBringup(I2cBus& bus, char deck, const char* line2) {
   OledBringup out;
   if (!bus.ok()) return out;
@@ -152,10 +157,20 @@ OledBringup oledBringup(I2cBus& bus, char deck, const char* line2) {
     ESP_LOGE(TAG, "SSD1306 at 0x%02X answered but the init write failed", addr);
     return out;
   }
+  g_panel = dev;
   ESP_LOGI(TAG, "SSD1306 at 0x%02X, 128x32, on SDA GPIO%d SCL GPIO%d", addr, pins::kI2cSda, pins::kI2cScl);
   out.present = true;
   out.address = addr;
   return out;
+}
+
+void oledLines(const char* top, const char* bottom) {
+  if (g_panel == nullptr) return;
+  uint8_t fb[kFrame];
+  std::memset(fb, 0, sizeof fb);
+  drawText(fb, 0, top != nullptr ? top : "");
+  drawText(fb, 2, bottom != nullptr ? bottom : "");
+  if (!push(g_panel, fb)) ESP_LOGW(TAG, "redraw failed");
 }
 
 }  // namespace hal

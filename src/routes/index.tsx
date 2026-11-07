@@ -61,6 +61,7 @@ function Home() {
         <h2 className="font-mono text-xs tracking-widest text-muted uppercase">Wide shells</h2>
         <p className="text-muted">
           176 × 240.5 × 16.3 mm. Twin is two 76 mm platters. Six is one 152 mm platter. Print the top face up and the tray cavity up.
+          The microSD slot is on the underside, 28 mm from the left and 18 mm in from the jack end. Orbit under the model to see it.
         </p>
         <p className="flex flex-wrap gap-x-4 gap-y-2">
           <a className="text-fg underline" href="/field-jog/wide.scad" target="_blank" rel="noreferrer">SCAD</a>

@@ -37,6 +37,11 @@ constexpr int kI2cScl = 47;
 constexpr int kTrsTx = 40;
 constexpr int kTrsRx = 41;
 
+// ---- microSD, SDMMC 1-bit (CLK / CMD / D0). DAT3 is not a GPIO: pull it up to 3V3 on the socket. ----
+constexpr int kSdClk = 18;
+constexpr int kSdCmd = 39;
+constexpr int kSdD0 = 42;
+
 // ---- status LED: the on-board WS2812. v1.1 boards have it on GPIO38, v1.0 on GPIO48 (Kconfig EPDJ_BOARD_REV,
 // default v1.1). For another board, replace this constant. ----
 #ifdef CONFIG_EPDJ_BOARD_DEVKITC_1_V1_0
@@ -58,10 +63,10 @@ constexpr int kAllPins[] = {
     kFader,  kKnob,  kTouchFirst + 0, kTouchFirst + 1, kTouchFirst + 2, kTouchFirst + 3, kTouchFirst + 4,
     kTouchFirst + 5, kTouchFirst + 6, kTouchFirst + 7, kCue,            kRev,            kDacStrap,
     kI2sBck, kI2sWs, kI2sDout,        kI2cSda,         kI2cScl,         kTrsTx,          kTrsRx,
-    kStatusLed,
+    kSdClk,  kSdCmd, kSdD0,           kStatusLed,
 };
 constexpr size_t kPinCount = sizeof(kAllPins) / sizeof(kAllPins[0]);
-static_assert(kPinCount == 21, "kAllPins must list every pin above, with all 8 touch pads");
+static_assert(kPinCount == 24, "kAllPins must list every pin above, with all 8 touch pads");
 static_assert(kTouchMax == 8, "kAllPins expands exactly 8 touch pads");
 
 constexpr bool pinsAreUnique() {

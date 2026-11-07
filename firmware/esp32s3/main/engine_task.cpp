@@ -3,6 +3,7 @@
 #include "epdj_audio/audio_out.h"
 #include "epdj_hal/time.h"
 #include "epdj_link/radio.h"
+#include "epdj_sd/sd_card.h"
 #include "epdj_usb/usb_device.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -107,8 +108,13 @@ void engineLoop(Runtime* rt) {
     in.knobRaw = rt->adc->knob();
     rt->touch->read(in.touchRaw);
     in.touchCount = static_cast<uint8_t>(rt->touch->count());
-    in.cue = rt->buttons->cue();
-    in.rev = rt->buttons->rev();
+    if (sd::buttonsCaptured()) {
+      in.cue = false;
+      in.rev = false;
+    } else {
+      in.cue = rt->buttons->cue();
+      in.rev = rt->buttons->rev();
+    }
     in.usbMounted = usb_dev::hostActive();
     in.audioStreaming = usb_dev::audioStreaming();
     in.dacPresent = rt->dacPresent;

@@ -1,27 +1,27 @@
-//#region node_modules/.nitro/vite/services/ssr/assets/_tanstack-start-manifest_v-khA_QDq7.js
+//#region node_modules/.nitro/vite/services/ssr/assets/_tanstack-start-manifest_v-j1IiNIS4.js
 var tsrStartManifest = () => ({ routes: {
 	__root__: {
 		filePath: "/workspace/src/routes/__root.tsx",
 		children: ["/", "/four"],
-		preloads: ["/assets/index-Br_IhfHR.js"],
+		preloads: ["/assets/index-BEX4wBSj.js"],
 		scripts: [{ attrs: {
 			type: "module",
 			async: !0,
-			src: "/assets/index-Br_IhfHR.js"
+			src: "/assets/index-BEX4wBSj.js"
 		} }]
 	},
 	"/": {
 		filePath: "/workspace/src/routes/index.tsx",
 		children: void 0,
-		preloads: ["/assets/routes-6io3_KI-.js", "/assets/RoundedBox-D1UqML6V.js"]
+		preloads: ["/assets/routes-NGa1ADHz.js", "/assets/RoundedBox-v_VnMCZK.js"]
 	},
 	"/four": {
 		filePath: "/workspace/src/routes/four.tsx",
 		children: void 0,
 		preloads: [
-			"/assets/four-DllHjGyv.js",
-			"/assets/RoundedBox-D1UqML6V.js",
-			"/assets/OrbitControls-DGufivr9.js"
+			"/assets/four-fUOEN-OG.js",
+			"/assets/RoundedBox-v_VnMCZK.js",
+			"/assets/OrbitControls-C7zyA53z.js"
 		]
 	}
 } });

@@ -101,8 +101,8 @@ export function ViewerPanel() {
           {mode === "wide"
             ? wideFocus === "unit"
               ? layout === "twin"
-                ? "176 × 240.5. Two 76 mm platters, a pitch fader each, hot cues, and one crossfader."
-                : "176 × 240.5. One 152 mm platter. Cue, play, loop and the tempo fader sit in the space around it."
+                ? "176 × 240.5. Two 76 mm platters. The card slot is the dark rectangle on the underside, rear-left."
+                : "176 × 240.5. One 152 mm platter. The card slot is the dark rectangle on the underside, rear-left."
               : `${WIDE_PARTS.find((part) => part.id === wideFocus)?.label ?? "Part"}. The rest of the deck is hidden.`
             : mode === "rig"
               ? `${faceLabel}. Pick what snaps on.`

@@ -45,6 +45,13 @@ void setVolume(int16_t volume256Db, bool mute);
 // ---- engine side ----
 // Sine on the DAC for the audio-path test; false if audio is not running. Ramps in and out, no clicks.
 bool testTone(bool on, uint16_t freqHz, uint8_t attenuationDb);
+
+// Local playback (the SD card). The audio task calls `fn` once per 1 ms block, on that task, so the
+// callback may read the card. A 0 return means "not playing": the USB stream is used instead.
+// Passing nullptr clears it. Safe to call before start(); it takes effect once the task is running.
+using LocalPull = size_t (*)(int16_t* interleaved, size_t frames, void* ctx);
+void setLocalSource(LocalPull fn, void* ctx);
+
 Stats stats();
 
 }  // namespace audio_out

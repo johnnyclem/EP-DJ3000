@@ -4,10 +4,15 @@
 // layout = "six"   one 152.4 mm platter
 //
 // Same construction as the narrow shell. Two halves, four magnet pairs,
-// Technic holes on the long edges. The pitch slots and the crossfader
-// slot are cut for the 75 mm dual-gang pot (60 mm travel), centered on
-// the marks in the viewer. The 6 inch deck has no room for that pot
-// beside the wheel, so its pitch slot is 46 mm for a short fader.
+// Technic holes on the long edges.
+//
+// Internals, both layouts. Magnet posts occupy x 6.8–30.2 and x 145.8–169.2
+// on each short end. A 3.5 mm jack body is 13 mm wide and 14 mm deep, so a
+// rear jack center has to sit between x = 44 and x = 136 or it dead-ends in
+// a post. The headphone jack is on the fader end: x = 41 on Twin, because the
+// crossfader owns the middle, and centered on Six. The OLED board stops 9 mm
+// short of those jack bodies. On Six the platter is shifted left so the pitch
+// fader, the knob and the toggles are not under the disk.
 //
 //   openscad -D 'layout="twin"' -D 'part="top"' -o wide-twin-top.stl wide.scad
 //   openscad -D 'layout="six"'  -D 'part="top"' -o wide-six-top.stl  wide.scad
@@ -48,8 +53,13 @@ barb_h = 0.9;
 fader_slot_w = 3.4;
 fader_slot_l = 62;
 pot_screw_span = 67;
-// Short pitch, only on the 6 inch deck. Measure the fader before printing.
+pot_body_l = 75;
+pot_body_w = 9.6;
+pot_body_h = 8.2;
+pot_rail = 1.6;
+// Short pitch, only on the 6 inch deck. 46 mm slot, 58 mm body. Measure it.
 short_slot_l = 46;
+short_body_l = 58;
 
 /* [Screen] */
 // Real 0.91" glass, centered on the mark in the viewer.
@@ -87,13 +97,14 @@ technic_ys = [16, 25, 48, 216, 224];
 
 jack_d = 6.3;
 jack_z = 7.4;
-// Clear of the corner magnets. The posts occupy x 7–30 and x 146–169.
-// A jack in those spans dead-ends in the post.
-jack_xs = [52, 68, 108, 124];
+// 13 mm body, 14 mm into the cavity. Posts end at x 30.2 and start at 145.8.
+jack_xs = [50, 66, 110, 126];
 usb_w = 12.5;
 usb_h = 4.6;
 usb_x = W / 2;
 usb_z0 = 4.3;
+// Twin: left of the crossfader. Six: centered, there is no crossfader.
+function hp_x() = layout == "twin" ? 41 : 88;
 
 encoder_pad_top = 3.5;
 encoder_pad_w = 26;       // MT6701 board is 23 mm square
@@ -181,40 +192,60 @@ module twin_platters() {
 function platter_list() =
     layout == "twin"
         ? [[46, 158, 76], [130, 158, 76]]
-        : [[88, 142, 152.4]];
+        : [[82, 124, 152.4]];
 
 function plunger_buttons() =
     layout == "twin"
         ? [[40, 40, 18], [66, 40, 18], [110, 40, 18], [136, 40, 18]]
-        : [[28, 30, 20], [54, 30, 20]];
+        : [[26, 24, 20], [52, 24, 20]];
 
 function toggle_buttons() =
     layout == "twin"
         ? [[40, 76], [66, 76], [110, 76], [136, 76]]
-        : [[28, 52], [22, 196], [22, 214]];
+        : [[74, 30], [22, 214], [42, 214]];
 
 function led_list() =
     layout == "twin"
         ? [[40, 88], [66, 88], [110, 88], [136, 88]]
-        : [[34, 196], [34, 214]];
+        : [[58, 210], [68, 210]];
 
 function pad_list() =
     layout == "twin"
         ? [for (x = [36, 50, 64, 78, 98, 112, 126, 140]) [x, 100, 11]]
-        : [for (x = [100, 116, 132, 148]) [x, 36, 12]];
+        : [for (x = [104, 120, 136, 152]) [x, 32, 12]];
 
 function pitch_list() =
     layout == "twin"
         ? [[18, 35, 97], [158, 35, 97]]
-        : [[166, 18, 18 + short_slot_l]];
+        : [[167, 64, 64 + short_slot_l]];
 
-function knob_at() = layout == "twin" ? [158, 218] : [150, 226];
-function screen_at() = layout == "twin" ? [88, 220] : [78, 228];
+function knob_at() = layout == "twin" ? [158, 210] : [148, 212];
+function screen_at() = layout == "twin" ? [88, 208] : [96, 210];
 
 module encoder_pads() {
     for (p = platter_list())
         translate([p[0] - encoder_pad_w / 2, p[1] - encoder_pad_d / 2, floor_t - eps])
             cube([encoder_pad_w, encoder_pad_d, encoder_pad_top - floor_t + eps]);
+}
+
+rail_h = tray_h - pot_body_h - floor_t;
+
+// Rails pinch the 9.6 mm body up against the deck. The pot's long axis
+// follows the slot.
+module y_pot_rails(x, y0, y1, body_l) {
+    by = (y0 + y1) / 2 - body_l / 2;
+    translate([x - pot_body_w / 2 - pot_rail, by, floor_t])
+        cube([pot_rail, body_l, rail_h]);
+    translate([x + pot_body_w / 2, by, floor_t])
+        cube([pot_rail, body_l, rail_h]);
+}
+
+module x_pot_rails(y, body_l) {
+    bx = W / 2 - body_l / 2;
+    translate([bx, y - pot_body_w / 2 - pot_rail, floor_t])
+        cube([body_l, pot_rail, rail_h]);
+    translate([bx, y + pot_body_w / 2, floor_t])
+        cube([body_l, pot_rail, rail_h]);
 }
 
 module bottom() {
@@ -227,6 +258,10 @@ module bottom() {
             }
             magnet_posts();
             encoder_pads();
+            for (s = pitch_list())
+                y_pot_rails(s[0], s[1], s[2], (s[2] - s[1]) >= 60 ? pot_body_l : short_body_l);
+            if (layout == "twin")
+                x_pot_rails(16, pot_body_l);
             technic_ribs();
         }
         magnet_pockets(tray_h - mag_pocket_d);
@@ -236,17 +271,30 @@ module bottom() {
                     translate([p[0] + sx * encoder_hole_pitch / 2,
                                p[1] + sy * encoder_hole_pitch / 2, 0.7])
                         cylinder(d = encoder_hole_d, h = encoder_pad_top - 0.7 + eps, $fn = 14);
-        // USB-C and the four jacks, through the rear wall into open cavity.
-        // The corner magnet posts stop at x 30 and x 146, so this row is clear.
+        // USB-C and the four jacks. Bodies stay in open cavity, clear of the posts.
         translate([usb_x - usb_w / 2, H - wall - 3, usb_z0])
             cube([usb_w, wall + 6, usb_h]);
         for (x = jack_xs)
             translate([x, H - wall - 3, jack_z])
                 rotate([-90, 0, 0])
                     cylinder(d = jack_d, h = wall + 6, $fn = 24);
-        translate([W / 2, -0.4, jack_z])
+        translate([hp_x(), -0.4, jack_z])
             rotate([-90, 0, 0])
                 cylinder(d = jack_d, h = wall + 0.8, $fn = 24);
+        // microSD mouth, underside. The socket sits inboard of the jack bodies
+        // and clear of the left rear magnet post.
+        translate([36.5, 212.0, -eps])
+            cube([11, 1.5, floor_t + 0.4]);
+        // Pin channels. Bend the fader pins flat into the floor.
+        for (s = pitch_list()) {
+            bl = (s[2] - s[1]) >= 60 ? pot_body_l : short_body_l;
+            mid = (s[1] + s[2]) / 2;
+            translate([s[0] - 4, mid - bl / 2 + 2, floor_t - 1.0])
+                cube([8, bl - 4, 1.0 + eps]);
+        }
+        if (layout == "twin")
+            translate([W / 2 - pot_body_l / 2 + 2, 16 - 4, floor_t - 1.0])
+                cube([pot_body_l - 4, 8, 1.0 + eps]);
         technic_bores();
     }
 }

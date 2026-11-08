@@ -60,10 +60,10 @@ function Home() {
       <section className="flex flex-col gap-2 text-sm leading-relaxed">
         <h2 className="font-mono text-xs tracking-widest text-muted uppercase">Wide shells</h2>
         <p className="text-muted">
-          176 × 240.5 × 16.3 mm. Twin is two 76 mm platters. Six is one 152 mm platter. Print the top face up and the tray cavity up.
+          176 × 240.5 × 16.3 mm. Twin is two 76 mm platters. Six is one 152 mm platter, set left so the pitch fader has a lane beside it. Print the top face up and the tray cavity up.
           IN, OUT and the other toggles are a 12×12×7.3 mm switch. Its own cap comes through the hole. CUE and PLAY stay printed plungers.
           Each platter sits over a MagnTek MT6701. The pad is 26 mm square, four M2 holes on a 17.5 mm square. Solder VDD, GND, SCL and SDA. Leave Analog/PWM open, and do not fit a pin header.
-          The microSD slot is on the underside, 28 mm from the left and 18 mm in from the jack end. Orbit under the model to see it.
+          The rear jacks sit between the magnet posts. On Twin the headphone jack is left of the crossfader. On Six it is centered. The microSD mouth is on the underside, 36.5 mm from the left and 27 mm in from the jack end.
         </p>
         <p className="flex flex-wrap gap-x-4 gap-y-2">
           <a className="text-fg underline" href="/field-jog/wide.scad" target="_blank" rel="noreferrer">SCAD</a>

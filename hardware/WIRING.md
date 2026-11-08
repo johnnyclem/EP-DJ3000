@@ -195,13 +195,11 @@ the loop current (~5 mA, measured across the 33 Ω resistor), and the 31250 baud
 
 The shell is 16.3 mm, so use a push-push microSD socket about 1.8 mm tall (a Hirose DM3 series, or the same footprint from a module once you have desoldered the pins and kept the metal shell). It sits on the inside of the bottom skin, mouth facing down.
 
-Measured from the rear-left corner of the bottom face, jack end at the back:
+Measured from the rear-left corner of the bottom face, jack end at the back.
 
-* mouth 12.6 × 1.5 mm
-* left edge of the mouth 28 mm from the left side
-* rear edge of the mouth 11 mm in from the rear edge (the body is 14 mm deep, so it ends 25 mm in)
+On the 88 mm deck the mouth is beside the corner magnet, not under a jack: left edge 8 mm from the left side, rear edge 11 mm in from the rear edge. The socket body is about 14 mm deep, so it ends 25 mm in.
 
-That clears the rear-left magnet pocket and the first TRS jack. On the 88 mm deck the jacks are closer together, so use the same offsets: 28 mm is between the second jack and the USB window only on the wide shell. On the 88 mm shell put the mouth at x = 8 mm, still 11 mm in from the rear, beside the corner magnet rather than under a jack.
+On the wide shells that 28 mm spot lands in the rear-left magnet post. The mouth there is 11 × 1.5 mm, left edge 36.5 mm from the left side, and it runs from 27 mm to 28.5 mm in from the rear edge. Keep the socket body inside x 36.5–47.5 and y 206–220 (fader end is y = 0). That clears the post and the first TRS jack. The rear jack centers are 50, 66, 110 and 126 mm, in the open wall between the posts. On Twin the headphone jack is at x = 41, left of the crossfader. On Six it stays centered at x = 88.
 
 Files are 16-bit PCM WAV in the root of a FAT card, 8 kHz to 96 kHz, mono or stereo, up to 48 of them. 48 kHz is copied straight through. Anything else is held up to 48 kHz, not filtered. The glass shows `3/12` and the name.
 

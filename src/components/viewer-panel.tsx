@@ -101,8 +101,8 @@ export function ViewerPanel() {
           {mode === "wide"
             ? wideFocus === "unit"
               ? layout === "twin"
-                ? "176 × 240.5. Two 76 mm platters. The card slot is the dark rectangle on the underside, rear-left."
-                : "176 × 240.5. One 152 mm platter. The card slot is the dark rectangle on the underside, rear-left."
+                ? "176 × 240.5. Two 76 mm platters. Headphone jack is left of the crossfader. Card slot is the dark mark under the rear-left, clear of the magnet."
+                : "176 × 240.5. One 152 mm platter, shifted left for the pitch fader. Headphone jack is centered. Card slot is the dark mark under the rear-left."
               : `${WIDE_PARTS.find((part) => part.id === wideFocus)?.label ?? "Part"}. The rest of the deck is hidden.`
             : mode === "rig"
               ? `${faceLabel}. Pick what snaps on.`

@@ -1,7 +1,7 @@
 import { i as __toESM } from "../_runtime.mjs";
 import { t as RoundedBox, v as require_jsx_runtime, y as require_react } from "../_libs/@react-three/drei+[...].mjs";
 import { y as Link } from "../_libs/@tanstack/react-router+[...].mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/routes-O4PwKzH1.js
+//#region node_modules/.nitro/vite/services/ssr/assets/routes-oUJHYoEJ.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var __defProp = Object.defineProperty;
@@ -325,7 +325,7 @@ function Pitch({ x, y0, y1 }) {
 function Crossfader() {
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("group", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(RoundedBox, {
 		args: [
-			88,
+			62,
 			3.4,
 			1.1
 		],
@@ -353,52 +353,59 @@ function Crossfader() {
 		children: mat(BLACK, .4)
 	})] });
 }
-function Screen({ x, y, w }) {
+function Screen({ x, y }) {
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("group", {
 		position: [
 			x,
 			y,
-			17
+			16.650000000000002
 		],
 		children: [
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(RoundedBox, {
 				args: [
-					w,
-					14,
-					1.1
+					30.5,
+					11.85,
+					.7
 				],
-				radius: .6,
+				radius: .4,
 				smoothness: 2,
 				children: mat("#0c0c0e", .35)
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("mesh", {
 				position: [
-					-w * .18,
-					1.6,
-					.6
+					-4,
+					1.2,
+					.4
 				],
 				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("boxGeometry", { args: [
-					w * .5,
-					3.2,
-					.3
+					14,
+					2.4,
+					.2
 				] }), mat("#e6c15a", .4)]
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("mesh", {
 				position: [
-					-w * .18,
-					-2.4,
-					.6
+					-4,
+					-1.6,
+					.4
 				],
 				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("boxGeometry", { args: [
-					w * .5,
-					3.2,
-					.3
+					14,
+					2.4,
+					.2
 				] }), mat("#3d6fd4", .4)]
 			})
 		]
 	});
 }
-function Jacks() {
+function Jacks({ layout }) {
+	const xs = [
+		50,
+		66,
+		110,
+		126
+	];
+	const hp = layout === "twin" ? 41 : 88;
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("group", { children: [
 		/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("mesh", {
 			position: [
@@ -412,12 +419,7 @@ function Jacks() {
 				3.4
 			] }), mat(SLOT, .5)]
 		}),
-		[
-			52,
-			68,
-			108,
-			124
-		].map((x) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("mesh", {
+		xs.map((x) => /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("mesh", {
 			position: [
 				x,
 				238.3,
@@ -432,14 +434,27 @@ function Jacks() {
 		}, x)),
 		/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("mesh", {
 			position: [
-				34.3,
-				222.5,
-				.35
+				hp,
+				2.2,
+				8
+			],
+			children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("cylinderGeometry", { args: [
+				2.3,
+				2.3,
+				4.4,
+				16
+			] }), mat(SLOT, .5)]
+		}),
+		/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("mesh", {
+			position: [
+				42,
+				213,
+				.25
 			],
 			children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("boxGeometry", { args: [
-				12.6,
+				11,
 				14,
-				.7
+				.4
 			] }), mat(SLOT, .45)]
 		})
 	] });
@@ -583,20 +598,19 @@ function Twin({ focus }) {
 			] }) : null,
 			show(focus, "fader") ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Pitch, {
 				x: d.pitch,
-				y0: 24,
-				y1: 108
+				y0: 35,
+				y1: 97
 			}) : null
 		] }, d.x)),
 		show(focus, "fader") ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Crossfader, {}) : null,
 		show(focus, "case") ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Screen, {
 			x: 88,
-			y: 220,
-			w: 78
+			y: 208
 		}) : null,
 		show(focus, "knob") ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Cap, {
 			x: 158,
-			y: 218,
-			d: 16,
+			y: 210,
+			d: 14,
 			h: 8,
 			color: ORANGE
 		}) : null
@@ -605,32 +619,32 @@ function Twin({ focus }) {
 function Six({ focus }) {
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("group", { children: [
 		show(focus, "platter") ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Platter, {
-			x: 88,
-			y: 142,
+			x: 82,
+			y: 124,
 			d: 152.4
 		}) : null,
 		show(focus, "pads") ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Cap, {
-				x: 28,
-				y: 30,
+				x: 26,
+				y: 24,
 				d: 20,
 				h: 5.5
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Cap, {
-				x: 54,
-				y: 30,
+				x: 52,
+				y: 24,
 				d: 20,
 				h: 5.5
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Tact, {
-				x: 28,
-				y: 52
+				x: 74,
+				y: 30
 			}),
 			[
-				100,
-				116,
-				132,
-				148
+				104,
+				120,
+				136,
+				152
 			].map((x) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)(RoundedBox, {
 				args: [
 					12,
@@ -641,7 +655,7 @@ function Six({ focus }) {
 				smoothness: 2,
 				position: [
 					x,
-					36,
+					32,
 					17.400000000000002
 				],
 				children: mat("#2c2c2e", .5)
@@ -651,39 +665,38 @@ function Six({ focus }) {
 				y: 214
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Tact, {
-				x: 22,
-				y: 196
-			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Led, {
-				x: 34,
+				x: 42,
 				y: 214
 			}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Led, {
-				x: 34,
-				y: 196
+				x: 58,
+				y: 210
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Led, {
+				x: 68,
+				y: 210
 			})
 		] }) : null,
 		show(focus, "fader") ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Pitch, {
-			x: 166,
-			y0: 12,
-			y1: 60
+			x: 167,
+			y0: 64,
+			y1: 110
 		}) : null,
 		show(focus, "case") ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Screen, {
-			x: 78,
-			y: 228,
-			w: 64
+			x: 96,
+			y: 210
 		}) : null,
 		show(focus, "knob") ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Cap, {
-			x: 150,
-			y: 226,
-			d: 14,
+			x: 148,
+			y: 212,
+			d: 12,
 			h: 7,
 			color: ORANGE
 		}) : null
 	] });
 }
 function WideDeck({ layout, focus = "unit" }) {
-	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("group", { children: [show(focus, "case") ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Shell, {}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Jacks, {})] }) : null, layout === "twin" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Twin, { focus }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Six, { focus })] });
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("group", { children: [show(focus, "case") ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Shell, {}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Jacks, { layout })] }) : null, layout === "twin" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Twin, { focus }) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Six, { focus })] });
 }
 var VIEW_ITEMS = [
 	{
@@ -805,7 +818,7 @@ function ViewerPanel() {
 	const [Scene, setScene] = (0, import_react.useState)(null);
 	(0, import_react.useEffect)(() => {
 		let live = true;
-		import("./unit-scene-61YriOhc.mjs").then((mod) => {
+		import("./unit-scene-D5UbPBSj.mjs").then((mod) => {
 			if (live) setScene(() => mod.UnitScene);
 		});
 		return () => {
@@ -855,7 +868,7 @@ function ViewerPanel() {
 				className: "flex items-center justify-between gap-3",
 				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 					className: "min-w-0 text-sm text-muted",
-					children: mode === "wide" ? wideFocus === "unit" ? layout === "twin" ? "176 × 240.5. Two 76 mm platters. The card slot is the dark rectangle on the underside, rear-left." : "176 × 240.5. One 152 mm platter. The card slot is the dark rectangle on the underside, rear-left." : `${WIDE_PARTS.find((part) => part.id === wideFocus)?.label ?? "Part"}. The rest of the deck is hidden.` : mode === "rig" ? `${faceLabel}. Pick what snaps on.` : "Drag to turn. Pinch to zoom."
+					children: mode === "wide" ? wideFocus === "unit" ? layout === "twin" ? "176 × 240.5. Two 76 mm platters. Headphone jack is left of the crossfader. Card slot is the dark mark under the rear-left, clear of the magnet." : "176 × 240.5. One 152 mm platter, shifted left for the pitch fader. Headphone jack is centered. Card slot is the dark mark under the rear-left." : `${WIDE_PARTS.find((part) => part.id === wideFocus)?.label ?? "Part"}. The rest of the deck is hidden.` : mode === "rig" ? `${faceLabel}. Pick what snaps on.` : "Drag to turn. Pinch to zoom."
 				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
 					type: "button",
 					className: "h-11 shrink-0 border border-line px-3 font-mono text-xs tracking-wide text-fg uppercase",
@@ -1148,7 +1161,7 @@ function Home() {
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 						className: "text-muted",
-						children: "176 × 240.5 × 16.3 mm. Twin is two 76 mm platters. Six is one 152 mm platter. Print the top face up and the tray cavity up. IN, OUT and the other toggles are a 12×12×7.3 mm switch. Its own cap comes through the hole. CUE and PLAY stay printed plungers. Each platter sits over a MagnTek MT6701. The pad is 26 mm square, four M2 holes on a 17.5 mm square. Solder VDD, GND, SCL and SDA. Leave Analog/PWM open, and do not fit a pin header. The microSD slot is on the underside, 28 mm from the left and 18 mm in from the jack end. Orbit under the model to see it."
+						children: "176 × 240.5 × 16.3 mm. Twin is two 76 mm platters. Six is one 152 mm platter, set left so the pitch fader has a lane beside it. Print the top face up and the tray cavity up. IN, OUT and the other toggles are a 12×12×7.3 mm switch. Its own cap comes through the hole. CUE and PLAY stay printed plungers. Each platter sits over a MagnTek MT6701. The pad is 26 mm square, four M2 holes on a 17.5 mm square. Solder VDD, GND, SCL and SDA. Leave Analog/PWM open, and do not fit a pin header. The rear jacks sit between the magnet posts. On Twin the headphone jack is left of the crossfader. On Six it is centered. The microSD mouth is on the underside, 36.5 mm from the left and 27 mm in from the jack end."
 					}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("p", {
 						className: "flex flex-wrap gap-x-4 gap-y-2",

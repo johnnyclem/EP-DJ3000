@@ -127,7 +127,7 @@ function Pitch({ x, y0, y1 }: { x: number; y0: number; y1: number }) {
 function Crossfader() {
   return (
     <group>
-      <RoundedBox args={[88, 3.4, 1.1]} radius={0.5} smoothness={2} position={[88, 16, T + 0.55]}>
+      <RoundedBox args={[62, 3.4, 1.1]} radius={0.5} smoothness={2} position={[88, 16, T + 0.55]}>
         {mat(SLOT, 0.6)}
       </RoundedBox>
       <RoundedBox args={[18, 12, 6]} radius={1} smoothness={2} position={[88, 16, T + 3.6]}>
@@ -137,26 +137,27 @@ function Crossfader() {
   );
 }
 
-function Screen({ x, y, w }: { x: number; y: number; w: number }) {
+function Screen({ x, y }: { x: number; y: number }) {
   return (
-    <group position={[x, y, T + 0.7]}>
-      <RoundedBox args={[w, 14, 1.1]} radius={0.6} smoothness={2}>
+    <group position={[x, y, T + 0.35]}>
+      <RoundedBox args={[30.5, 11.85, 0.7]} radius={0.4} smoothness={2}>
         {mat("#0c0c0e", 0.35)}
       </RoundedBox>
-      <mesh position={[-w * 0.18, 1.6, 0.6]}>
-        <boxGeometry args={[w * 0.5, 3.2, 0.3]} />
+      <mesh position={[-4, 1.2, 0.4]}>
+        <boxGeometry args={[14, 2.4, 0.2]} />
         {mat("#e6c15a", 0.4)}
       </mesh>
-      <mesh position={[-w * 0.18, -2.4, 0.6]}>
-        <boxGeometry args={[w * 0.5, 3.2, 0.3]} />
+      <mesh position={[-4, -1.6, 0.4]}>
+        <boxGeometry args={[14, 2.4, 0.2]} />
         {mat("#3d6fd4", 0.4)}
       </mesh>
     </group>
   );
 }
 
-function Jacks() {
-  const xs = [52, 68, 108, 124];
+function Jacks({ layout }: { layout: WideLayout }) {
+  const xs = [50, 66, 110, 126];
+  const hp = layout === "twin" ? 41 : 88;
   return (
     <group>
       <mesh position={[W / 2, H - 2.2, 8]}>
@@ -169,9 +170,13 @@ function Jacks() {
           {mat(SLOT, 0.5)}
         </mesh>
       ))}
-      {/* microSD mouth, underside, rear-left: 28 mm from the left, 18 mm in from the rear edge. */}
-      <mesh position={[34.3, H - 18, 0.35]}>
-        <boxGeometry args={[12.6, 14, 0.7]} />
+      <mesh position={[hp, 2.2, 8]}>
+        <cylinderGeometry args={[2.3, 2.3, 4.4, 16]} />
+        {mat(SLOT, 0.5)}
+      </mesh>
+      {/* microSD socket keep-out, underside. Mouth left edge 36.5, y 212. */}
+      <mesh position={[42, 213, 0.25]}>
+        <boxGeometry args={[11, 14, 0.4]} />
         {mat(SLOT, 0.45)}
       </mesh>
     </group>
@@ -225,12 +230,12 @@ function Twin({ focus }: { focus: WidePart }) {
               ))}
             </>
           ) : null}
-          {show(focus, "fader") ? <Pitch x={d.pitch} y0={24} y1={108} /> : null}
+          {show(focus, "fader") ? <Pitch x={d.pitch} y0={35} y1={97} /> : null}
         </group>
       ))}
       {show(focus, "fader") ? <Crossfader /> : null}
-      {show(focus, "case") ? <Screen x={88} y={220} w={78} /> : null}
-      {show(focus, "knob") ? <Cap x={158} y={218} d={16} h={8} color={ORANGE} /> : null}
+      {show(focus, "case") ? <Screen x={88} y={208} /> : null}
+      {show(focus, "knob") ? <Cap x={158} y={210} d={14} h={8} color={ORANGE} /> : null}
     </group>
   );
 }
@@ -238,26 +243,26 @@ function Twin({ focus }: { focus: WidePart }) {
 function Six({ focus }: { focus: WidePart }) {
   return (
     <group>
-      {show(focus, "platter") ? <Platter x={88} y={142} d={152.4} /> : null}
+      {show(focus, "platter") ? <Platter x={82} y={124} d={152.4} /> : null}
       {show(focus, "pads") ? (
         <>
-          <Cap x={28} y={30} d={20} h={5.5} />
-          <Cap x={54} y={30} d={20} h={5.5} />
-          <Tact x={28} y={52} />
-          {[100, 116, 132, 148].map((x) => (
-            <RoundedBox key={x} args={[12, 12, 2.2]} radius={0.8} smoothness={2} position={[x, 36, T + 1.1]}>
+          <Cap x={26} y={24} d={20} h={5.5} />
+          <Cap x={52} y={24} d={20} h={5.5} />
+          <Tact x={74} y={30} />
+          {[104, 120, 136, 152].map((x) => (
+            <RoundedBox key={x} args={[12, 12, 2.2]} radius={0.8} smoothness={2} position={[x, 32, T + 1.1]}>
               {mat("#2c2c2e", 0.5)}
             </RoundedBox>
           ))}
           <Tact x={22} y={214} />
-          <Tact x={22} y={196} />
-          <Led x={34} y={214} />
-          <Led x={34} y={196} />
+          <Tact x={42} y={214} />
+          <Led x={58} y={210} />
+          <Led x={68} y={210} />
         </>
       ) : null}
-      {show(focus, "fader") ? <Pitch x={166} y0={12} y1={60} /> : null}
-      {show(focus, "case") ? <Screen x={78} y={228} w={64} /> : null}
-      {show(focus, "knob") ? <Cap x={150} y={226} d={14} h={7} color={ORANGE} /> : null}
+      {show(focus, "fader") ? <Pitch x={167} y0={64} y1={110} /> : null}
+      {show(focus, "case") ? <Screen x={96} y={210} /> : null}
+      {show(focus, "knob") ? <Cap x={148} y={212} d={12} h={7} color={ORANGE} /> : null}
     </group>
   );
 }
@@ -268,7 +273,7 @@ export function WideDeck({ layout, focus = "unit" }: { layout: WideLayout; focus
       {show(focus, "case") ? (
         <>
           <Shell />
-          <Jacks />
+          <Jacks layout={layout} />
         </>
       ) : null}
       {layout === "twin" ? <Twin focus={focus} /> : <Six focus={focus} />}

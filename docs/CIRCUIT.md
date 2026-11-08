@@ -441,7 +441,7 @@ Config, calibration, and identity travel as SysEx (`F0 7D 45 44 …`). The contr
 | Line in | No. No ADC. |
 | Headphone jack | No. No amplifier. |
 | Battery bay | No. No cell, charger, or switch. |
-| Second encoder on the twin-platter shell | The pad is in the print. The firmware has one I2C encoder. A second MT6701 at 0x06 would collide. |
+| Second encoder on the twin-platter shell | Wired as its own I2C bus (GPIO6/7). Buttons and the two pitch faders need an MCP23017 and an ADS1115. See [hardware/TWIN.md](../hardware/TWIN.md). Enable `EPDJ_TWIN`. |
 | Touch ring, GPIO5–11 | Compiled as an option. Not this build. |
 
 ## 17. Failures and what they look like

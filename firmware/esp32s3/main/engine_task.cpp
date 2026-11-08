@@ -1,5 +1,6 @@
 #include "engine_task.h"
 
+#include "epdj/twin.h"
 #include "epdj_audio/audio_out.h"
 #include "epdj_hal/time.h"
 #include "epdj_link/radio.h"
@@ -46,6 +47,7 @@ void engineLoop(Runtime* rt) {
   Engine& engine = *rt->engine;
   EngineIo io{*rt};
   OutputPump<EngineIo> pump(io);
+  static twin::Bank twinBank;
   uint64_t lastLedUs = 0;
   uint64_t prevT0 = 0;
   bool encoderCapsSet = rt->as5600->present();
@@ -68,7 +70,11 @@ void engineLoop(Runtime* rt) {
     // ---- 1. inputs that arrived since last time, stamped at receipt by whoever received them ----
     usb_dev::RxPacket up;
     for (unsigned i = 0; i < kMaxUsbPerIteration && usb_dev::popRx(&up); ++i) {
-      engine.onUsbPacket(midi::UsbPacket::fromBytes(up.bytes), up.rxUs);
+      const midi::UsbPacket pkt = midi::UsbPacket::fromBytes(up.bytes);
+      if (rt->twin != nullptr && (pkt.cin == 8 || pkt.cin == 9)) {
+        twinBank.onMidi(midi::make(pkt.data[0], pkt.data[1], pkt.data[2], 3));
+      }
+      engine.onUsbPacket(pkt, up.rxUs);
     }
     if (rt->trs != nullptr) {
       hal::TrsMidi::Chunk tc;
@@ -108,9 +114,22 @@ void engineLoop(Runtime* rt) {
     in.knobRaw = rt->adc->knob();
     rt->touch->read(in.touchRaw);
     in.touchCount = static_cast<uint8_t>(rt->touch->count());
+    uint16_t touchB = 0;
+    uint16_t angleB = 0;
+    bool angleBValid = false;
+    if (rt->twin != nullptr) {
+      rt->twin->poll(in.nowUs);
+      touchB = in.touchRaw[1];
+      if (in.touchCount > 1) in.touchCount = 1;  // pad B must not smear deck A's hold detector
+      in.faderRaw = rt->twin->pitchA();          // GPIO1 is the crossfader on this shell
+      angleBValid = rt->twin->encoderB().readAngle(&angleB, in.nowUs);
+    }
     if (sd::buttonsCaptured()) {
       in.cue = false;
       in.rev = false;
+    } else if (rt->twin != nullptr) {
+      in.cue = (rt->twin->buttons() & twin::kCueA) != 0;
+      in.rev = false;  // the twin has no REV. Both decks live on this one unit.
     } else {
       in.cue = rt->buttons->cue();
       in.rev = rt->buttons->rev();
@@ -119,6 +138,31 @@ void engineLoop(Runtime* rt) {
     in.audioStreaming = usb_dev::audioStreaming();
     in.dacPresent = rt->dacPresent;
     engine.step(in);
+
+    if (rt->twin != nullptr) {
+      twinBank.setJogInvert(rt->cfg->get(proto::ConfigKey::JogInvert) != 0);
+      twinBank.setPitchInvert(rt->cfg->get(proto::ConfigKey::FaderInvert) != 0);
+      twin::Sample sample;
+      sample.nowUs = in.nowUs;
+      sample.buttons = rt->twin->buttons();
+      sample.muteButtons = sd::buttonsCaptured();
+      sample.touchB = touchB;
+      sample.angleValid = angleBValid;
+      sample.angle12 = angleB;
+      sample.pitchB = rt->twin->pitchB();
+      sample.cross = rt->adc->fader();
+      twin::Out out;
+      twinBank.step(sample, &out);
+      hal::publishTwinButtons(twinBank.down());
+      rt->twin->setLeds(out.leds);
+      for (uint8_t n = 0; n < out.count; ++n) {
+        midi::UsbPacket pkt;
+        if (!midi::encodePacket(proto::cable::kDeck, out.msg[n], &pkt)) continue;
+        uint8_t raw[4];
+        pkt.toBytes(raw);
+        if (!usb_dev::writePacket(raw)) g_stats.usbDrops.fetch_add(1, std::memory_order_relaxed);
+      }
+    }
 
     // ---- 3. everything the engine wants to send ----
     pump.drain(in.nowUs);

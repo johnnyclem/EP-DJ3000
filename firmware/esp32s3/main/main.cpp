@@ -66,6 +66,8 @@
 #include "epdj_hal/board_pins.h"
 #include "epdj_hal/i2c_bus.h"
 #include "epdj_hal/oled.h"
+#include "epdj_hal/twin_io.h"
+#include "epdj_hal/twin_pins.h"
 #include "epdj_sd/sd_card.h"
 #include "epdj_hal/nvs_store.h"
 #include "epdj_hal/sensor_budget.h"
@@ -90,7 +92,9 @@ hal::TouchPads g_touch;
 hal::AdcInputs g_adc;
 hal::ButtonPins g_buttons;
 hal::I2cBus g_i2c;
+hal::I2cBus g_i2cB;
 hal::As5600 g_as5600;
+hal::TwinIo g_twin;
 hal::TrsMidi g_trs;
 hal::StatusLed g_led;
 app::DevicePlatform g_platform(g_store);
@@ -201,6 +205,12 @@ extern "C" void app_main(void) {
   if (!g_store.begin()) ESP_LOGE(TAG, "NVS unavailable: running on defaults, nothing can be saved");
   const LoadStatus ls = loadConfig(g_store, &g_cfg);
   if (ls == LoadStatus::Empty) app::applyFirstBootDefaults(&g_cfg);
+#if CONFIG_EPDJ_TWIN
+  if (g_cfg.deck() != proto::Deck::A) {
+    g_cfg.set(proto::ConfigKey::DeckId, static_cast<int32_t>(proto::Deck::A));
+    ESP_LOGW(TAG, "twin is both decks; ignoring a saved deck B. Left is channel 1, right is channel 2");
+  }
+#endif
   ESP_LOGI(TAG, "config: %s; deck %c", loadStatusText(ls), g_cfg.deck() == proto::Deck::A ? 'A' : 'B');
 
   uint8_t mac[6];
@@ -215,6 +225,13 @@ extern "C" void app_main(void) {
 #if CONFIG_EPDJ_AS5600_ENABLE
   if (g_i2c.ok()) g_as5600.begin(g_i2c);
 #endif
+#if CONFIG_EPDJ_TWIN
+  if (!g_i2cB.beginOn(twin_pins::kEncSda, twin_pins::kEncScl)) {
+    ESP_LOGE(TAG, "twin: second I2C bus failed (SDA GPIO%d SCL GPIO%d)", twin_pins::kEncSda, twin_pins::kEncScl);
+  }
+  g_twin.begin(g_i2c, g_i2cB);
+  ESP_LOGI(TAG, "twin: right encoder %s", g_twin.encoderB().present() ? "answered at 0x06" : "NOT answering at 0x06");
+#endif
   // The ADC takes what the encoder read leaves of the 400 us. An encoder that did not answer may still turn up (it is asked
   // again while running), so its share is reserved anyway when the AS5600 is the platter: finding it later must not push the
   // sensors past the budget.
@@ -223,7 +240,14 @@ extern "C" void app_main(void) {
   if (!g_adc.begin(hal::sensor_budget::i2cReserveUs(encoderExpected, g_as5600.present(), g_as5600.readUs()))) {
     ESP_LOGE(TAG, "ADC failed: fader and knob will read 0");
   }
-  if (CONFIG_EPDJ_TOUCH_PAD_COUNT > 0 && !g_touch.begin(CONFIG_EPDJ_TOUCH_PAD_COUNT)) {
+  unsigned touchPads = CONFIG_EPDJ_TOUCH_PAD_COUNT;
+#if CONFIG_EPDJ_TWIN
+  if (touchPads != 2) {
+    ESP_LOGW(TAG, "twin scans exactly two hold pads (GPIO4 left, GPIO5 right); menuconfig had %u", touchPads);
+    touchPads = 2;
+  }
+#endif
+  if (touchPads > 0 && !g_touch.begin(touchPads)) {
     ESP_LOGE(TAG, "touch pads failed: no platter input");
   }
   logPlatter();
@@ -295,6 +319,9 @@ extern "C" void app_main(void) {
   g_rt.adc = &g_adc;
   g_rt.buttons = &g_buttons;
   g_rt.as5600 = &g_as5600;
+#if CONFIG_EPDJ_TWIN
+  g_rt.twin = &g_twin;
+#endif
   g_rt.trs = trsOn ? &g_trs : nullptr;
   g_rt.led = ledOn ? &g_led : nullptr;
   g_rt.radioOn = radioOn;

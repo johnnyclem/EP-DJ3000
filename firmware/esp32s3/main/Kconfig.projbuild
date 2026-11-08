@@ -118,6 +118,15 @@ menu "EP-DJ3000"
 
     endmenu
 
+    config EPDJ_TWIN
+        bool "Twin wide deck: two platters, 16 buttons, two pitch faders"
+        default n
+        help
+            The 176 mm shell with a platter on each side. Turns on the second encoder bus (GPIO6/7),
+            the MCP23017 button expander and the ADS1115 pitch-fader ADC, both on the display I2C bus.
+            GPIO1 becomes the crossfader. Deck A CUE, jog, hold and pitch stay on the existing engine.
+            Wiring: hardware/TWIN.md. Leave this off for the 88 mm deck and the single 6 inch deck.
+
     menu "USB"
 
         config EPDJ_USB_AUDIO

@@ -7,6 +7,10 @@ which refuses to compile if a pin is used twice or lands on a reserved one. Chan
 Target: **ESP32-S3-DevKitC-1** (any ESP32-S3 module with native USB on GPIO19/20 works with the same GPIO numbers).
 The board's two USB-C ports: **USB** (native, GPIO19/20) goes to the DJ computer and carries MIDI and audio;
 **UART** (CP210x on UART0) is only for flashing and the log. Both can be connected at once.
+
+The twin wide deck (two 76 mm platters, sixteen buttons, two pitch faders) is a different circuit on the same DevKit.
+It is [TWIN.md](TWIN.md): an MCP23017 for the buttons, an ADS1115 for the pitch faders, and a second I2C bus for the
+right-hand MT6701. Turn on `EPDJ_TWIN` for that shell only. Everything below this line is the single-deck circuit.
 VBUS from the native port is **not sensed** by any GPIO, so the firmware cannot tell a pulled USB cable from a quiet bus
 except by the bus going idle (`docs/BRINGUP.md` step 5 and risk 9). If that proves too slow or unreliable, add a divider from the
 connector's VBUS (5 V) to a spare GPIO, e.g. 100 k to VBUS and 150 k to GND (about 3.0 V, 3.15 V at 5.25 V; check the real value

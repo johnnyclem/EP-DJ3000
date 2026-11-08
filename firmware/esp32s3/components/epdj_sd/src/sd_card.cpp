@@ -10,6 +10,10 @@
 #include "epdj_audio/audio_out.h"
 #include "epdj_hal/board_pins.h"
 #include "epdj_hal/oled.h"
+#if CONFIG_EPDJ_TWIN
+#include "epdj/twin.h"
+#include "epdj_hal/twin_io.h"
+#endif
 #include "esp_log.h"
 #include "esp_vfs_fat.h"
 #include "freertos/FreeRTOS.h"
@@ -35,7 +39,21 @@ std::atomic<uint8_t> g_cmd{0};
 std::atomic<int> g_index{0};
 std::atomic<uint8_t> g_state{static_cast<uint8_t>(library::PlayState::Empty)};
 
-bool pressed(int gpio) { return gpio_get_level(static_cast<gpio_num_t>(gpio)) == 0; }
+bool pressedCue() {
+#if CONFIG_EPDJ_TWIN
+  return (hal::publishedTwinButtons() & twin::kCueA) != 0;
+#else
+  return gpio_get_level(static_cast<gpio_num_t>(pins::kCue)) == 0;
+#endif
+}
+bool pressedNext() {
+#if CONFIG_EPDJ_TWIN
+  // PLAY on the left deck is the browser's "next / stop" key. A short tap still sends play.
+  return (hal::publishedTwinButtons() & twin::kPlayA) != 0;
+#else
+  return gpio_get_level(static_cast<gpio_num_t>(pins::kRev)) == 0;
+#endif
+}
 
 size_t fileRead(void* ctx, uint8_t* dst, size_t n) {
   return std::fread(dst, 1, n, static_cast<FILE*>(ctx));
@@ -100,8 +118,8 @@ void browserTask(void*) {
   auto shownState = library::PlayState::Empty;
 
   for (;;) {
-    const bool cue = pressed(pins::kCue);
-    const bool rev = pressed(pins::kRev);
+    const bool cue = pressedCue();
+    const bool rev = pressedNext();
     const bool captured = g_capture.load(std::memory_order_relaxed);
 
     if (captured) {

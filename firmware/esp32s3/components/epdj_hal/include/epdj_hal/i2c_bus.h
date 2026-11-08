@@ -10,6 +10,8 @@ namespace hal {
 class I2cBus {
  public:
   bool begin();
+  // A second bus, no wire-swap heuristic. Used for the twin deck's right-hand encoder.
+  bool beginOn(int sda, int scl);
   bool ok() const { return bus_ != nullptr; }
   // True if a device ACKs its address. Short timeout; never blocks the caller for long.
   bool probe(uint8_t addr7);

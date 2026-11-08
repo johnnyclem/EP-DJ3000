@@ -19,6 +19,7 @@ planned pin is on a header and none is USB, console, strapping or flash/PSRAM
 | File | What |
 |---|---|
 | [`WIRING.md`](WIRING.md) | Pin table (the source of truth is `board_pins.h`) and its check against Espressif's header tables, power, **AS5600 wiring, its filter configuration, the 3.3 V / 5 V strap trap and the bring-up log lines**, DAC, TRS MIDI, LED |
+| [`TWIN.md`](TWIN.md) | The two-platter shell: MCP23017 buttons, ADS1115 pitch faders, second MT6701 on its own I2C bus |
 | [`PLATTER.md`](PLATTER.md) | The AS5600 platter and its mechanics; the two ways to get a hold signal off a spinning conductive-PLA platter (both unvalidated); what you lose without a hold pad; then the experimental touch ring |
 | [`platter-test/`](platter-test/README.md) | Printable bench coupon for the experimental touch ring: carrier, 8 wedges, numbered stand. Not a shell; nobody has printed it |
 | [`BOM.md`](BOM.md) | What changes from the Field Jog bill of materials |

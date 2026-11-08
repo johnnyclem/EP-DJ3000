@@ -106,6 +106,12 @@ bool I2cBus::begin() {
   return reopen(&bus_, sda_, scl_);
 }
 
+bool I2cBus::beginOn(int sda, int scl) {
+  sda_ = sda;
+  scl_ = scl;
+  return openBus(sda, scl, &bus_);
+}
+
 // A one-byte write, not i2c_master_probe. On this IDF the probe is only START+STOP, and that transaction
 // never completes here (the wait expires with no NACK and no done), so a chip that is present looks absent
 // and the panel is never initialised. Writing 0x00 is harmless: the SSD1306 treats it as a command control

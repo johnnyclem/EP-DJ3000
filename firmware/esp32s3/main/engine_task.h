@@ -12,6 +12,7 @@
 #include "epdj_hal/status_led.h"
 #include "epdj_hal/touch_pads.h"
 #include "epdj_hal/trs_midi.h"
+#include "epdj_hal/twin_io.h"
 
 namespace epdj {
 namespace app {
@@ -23,6 +24,7 @@ struct Runtime {
   hal::AdcInputs* adc = nullptr;
   hal::ButtonPins* buttons = nullptr;
   hal::As5600* as5600 = nullptr;  // present() says whether a chip answered
+  hal::TwinIo* twin = nullptr;    // non-null only on the twin wide deck
   hal::TrsMidi* trs = nullptr;    // null when compiled out
   hal::StatusLed* led = nullptr;  // null when the LED failed to initialise
   bool radioOn = false;

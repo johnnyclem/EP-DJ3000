@@ -71,7 +71,7 @@ EPDJ_TEST(builders_produce_exact_bytes) {
   CHECK_BYTES(bytesOf(noteOn(1, 39, 127)), (Bytes{0x91, 39, 127}));
   CHECK_BYTES(bytesOf(controlChange(1, 22, 67)), (Bytes{0xB1, 22, 67}));
   CHECK_BYTES(bytesOf(programChange(0, 5)), (Bytes{0xC0, 5}));
-  CHECK_BYTES(bytesOf(clock()), (Bytes{0xF8}));
+  CHECK_BYTES(bytesOf(midi::clock()), (Bytes{0xF8}));
   CHECK_BYTES(bytesOf(start()), (Bytes{0xFA}));
   CHECK_BYTES(bytesOf(cont()), (Bytes{0xFB}));
   CHECK_BYTES(bytesOf(stop()), (Bytes{0xFC}));
@@ -95,13 +95,13 @@ EPDJ_TEST(message_classification) {
   CHECK_EQ(noteOn(2, 60, 1).channel(), 2);
   CHECK_EQ(noteOn(2, 60, 1).type(), 0x90);
   CHECK(controlChange(0, 1, 1).isControlChange());
-  CHECK(clock().isRealTime());
+  CHECK(midi::clock().isRealTime());
   CHECK(!noteOn(0, 0, 0).isRealTime());
-  CHECK_EQ(clock().type(), 0xF8);
+  CHECK_EQ(midi::clock().type(), 0xF8);
   CHECK(Message().empty());
   CHECK(noteOn(0, 1, 2) == noteOn(0, 1, 2));
   CHECK(noteOn(0, 1, 2) != noteOn(0, 1, 3));
-  CHECK(clock() != Message());
+  CHECK(midi::clock() != Message());
 }
 
 EPDJ_TEST(relative_matches_vectors) {

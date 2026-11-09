@@ -1,5 +1,5 @@
-// SSD1306 128x32 on the AS5600's I2C bus (address 0x3C, else 0x3D). A frame is 512 bytes, so this runs once
-// at boot, before the 1 kHz engine task exists. Nothing here is called from that task.
+// SSD1306 128x32 on the AS5600's I2C bus (address 0x3C, else 0x3D). A frame is 512 bytes. The first paint
+// runs at boot, before the 1 kHz engine task exists. Later redraws are oledLines, and not from that task.
 #pragma once
 #include <cstdint>
 
@@ -17,8 +17,8 @@ struct OledBringup {
 // bus did not start or neither address ACKs. `deck` is 'A' or 'B'.
 OledBringup oledBringup(I2cBus& bus, char deck, const char* line2);
 
-// Redraws the glass with two lines (top is the yellow band). No-op until oledBringup has succeeded.
-// A frame is about 50 ms on the 100 kHz bus, and that bus is also the encoder's, so call it when the
+// Redraws the glass with two lines. No-op until oledBringup has succeeded.
+// A frame is about 100 ms on the 100 kHz bus, and that bus is also the encoder's, so call it when the
 // text changes, not on a timer.
 void oledLines(const char* top, const char* bottom);
 

@@ -112,6 +112,9 @@ void engineLoop(Runtime* rt) {
     }
     in.faderRaw = rt->adc->fader();
     in.knobRaw = rt->adc->knob();
+    in.pitchRightRaw = rt->adc->pitchRight();
+    in.crossfaderRaw = rt->adc->crossfader();
+    in.twinWired = true;
     rt->touch->read(in.touchRaw);
     in.touchCount = static_cast<uint8_t>(rt->touch->count());
     uint16_t touchB = 0;
@@ -134,6 +137,12 @@ void engineLoop(Runtime* rt) {
       in.cue = rt->buttons->cue();
       in.rev = rt->buttons->rev();
     }
+    in.play = rt->buttons->play();
+    in.loopIn = rt->buttons->loopIn();
+    in.cueRight = rt->buttons->cueRight();
+    in.playRight = rt->buttons->playRight();
+    in.loopInRight = rt->buttons->loopInRight();
+    in.loopOutRight = rt->buttons->loopOutRight();
     in.usbMounted = usb_dev::hostActive();
     in.audioStreaming = usb_dev::audioStreaming();
     in.dacPresent = rt->dacPresent;
@@ -179,6 +188,8 @@ void engineLoop(Runtime* rt) {
     if (dt > g_stats.maxIterationUs.load(std::memory_order_relaxed)) g_stats.maxIterationUs.store(dt, std::memory_order_relaxed);
     g_stats.fader.store(in.faderRaw, std::memory_order_relaxed);
     g_stats.knob.store(in.knobRaw, std::memory_order_relaxed);
+    g_stats.pitchRight.store(in.pitchRightRaw, std::memory_order_relaxed);
+    g_stats.crossfader.store(in.crossfaderRaw, std::memory_order_relaxed);
     g_stats.angle.store(in.angle12, std::memory_order_relaxed);
     g_stats.angleValid.store(in.angleValid, std::memory_order_relaxed);
     for (unsigned i = 0; i < 8; ++i) g_stats.touchRaw[i].store(in.touchRaw[i], std::memory_order_relaxed);

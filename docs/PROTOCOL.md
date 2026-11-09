@@ -81,7 +81,9 @@ one deck's LEDs following the other's.
 | `cue` | Note 36 | note | both | CUE button. Out: vel 127 down / 0 up. In: vel > 0 lights the button (deck cue state). |
 | `rev` | Note 37 | note | both | REV button. Out: vel 127 down / 0 up. |
 | `touch` | Note 38 | note | out | Platter touched (vel 127) / released (vel 0). Enter/leave scratch mode. |
-| `play` | Note 39 | note | both | Play/pause toggle. Out: pulse (127 then 0) on a platter tap when tapPlay = 1. In: vel > 0 = deck is playing (LED feedback). |
+| `play` | Note 39 | note | both | Play/pause toggle. Out: pulse (127 then 0, note-off at least 10 ms later) on a platter tap when tapPlay = 1, and on the PLAY button's press. In: vel > 0 = deck is playing (LED feedback). |
+| `loopIn` | Note 42 | note | both | LOOP IN button. Out: vel 127 down / 0 up. |
+| `loopOut` | Note 43 | note | both | LOOP OUT button. Out: vel 127 down / 0 up. |
 | `tap` | Note 41 | note | both | Tap tempo. In: host taps tempo. Out: sent when a tap is detected in SYNC_MASTER mode. |
 <!-- END GENERATED:midi -->
 

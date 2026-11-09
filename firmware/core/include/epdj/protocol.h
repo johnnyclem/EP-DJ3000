@@ -51,6 +51,8 @@ constexpr uint8_t kCue = 36;
 constexpr uint8_t kRev = 37;
 constexpr uint8_t kTouch = 38;
 constexpr uint8_t kPlay = 39;
+constexpr uint8_t kLoopIn = 42;
+constexpr uint8_t kLoopOut = 43;
 constexpr uint8_t kTap = 41;
 }  // namespace note
 

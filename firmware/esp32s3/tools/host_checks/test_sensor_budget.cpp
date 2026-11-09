@@ -60,6 +60,19 @@ EPDJ_TEST(oversampling_never_overspends_unless_one_conversion_already_does) {
   CHECK_EQ(sensorUs(150, 30, 4), 390);
 }
 
+EPDJ_TEST(four_adc_channels_fit_the_same_400us) {
+  bool squeezed = false;
+  // No encoder: 400 / (4 * 20) = 5, under the cap of 8.
+  CHECK_EQ(adcOversample(0, 20, 8, &squeezed, 4), 5u);
+  CHECK(squeezed);
+  CHECK(sensorUs(0, 20, 5, 4) <= kTotalUs);
+  CHECK(sensorUs(0, 20, 6, 4) > kTotalUs);
+  // A 150 us encoder read leaves 250 us: 250 / 80 = 3.
+  CHECK_EQ(adcOversample(150, 20, 8, &squeezed, 4), 3u);
+  CHECK(squeezed);
+  CHECK(sensorUs(150, 20, 3, 4) <= kTotalUs);
+}
+
 EPDJ_TEST(an_encoder_that_may_turn_up_later_keeps_its_share_of_the_budget_reserved) {
   using namespace epdj::hal::sensor_budget;
   CHECK_EQ(i2cReserveUs(true, true, 130), 130u);    // answered at boot: the measured read

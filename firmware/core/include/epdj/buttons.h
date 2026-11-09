@@ -24,6 +24,21 @@ class ButtonDebouncer {
   uint8_t state_ = 0;
 };
 
+// The same lock, for the Twin buttons (PLAY, LOOP IN, and the right-hand controls). Those do not
+// take part in the CUE+REV chord, so they stay out of ButtonDebouncer's two bits.
+class MaskDebouncer {
+ public:
+  static constexpr unsigned kButtons = 8;
+
+  void setDebounceMs(uint8_t ms) { lockUs_ = static_cast<uint64_t>(ms) * 1000u; }
+  uint8_t update(uint8_t rawMask, uint64_t nowUs);
+
+ private:
+  uint64_t lockUs_ = 4000;
+  uint64_t lockUntilUs_[kButtons] = {};
+  uint8_t state_ = 0;
+};
+
 // Turns the debounced mask into per-button edges (never delayed) and the CUE+REV chord.
 //
 // Chord: both buttons down at once. The hold time runs from the moment the second one went down to

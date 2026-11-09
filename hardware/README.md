@@ -105,9 +105,9 @@ this repo; nothing has run on a chip):
 |---|---|---|---|
 | Platter and AS5600 pad | 76 mm platter over the 683ZZ sleeve, M3 head pocket, AS5600 pad (seat z = 3.5) | Implemented: jog CC 22 from the AS5600. Simulation-tested only | Print, then test-fit an M3x5 and an M3x6 (stack-up cross-check above) |
 | Hold pad (touch, hold, tap) | Nothing: no contact, foil recess or wire path | Implemented for one pad on GPIO4: touch note 38, tap -> play note 39. Simulation-tested only | Choose and draw the rotating contact (`PLATTER.md`) |
-| **PLAY** cap | 16 mm cap, stem hole | **No button.** Play note 39 exists only as the platter-tap pulse (and as the host's feedback in), so while the hold pad does not work nothing can send play | Proposal below |
-| **CUE** and **REV** caps | 16 mm and 10 mm caps, stem holes | Implemented: CUE note 36 on GPIO12, REV note 37 on GPIO13 | Glue a 6 x 6 mm tactile under each stem |
-| **LOOP IN** and **LOOP OUT** caps | 10 mm caps, stem holes | **None.** No pin, no note | Proposal below |
+| **PLAY** cap | 16 mm cap, stem hole | Left PLAY is GPIO7, note 39 as a pulse (127 then 0) on this deck's channel. Right PLAY is GPIO10, the same pulse on the other channel | Glue a 6 x 6 mm tactile under each stem |
+| **CUE** and **REV** caps | 16 mm and 10 mm caps, stem holes | Left CUE note 36 on GPIO12, left REV note 37 on GPIO13, this deck's channel. Right CUE is GPIO9, note 36 on the other channel | Glue a 6 x 6 mm tactile under each stem |
+| **LOOP IN** and **LOOP OUT** caps | 10 mm caps, stem holes | Left LOOP IN is GPIO8, note 42, held, this channel. Right LOOP IN is GPIO11, note 42, and right LOOP OUT is GPIO48, note 43, both held on the other channel. No left LOOP OUT. The LEDs beside the caps are still not driven | Glue the switches. Leave the LED holes empty |
 | Two **LEDs** beside LOOP IN / LOOP OUT | Two 3.1 mm holes; no LED part chosen | **None.** The only LED the firmware drives is the DevKit's own WS2812, inside the shell | Proposal below (host echo) |
 | Knob | 7.3 mm bushing hole | Implemented: CC 24, wiper on GPIO2 | Fit a 9 mm vertical 10 k pot |
 | Scratch fader | Loose-fader slot, 8 x 64 mm (51 mm of travel), two hall posts; **no slide-pot mount** | Reads a 10 k slide pot on GPIO1 (default role PITCH, CC 25/57). **No hall-sensor input** | Draw a pot pad and a lever cap (firmware unchanged), or decide to build the hall fader and design its input (not designed) |
@@ -123,20 +123,12 @@ this repo; nothing has run on a chip):
 The bay is drawn for a headerless DevKitC-1. Still open: how the **hold pad** reaches the spinning platter (or whether to build
 without one and live without scratch mode: `PLATTER.md`).
 
-#### Proposal: PLAY, LOOP IN, LOOP OUT and their LEDs (NOT IMPLEMENTED)
+#### PLAY, LOOP IN, LOOP OUT, and their LEDs
 
-Needs the owner's go-ahead and a contract revision. Nothing below exists in the firmware, the tests, the macOS app, the
-mappings or `protocol/`.
-
-* **PLAY cap** -> the existing `play` note 39, sent as the same pulse (127, then 0) a platter tap sends. No new note.
-* **LOOP IN / LOOP OUT caps** -> two new notes (36-39 and 41 are taken; numbers to be assigned in the contract), velocity 127 down
-  and 0 up like CUE and REV. The host echoes each loop's state back on the same note (velocity above 0 = lit), and the unit drives
-  the two LEDs from that echo, the same pattern as the contract's `cue` note. Mixxx has `loop_in` and `loop_out` controls to bind
-  them to; the other three apps' equivalents have not been looked up.
-* **Pins.** Three buttons and two LEDs are five GPIOs. Free and not special: GPIO18, 39 and 42 (three), then GPIO5-11, which are
-  the experimental touch ring's sectors 1-7: idle with the AS5600 platter, **taken if the ring is used**, and reserved for it by
-  `board_pins.h` today, so using them needs a pin-plan change and retires the ring option. Each LED needs a series resistor
-  (value from the LED chosen).
+The buttons are in the firmware (`WIRING.md`). PLAY reuses note 39 as a pulse. LOOP IN is note 42 and LOOP OUT is note 43,
+held like CUE. The right-hand copies of those notes go out on the other deck's MIDI channel. The two LEDs are still not
+driven: no pin is free for them, and nothing in the firmware turns a host echo into a lamp. Mixxx does not yet bind the
+new notes; a MIDI monitor shows them.
 * **OLED.** The SSD1306 shares the AS5600's I2C bus (GPIO21 / GPIO47; AS5600 at 0x36, SSD1306 at 0x3C), so no new pins. It needs a
   driver and a contract message for what to show. A full 128x32 frame is 512 bytes, about 12 ms of bus time at 400 kHz (arithmetic,
   not measured), so display traffic must be kept out of the 1 ms loop that reads the AS5600.

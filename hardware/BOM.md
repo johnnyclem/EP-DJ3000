@@ -57,7 +57,7 @@ There is deliberately **no bill-of-materials line** for:
 | a **line in** jack (top edge) | the PCM5102A is output-only; a line input needs an ADC or an I2S codec, firmware and a USB audio input path |
 | a **headphone** jack (fader end) | a headphone amplifier and a cue/monitor mix are not designed |
 | a flat **LiPo** in the battery bay | no cell holder, charger, protection, power path, switch or battery sense is designed; the unit is bus powered |
-| the **PLAY, LOOP IN, LOOP OUT** caps and the two LEDs beside the loop caps | no firmware reads the buttons or drives the LEDs; a proposal is in `README.md` (not implemented). Leave the stems unfitted |
+| the **PLAY, LOOP IN, LOOP OUT** caps and the two LEDs beside the loop caps | the Twin firmware reads PLAY, LOOP IN, and the right LOOP OUT (`WIRING.md`). The LEDs are still not driven. Fit the switches; leave the LED holes empty |
 | the 0.91" **SSD1306 OLED** | no driver and nothing in the contract to show |
 
 ## Only for the experimental touch ring (not the current path)

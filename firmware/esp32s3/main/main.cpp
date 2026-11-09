@@ -219,6 +219,16 @@ extern "C" void app_main(void) {
   // ---- sensors ----
   // The encoder first: the ADC's share of the 1 ms sensor budget is what the AS5600 read leaves (sensor_budget.h).
   g_buttons.begin();
+  if (pins::kLoopOutRight >= 0) {
+    ESP_LOGI(TAG,
+             "twin: right pitch GPIO%d, crossfader GPIO%d, play GPIO%d, loop in GPIO%d, "
+             "right cue/play/in/out GPIO%d/%d/%d/%d",
+             pins::kPitchRight, pins::kCrossfader, pins::kPlay, pins::kLoopIn, pins::kCueRight, pins::kPlayRight,
+             pins::kLoopInRight, pins::kLoopOutRight);
+  } else {
+    ESP_LOGI(TAG, "twin: right pitch GPIO%d, crossfader GPIO%d; right loop out has no pin (status LED owns GPIO48)",
+             pins::kPitchRight, pins::kCrossfader);
+  }
 #if CONFIG_EPDJ_AS5600_ENABLE || CONFIG_EPDJ_DAC_PROBE_I2C
   g_i2c.begin();
 #endif
@@ -238,7 +248,7 @@ extern "C" void app_main(void) {
   const bool encoderExpected = g_as5600.canRetry() && g_cfg.get(proto::ConfigKey::PlatterSource) ==
                                                            static_cast<int32_t>(proto::PlatterSource::As5600);
   if (!g_adc.begin(hal::sensor_budget::i2cReserveUs(encoderExpected, g_as5600.present(), g_as5600.readUs()))) {
-    ESP_LOGE(TAG, "ADC failed: fader and knob will read 0");
+    ESP_LOGE(TAG, "ADC failed: the slide pots and the knob will read 0");
   }
   unsigned touchPads = CONFIG_EPDJ_TOUCH_PAD_COUNT;
 #if CONFIG_EPDJ_TWIN
@@ -332,8 +342,8 @@ extern "C" void app_main(void) {
   if (radioOn) ESP_LOGI(TAG, "link group %u (%s)", static_cast<unsigned>(app::effectiveLinkGroup(g_rt)),
                         g_cfg.get(proto::ConfigKey::LinkGroup) != 0 ? "linkGroup config key" : "build default");
 
-  // 512 bytes on the 400 kHz bus is about 12 ms. Painted here, once, before the engine task exists, so a frame
-  // can never sit in front of an AS5600 read.
+  // 512 bytes on the 100 kHz display bus. Painted here, once, before the engine task exists, so a frame
+  // can never sit in front of an encoder read.
   const char* encLine = "NO ENCODER";
   if (g_as5600.present()) {
     switch (g_as5600.magnet()) {

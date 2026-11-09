@@ -41,6 +41,18 @@ struct RawInputs {
   uint8_t touchCount = 0;     // how many of touchRaw are wired (0 = no touch hardware)
   bool cue = false;
   bool rev = false;
+  // Twin shell. Ignored unless twinWired: a build that does not sample these leaves them false and
+  // the engine sends nothing for them, so a test of the one-fader deck is unchanged. pitchRightRaw
+  // and crossfaderRaw are 12-bit ADC counts, clamped like faderRaw.
+  bool twinWired = false;
+  uint16_t pitchRightRaw = 0;  // right deck's pitch, CC 25/57 on the other MIDI channel
+  uint16_t crossfaderRaw = 0;  // dedicated crossfader, CC 23/55 on this unit's channel
+  bool play = false;           // left PLAY: note 39 pulse on this channel
+  bool loopIn = false;         // left LOOP IN: note 42 held on this channel
+  bool cueRight = false;       // right CUE: note 36 held on the other channel
+  bool playRight = false;      // right PLAY: note 39 pulse on the other channel
+  bool loopInRight = false;    // right LOOP IN: note 42 held on the other channel
+  bool loopOutRight = false;   // right LOOP OUT: note 43 held on the other channel
   bool usbMounted = false;      // a USB host has enumerated the device
   bool audioStreaming = false;  // the host has the audio interface open
   bool dacPresent = false;      // a DAC was found (or forced by dacMode)
@@ -247,7 +259,8 @@ class Engine {
   void emitSystem(const midi::Message& m);   // clock/transport/MTC: clockOutMask ports
   void emitSystemSysex(const uint8_t* msg, size_t len);
   uint8_t systemPorts() const;
-  void noteOn(uint8_t note, HeldNote* held);
+  void noteOn(uint8_t note, HeldNote* held, uint8_t ch);
+  void noteOn(uint8_t note, HeldNote* held) { noteOn(note, held, channel()); }
   void noteOff(HeldNote* held);
 
   // configuration
@@ -258,6 +271,8 @@ class Engine {
   // CUE+REV deck swap) write the new deck into the config and then restart, so until the restart the
   // channel, the LED deck and the radio id must keep saying what the USB name says.
   uint8_t channel() const;
+  // The other deck's channel. Right-hand Twin controls speak here. This unit's deck id does not change.
+  uint8_t otherChannel() const;
   uint8_t linkGroup() const;
   bool trsEnabled() const { return cfg_.get(proto::ConfigKey::TrsMidiEnable) != 0; }
   bool isMaster() const { return mode_ == proto::Mode::SyncMaster; }
@@ -274,9 +289,12 @@ class Engine {
   void runJog();
   void runFader();
   void runKnob();
+  void runTwin();
   bool knobTakesOver(uint16_t v14);
   void sendFader(uint16_t v14);
   void sendKnob(uint16_t v14);
+  void sendCc(uint8_t ch, uint8_t msb, uint8_t lsb, uint16_t v14, int32_t* sent);
+  void pulsePlay(HeldNote* held, uint64_t* offAtUs, uint8_t ch);
   void resendContinuous();
 
   // tempo / transport / clock
@@ -321,8 +339,9 @@ class Engine {
   StickyTouch sticky_;  // the hold pad's motion-sticky release (AS5600 and hold-only platters)
   JogEmitter jogOut_;
   ButtonDebouncer deb_;
+  MaskDebouncer twinDeb_;
   ButtonGestures gestures_;
-  AnalogControl fader_, knob_;
+  AnalogControl fader_, knob_, pitchRight_, crossfader_;
   CalibrationTracker calFader_, calKnob_;
 
   ClockGenerator clock_;
@@ -353,6 +372,7 @@ class Engine {
   bool linkEnabled_ = true, prevRouteOut_ = false;
   int8_t linkUsbHostSent_ = -1;  // what Link::setUsbHost last got (-1 = nothing yet)
   uint8_t buttonsDown_ = 0;
+  uint8_t twinDown_ = 0;
 
   // config bookkeeping
   int32_t applied_[proto::kConfigCount] = {};
@@ -389,14 +409,16 @@ class Engine {
   // held notes (the channel at press time is remembered so a live channel change cannot strand a note)
   HeldNote heldBtn_[2];
   HeldNote heldTouch_, heldPulse_;
+  HeldNote heldLoopIn_, heldCueRight_, heldLoopInRight_, heldLoopOutRight_, heldPulseRight_;
   // The hold pad has registered a touch since power-up (or since the platter source changed). jogUntouched = AUTO only
   // starts suppressing coasting after this, so a pad that is configured but not yet wired never silences the encoder.
   bool padProven_ = false;
   uint64_t pulseOffUs_ = 0;
+  uint64_t pulseOffRightUs_ = 0;
 
   // continuous controls
-  int32_t faderSent_ = -1, knobSent_ = -1;
-  bool faderForce_ = false, knobForce_ = false;
+  int32_t faderSent_ = -1, knobSent_ = -1, pitchRightSent_ = -1, crossSent_ = -1;
+  bool faderForce_ = false, knobForce_ = false, pitchRightForce_ = false, crossForce_ = false;
   // knobRole = BPM: the knob does not set the tempo until it has moved away from where it was when it
   // was armed (boot, role or calibration change), so a boot never replaces the saved tempo.
   enum class KnobPickup : uint8_t { Arm, Waiting, Active };

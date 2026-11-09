@@ -10,16 +10,32 @@ namespace epdj {
 namespace pins {
 
 // ---- analog (ADC1 only: ADC2 is unusable while the Wi-Fi radio is on) ----
-constexpr int kFader = 1;  // ADC1_CH0, slide pot wiper
-constexpr int kKnob = 2;   // ADC1_CH1, orange knob wiper
+constexpr int kFader = 1;        // ADC1_CH0, left pitch slide (the fader whose role is configurable; default PITCH)
+constexpr int kKnob = 2;         // ADC1_CH1, orange knob wiper
+constexpr int kPitchRight = 5;   // ADC1_CH4, right deck's pitch slide. Always CC 25/57 on the other MIDI channel.
+constexpr int kCrossfader = 6;   // ADC1_CH5, the Twin crossfader. Always CC 23/55 on this unit's channel.
 
-// ---- capacitive touch: platter sector i is on GPIO kTouchFirst + i (touch pad N is GPIO N on the S3) ----
+// ---- capacitive touch: only the hold pad. GPIO5-11 are the Twin pots and buttons, so the experimental
+// touch ring cannot be built on this pin plan (EPDJ_TOUCH_PAD_COUNT is 0 or 1). ----
 constexpr int kTouchFirst = 4;
-constexpr int kTouchMax = 8;  // pads 4..11 = sectors 0..7. In AS5600 mode only pad 4 (sector 0) is wired: hold pad.
+constexpr int kTouchMax = 8;  // the chip's pad numbers 4..11. This firmware wires only pad 4 (the hold pad).
 
 // ---- buttons (internal pull-up, pressed = low) ----
+// Left deck, this unit's MIDI channel: CUE, REV (the left toggle), PLAY, LOOP IN.
+// Right deck, the other MIDI channel: CUE, PLAY, LOOP IN, LOOP OUT. There is no left LOOP OUT on this plan.
 constexpr int kCue = 12;
 constexpr int kRev = 13;
+constexpr int kPlay = 7;
+constexpr int kLoopIn = 8;
+constexpr int kCueRight = 9;
+constexpr int kPlayRight = 10;
+constexpr int kLoopInRight = 11;
+// GPIO48 is free on v1.1 (the LED is GPIO38). On v1.0 the LED owns GPIO48, so that revision has no right OUT.
+#ifdef CONFIG_EPDJ_BOARD_DEVKITC_1_V1_0
+constexpr int kLoopOutRight = -1;
+#else
+constexpr int kLoopOutRight = 48;
+#endif
 
 // ---- DAC-present strap: pull-up, jumper to GND on the DAC board ----
 constexpr int kDacStrap = 14;
@@ -58,16 +74,24 @@ constexpr const char* kBoardRev = "DevKitC-1 v1.1";
 
 constexpr int kTouchLast = kTouchFirst + kTouchMax - 1;
 
-// Every pin the firmware claims, touch pads expanded.
+// Every pin the firmware claims. The hold pad only: GPIO5-11 are pots and buttons, not touch pads.
 constexpr int kAllPins[] = {
-    kFader,  kKnob,  kTouchFirst + 0, kTouchFirst + 1, kTouchFirst + 2, kTouchFirst + 3, kTouchFirst + 4,
-    kTouchFirst + 5, kTouchFirst + 6, kTouchFirst + 7, kCue,            kRev,            kDacStrap,
-    kI2sBck, kI2sWs, kI2sDout,        kI2cSda,         kI2cScl,         kTrsTx,          kTrsRx,
-    kSdClk,  kSdCmd, kSdD0,           kStatusLed,
+    kFader,       kKnob,        kPitchRight,  kCrossfader, kTouchFirst, kCue,           kRev,
+    kPlay,        kLoopIn,      kCueRight,    kPlayRight,  kLoopInRight,
+#ifdef CONFIG_EPDJ_BOARD_DEVKITC_1_V1_0
+#else
+    kLoopOutRight,
+#endif
+    kDacStrap,    kI2sBck,      kI2sWs,       kI2sDout,    kI2cSda,     kI2cScl,        kTrsTx,
+    kTrsRx,       kSdClk,       kSdCmd,       kSdD0,       kStatusLed,
 };
 constexpr size_t kPinCount = sizeof(kAllPins) / sizeof(kAllPins[0]);
-static_assert(kPinCount == 24, "kAllPins must list every pin above, with all 8 touch pads");
-static_assert(kTouchMax == 8, "kAllPins expands exactly 8 touch pads");
+#ifdef CONFIG_EPDJ_BOARD_DEVKITC_1_V1_0
+static_assert(kPinCount == 24, "kAllPins must list every pin above (v1.0 has no right LOOP OUT)");
+#else
+static_assert(kPinCount == 25, "kAllPins must list every pin above, including right LOOP OUT");
+#endif
+static_assert(CONFIG_EPDJ_TOUCH_PAD_COUNT <= 1, "GPIO5-11 are Twin controls; only the hold pad on GPIO4 is a touch input");
 
 constexpr bool pinsAreUnique() {
   for (size_t i = 0; i < kPinCount; ++i)
@@ -94,7 +118,9 @@ constexpr bool noPinIsReserved() {
 static_assert(noPinIsReserved(), "a GPIO collides with a flash/PSRAM, USB, UART0 or strapping pin");
 
 constexpr bool isAdc1(int gpio) { return gpio >= 1 && gpio <= 10; }  // ESP32-S3: GPIO1..10 = ADC1_CH0..9
-static_assert(isAdc1(kFader) && isAdc1(kKnob), "fader and knob must be on ADC1");
+static_assert(isAdc1(kFader) && isAdc1(kKnob) && isAdc1(kPitchRight) && isAdc1(kCrossfader),
+              "slide pots must be on ADC1");
+static_assert(kLoopOutRight < 0 || kLoopOutRight != kStatusLed, "right LOOP OUT collides with the status LED");
 
 constexpr bool isTouchCapable(int gpio) { return gpio >= 1 && gpio <= 14; }  // touch pad N = GPIO N
 static_assert(isTouchCapable(kTouchFirst) && isTouchCapable(kTouchLast), "touch pads must be GPIO 1..14");

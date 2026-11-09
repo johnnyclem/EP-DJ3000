@@ -39,15 +39,14 @@ menu "EP-DJ3000"
         endchoice
 
         config EPDJ_TOUCH_PAD_COUNT
-            int "Number of touch pads wired (0 = none)"
-            range 0 8
+            int "Number of touch pads wired (0 = none, 1 = the hold pad)"
+            range 0 1
             default 1
             help
-                Pads are GPIO4.. in order, sector 0 first (board_pins.h). With the AS5600 platter (the
-                default) wire ONE pad: GPIO4 is the hold pad, which supplies the touch note and tap
-                detection while the encoder supplies the motion. 0 means no hold pad: jog still works
-                but the unit never sends a touch note, so DJ apps never enter scratch mode. For the
-                experimental touch ring wire 3 to 8 pads (8 for the full ring).
+                The hold pad is GPIO4. 0 means no hold pad: jog still works but the unit never sends a
+                touch note, so DJ apps never enter scratch mode. GPIO5-11 are the Twin slide pots and
+                buttons, so this cannot be more than 1: the experimental touch ring does not fit on
+                this pin plan.
 
         config EPDJ_TOUCH_SCAN_TARGET_US
             int "Touch: target duration of one scan of all pads (us, 0 = no auto-range)"
@@ -84,11 +83,12 @@ menu "EP-DJ3000"
             range 1 32
             default 8
             help
-                The upper limit: at boot the firmware times one conversion and the AS5600 read, and lowers
-                the count so that fader, knob and encoder together take at most 400 us of each
-                millisecond (the encoder read comes off the top). Each ADC conversion runs with interrupts
-                off on the core that also serves USB. 8 trades part of that budget for roughly 3x less ADC
-                noise than a single read.
+                The upper limit: at boot the firmware times one conversion and the encoder read, and lowers
+                the count so that the four ADC channels (left pitch, knob, right pitch, crossfader) and the
+                encoder together take at most 400 us of each millisecond (the encoder read comes off the
+                top). Each ADC conversion runs with interrupts off on the core that also serves USB. 8
+                trades part of that budget for roughly 3x less ADC noise than a single read. Four channels
+                usually land below 8.
 
         config EPDJ_AS5600_ENABLE
             bool "Probe for an AS5600 encoder on I2C at boot (SDA GPIO21, SCL GPIO47, address 0x36)"

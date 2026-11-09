@@ -32,6 +32,8 @@ If a wedge will not drop in, sand the vertical edges, not the play face.
 
 ## Wire it
 
+The Twin firmware image uses GPIO5–11 for the right pitch, the crossfader, and the extra buttons. This coupon is the old touch-ring experiment, and it cannot share a board with that image. GPIO4 is still the hold pad.
+
 1. Seat each wedge in a pocket. One small drop of CA on the pocket floor.
    Keep glue out of the gaps. The rib between pockets is the insulation
    (1.35 mm). Adjacent wedges must read open on a multimeter.

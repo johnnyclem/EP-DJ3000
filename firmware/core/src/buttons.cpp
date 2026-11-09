@@ -15,6 +15,16 @@ uint8_t ButtonDebouncer::update(uint8_t rawMask, uint64_t nowUs) {
   return state_;
 }
 
+uint8_t MaskDebouncer::update(uint8_t rawMask, uint64_t nowUs) {
+  for (unsigned i = 0; i < kButtons; ++i) {
+    const uint8_t bit = static_cast<uint8_t>(1u << i);
+    if (nowUs < lockUntilUs_[i] || (rawMask & bit) == (state_ & bit)) continue;
+    state_ = static_cast<uint8_t>((state_ & ~bit) | (rawMask & bit));
+    lockUntilUs_[i] = nowUs + lockUs_;
+  }
+  return state_;
+}
+
 ButtonGestures::Events ButtonGestures::update(uint8_t downMask, uint64_t nowUs) {
   Events ev;
   const uint8_t prev = down_;

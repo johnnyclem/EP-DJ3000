@@ -205,8 +205,10 @@ void formatScreen(Screen& s, const Catalog& cat, int index, PlayState state) {
   if (state == PlayState::Playing) tag = " PLAY";
   else if (state == PlayState::Paused) tag = " PAUSE";
   else if (state == PlayState::Ended) tag = " END";
-  std::snprintf(s.top, sizeof s.top, "%d/%d%s", index + 1, cat.count(), tag);
-  std::snprintf(s.bottom, sizeof s.bottom, "%s", cat.name(index));
+  char line[40];
+  std::snprintf(line, sizeof line, "%d/%d%s", index + 1, cat.count(), tag);
+  std::snprintf(s.top, sizeof s.top, "%.*s", static_cast<int>(sizeof s.top - 1), line);
+  std::snprintf(s.bottom, sizeof s.bottom, "%.*s", static_cast<int>(sizeof s.bottom - 1), cat.name(index));
 }
 
 }  // namespace library

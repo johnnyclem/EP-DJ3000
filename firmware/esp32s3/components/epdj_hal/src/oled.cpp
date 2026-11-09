@@ -89,8 +89,9 @@ bool command(i2c_master_dev_handle_t dev, const uint8_t* c, size_t n) {
   return false;
 }
 
-// 128x32 SSD1306, the 0.91" yellow-over-blue glass. Charge pump on, COM pins sequential (0x02, not the
-// 128x64 value 0x12).
+// 128x32 SSD1306, the 0.91" yellow glass. Charge pump on, COM pins sequential (0x02, not the 128x64
+// value 0x12). The module sits upside down in the case, so 0xA0 and 0xC0 turn the RAM 180 degrees
+// from the usual 0xA1 / 0xC8.
 bool initPanel(i2c_master_dev_handle_t dev) {
   const uint8_t off[] = {0xAE};
   const uint8_t clock[] = {0xD5, 0x80};
@@ -99,7 +100,6 @@ bool initPanel(i2c_master_dev_handle_t dev) {
   const uint8_t start[] = {0x40};
   const uint8_t pump[] = {0x8D, 0x14};
   const uint8_t mode[] = {0x20, 0x00};
-  // The module sits upside down in the case. 0xA0 and 0xC0 turn the RAM 180 degrees from the usual 0xA1 / 0xC8.
   const uint8_t remap[] = {0xA0};
   const uint8_t scan[] = {0xC0};
   const uint8_t com[] = {0xDA, 0x02};
@@ -156,8 +156,8 @@ OledBringup oledBringup(I2cBus& bus, char deck, const char* line2) {
   i2c_master_dev_handle_t dev = nullptr;
   if (i2c_master_bus_add_device(bus.handle(), &dc, &dev) != ESP_OK) return out;
 
-  uint8_t fb[kFrame];
-  std::memset(fb, 0x00, sizeof fb);  // pixel on = yellow, so the glyphs are yellow on black
+  static uint8_t fb[kFrame];
+  std::memset(fb, 0x00, sizeof fb);  // pixel on = lit, so the glyphs are lit on black
   char deckLine[12];
   std::snprintf(deckLine, sizeof deckLine, "DECK %c", deck);
   drawText(fb, 0, "EP-DJ3000");
@@ -179,7 +179,7 @@ OledBringup oledBringup(I2cBus& bus, char deck, const char* line2) {
 
 void oledLines(const char* top, const char* bottom) {
   if (g_panel == nullptr) return;
-  uint8_t fb[kFrame];
+  static uint8_t fb[kFrame];
   std::memset(fb, 0, sizeof fb);
   drawText(fb, 0, top != nullptr ? top : "");
   drawText(fb, 2, bottom != nullptr ? bottom : "");

@@ -20,12 +20,18 @@ with a multimeter), and set `self_powered` / `vbus_monitor_io` in `usb_device.cp
 
 | GPIO | Function | Notes |
 |---|---|---|
-| 1 | Fader wiper | ADC1_CH0. 12-bit, ~3.1 V full scale at 12 dB attenuation. |
+| 1 | Left pitch (the fader) | ADC1_CH0. Role is `faderRole`, default PITCH (CC 25/57) on this deck's MIDI channel. |
 | 2 | Knob wiper | ADC1_CH1. |
-| 4 | **Hold pad** (default build) | The ONE touch pad of the AS5600 build: touch/hold and tap detection. How it reaches a spinning platter is undecided: `PLATTER.md`. Also sector 0 of the experimental ring. |
-| 5 .. 11 | Experimental touch ring only: sectors 1 .. 7 | Touch pad N is GPIO N on the S3. Sector 0 = GPIO4 = 12 o'clock, increasing clockwise seen from above. Leave unconnected in the default build. |
-| 12 | CUE button | to GND, internal pull-up, pressed = low |
-| 13 | REV button | same |
+| 4 | **Hold pad** | The one touch pad: touch/hold and tap. GPIO5-11 are no longer touch pads. |
+| 5 | Right pitch | ADC1. Always pitch CC 25/57 on the other deck's MIDI channel. Internal pulldown, so an open pin sits near 0. |
+| 6 | Crossfader | ADC1. Always crossfader CC 23/55 on this deck's channel. Internal pulldown, same as GPIO5. |
+| 7 | Left PLAY | to GND, internal pull-up, pressed = low. Note 39, a pulse, this deck's channel. |
+| 8 | Left LOOP IN | same. Note 42, held, this deck's channel. |
+| 9 | Right CUE | same. Note 36, held, the other deck's channel. |
+| 10 | Right PLAY | same. Note 39, a pulse, the other deck's channel. |
+| 11 | Right LOOP IN | same. Note 42, held, the other deck's channel. |
+| 12 | Left CUE | to GND, internal pull-up, pressed = low. Note 36, this deck. |
+| 13 | Left REV | same. Note 37. The left toggle that should be reverse. |
 | 14 | DAC-present strap | internal pull-up; a jumper to GND on the DAC board means "a DAC is attached" |
 | 15 | I2S BCK | to PCM5102A BCK |
 | 16 | I2S WS (LRCK) | to PCM5102A LCK |
@@ -38,6 +44,7 @@ with a multimeter), and set `self_powered` / `vbus_monitor_io` in `usb_device.cp
 | 39 | microSD CMD | same. GPIO39 is a JTAG pin; fine unless a probe is attached. |
 | 42 | microSD D0 | same. GPIO42 is a JTAG pin, same caveat. |
 | 38 (v1.1) or 48 (v1.0) | Status LED | the DevKitC-1's on-board WS2812. **v1.1 boards, the current ones, have it on GPIO38; v1.0 on GPIO48.** Pick the revision in `menuconfig` (EP-DJ3000 > board revision, `EPDJ_BOARD_REV`); the default is v1.1. A wrong choice leaves the LED dark and nothing else changes. |
+| 48 (v1.1 only) | Right LOOP OUT | to GND, internal pull-up, pressed = low. Note 43, held, the other deck's channel. v1.0 has no pin for it: the LED owns GPIO48. |
 
 Why these: fader and knob are on ADC1 because ADC2 cannot be used while the radio is on. GPIO4..11 are the S3's
 touch pads 4..11 (contiguous, away from the strapping pins). Left alone on purpose: GPIO0 (BOOT/strapping),
@@ -52,9 +59,11 @@ The headers expose GPIO 0-21 and 35-48; **GPIO 22-34 are not broken out.** Every
 
 | Function | GPIO | On a header | Note |
 |---|---|---|---|
-| Fader, knob wipers | 1, 2 | yes | ADC1_CH0, ADC1_CH1 |
-| Hold pad | 4 | yes | TOUCH4 |
-| CUE, REV | 12, 13 | yes | |
+| Left pitch, knob, right pitch, crossfader | 1, 2, 5, 6 | yes | ADC1 |
+| Hold pad | 4 | yes | TOUCH4. GPIO5-11 are not touch pads |
+| Left PLAY, LOOP IN, right CUE, right PLAY, right LOOP IN | 7, 8, 9, 10, 11 | yes | |
+| Left CUE, REV | 12, 13 | yes | |
+| Right LOOP OUT | 48 on v1.1 | yes | not on v1.0, where the LED is GPIO48 |
 | DAC-present strap | 14 | yes | |
 | I2S BCK, WS, DOUT | 15, 16, 17 | yes | |
 | microSD CLK, CMD, D0 | 18, 39, 42 | yes | 39 and 42 are JTAG pins (caveat 1) |
@@ -65,7 +74,7 @@ The headers expose GPIO 0-21 and 35-48; **GPIO 22-34 are not broken out.** Every
 None of them is USB (GPIO19 D-, GPIO20 D+), the UART0 console (GPIO43, 44), a strapping pin (GPIO0, 3, 45, 46) or one of the
 octal flash/PSRAM pins (GPIO35, 36, 37, which the guide says are used internally on octal modules).
 
-**Still free and not special:** GPIO5-11. Those are the experimental touch ring's sectors 1-7: idle with the AS5600 platter, taken if the ring is used. GPIO18, 39 and 42 are the microSD bus.
+**GPIO5-11 and, on v1.1, GPIO48 are the Twin controls** in the table above. The experimental touch ring used GPIO5-11 and does not fit this pin plan (`EPDJ_TOUCH_PAD_COUNT` is 0 or 1). GPIO18, 39 and 42 are the microSD bus. There is no left LOOP OUT, and the loop LEDs have no pin.
 
 Two caveats:
 
@@ -94,10 +103,13 @@ named elsewhere in this repo are what v1.1 boards have, from memory: look at you
 
 ## Buttons and pots
 
-* CUE (GPIO12) and REV (GPIO13): one terminal to the pin, the other to GND. Debounce is in firmware
-  (`buttonDebounceMs`, default 4 ms). Optionally 100 nF across each switch.
-* Slide pot: the part in the shell is a dual-gang 75 mm fader, 60 mm travel, marked **B103** (10 kΩ linear). Use **one** gang. Ends of that gang to 3V3 and GND, wiper to GPIO1, 100 nF from the wiper to GND. Leave the second gang unconnected. Do not tie the two wipers together. Which end is "up" does not matter: `faderInvert` and the calibration take care of it. A wiper that breaks contact for a moment reads 0 or 4095 for a sample: the engine's filter rejects single-sample spikes, but do not use a scratchy pot.
-* Knob pot: 10 kΩ linear, same wiring, wiper to GPIO2.
+* Every button (CUE, REV, PLAY, LOOP IN, and the right-hand CUE / PLAY / LOOP IN / LOOP OUT): one terminal to the pin, the other to GND. Debounce is in firmware (`buttonDebounceMs`, default 4 ms). Optionally 100 nF across each switch. An open button reads released.
+* Slide pots: the part in the shell is a dual-gang 75 mm fader, 60 mm travel, marked **B103** (10 kΩ linear). Use **one** gang of each. Ends of that gang to 3V3 and GND, wiper to the ADC pin, 100 nF from the wiper to GND. Leave the second gang unconnected. Do not tie the two wipers together. Which end is "up" does not matter for the left pitch: `faderInvert` and the calibration flip it, and the right pitch and the crossfader follow that same saved window. A wiper that breaks contact for a moment reads 0 or 4095 for a sample: the engine's filter rejects single-sample spikes, but do not use a scratchy pot.
+  * GPIO1 is the left pitch (this deck's channel, default role PITCH).
+  * GPIO5 is the right pitch. It always sends pitch on the other deck's MIDI channel. This unit stays whatever deck it booted as; the right-hand controls just use the other channel (Deck A speaks channel 1, the right side speaks channel 2).
+  * GPIO6 is the crossfader. It always sends CC 23/55 on this deck's channel. If `faderRole` is also CROSSFADER, the left slide stops sending that pair so the two do not fight. Leave the role at PITCH.
+  * GPIO5 and GPIO6 have the internal pulldown on, so a pot that is not wired yet sits near 0 and sends one position instead of a stream of noise. The pulldown is weak next to a 10 k pot.
+* Knob pot: 10 kΩ linear, same wiring, wiper to GPIO2. No pulldown on GPIO1 or GPIO2.
 
 ## DAC: PCM5102A board (I2S, no I2C, no MCLK)
 

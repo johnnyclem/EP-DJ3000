@@ -126,7 +126,21 @@
         "type": "note",
         "number": 39,
         "dir": "both",
-        "desc": "Play/pause toggle. Out: pulse (127 then 0) on a platter tap when tapPlay = 1. In: vel > 0 = deck is playing (LED feedback)."
+        "desc": "Play/pause toggle. Out: pulse (127 then 0, note-off at least 10 ms later) on a platter tap when tapPlay = 1, and on the PLAY button's press. In: vel > 0 = deck is playing (LED feedback)."
+      },
+      {
+        "id": "loopIn",
+        "type": "note",
+        "number": 42,
+        "dir": "both",
+        "desc": "LOOP IN button. Out: vel 127 down / 0 up."
+      },
+      {
+        "id": "loopOut",
+        "type": "note",
+        "number": 43,
+        "dir": "both",
+        "desc": "LOOP OUT button. Out: vel 127 down / 0 up."
       },
       {
         "id": "tap",

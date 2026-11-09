@@ -43,6 +43,8 @@ public enum Proto {
         public static let rev: UInt8 = 37
         public static let touch: UInt8 = 38
         public static let play: UInt8 = 39
+        public static let loopIn: UInt8 = 42
+        public static let loopOut: UInt8 = 43
         public static let tap: UInt8 = 41
     }
     public enum Cable {

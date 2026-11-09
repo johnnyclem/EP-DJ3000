@@ -165,6 +165,13 @@ uint8_t Engine::channel() const {
   return bootDeck_ == proto::Deck::B ? proto::kDefaultChannelDeckB : proto::kDefaultChannelDeckA;
 }
 
+uint8_t Engine::otherChannel() const {
+  const uint8_t ch = channel();
+  if (ch == proto::kDefaultChannelDeckA) return proto::kDefaultChannelDeckB;
+  if (ch == proto::kDefaultChannelDeckB) return proto::kDefaultChannelDeckA;
+  return static_cast<uint8_t>((ch + 1) & 0x0F);
+}
+
 // A non-zero config value wins over the build-time default; applied live by applyConfig.
 uint8_t Engine::linkGroup() const {
   const int32_t g = cfg_.get(ConfigKey::LinkGroup);
@@ -253,10 +260,10 @@ void Engine::emitSystemSysex(const uint8_t* msg, size_t len) {
   push(OutEvent::Kind::SysEx, systemPorts(), proto::cable::kDeck, msg, len);
 }
 
-void Engine::noteOn(uint8_t note, HeldNote* held) {
+void Engine::noteOn(uint8_t note, HeldNote* held, uint8_t ch) {
   held->note = note;
-  held->channel = channel();
-  emitDeck(midi::noteOn(held->channel, note, 127));
+  held->channel = ch;
+  emitDeck(midi::noteOn(ch, note, 127));
 }
 
 void Engine::noteOff(HeldNote* held) {
@@ -315,6 +322,17 @@ void Engine::applyConfig(bool force) {
     ac.deadHiPermille = static_cast<uint16_t>(v(K::FaderDeadHiPermille));
     ac.curve = static_cast<proto::FaderCurve>(v(K::FaderCurve));
     fader_.configure(ac);
+    // The right pitch and the crossfader are the same kind of slide pot. They follow this calibration,
+    // curve and invert: one saved window, three pots. A pot whose travel differs can be flipped in
+    // hardware (which end is 3V3) until its own keys exist.
+    pitchRight_.configure(ac);
+    crossfader_.configure(ac);
+    if (!force) {
+      pitchRightSent_ = -1;
+      pitchRightForce_ = true;
+      crossSent_ = -1;
+      crossForce_ = true;
+    }
   }
   if (!force && changed(K::FaderRole)) {  // the other CC pair has never been told the position
     faderSent_ = -1;
@@ -340,7 +358,10 @@ void Engine::applyConfig(bool force) {
     knobPickup_ = KnobPickup::Arm;
   }
 
-  if (changed(K::ButtonDebounceMs)) deb_.setDebounceMs(static_cast<uint8_t>(v(K::ButtonDebounceMs)));
+  if (changed(K::ButtonDebounceMs)) {
+    deb_.setDebounceMs(static_cast<uint8_t>(v(K::ButtonDebounceMs)));
+    twinDeb_.setDebounceMs(static_cast<uint8_t>(v(K::ButtonDebounceMs)));
+  }
   if (changed(K::MtcFps)) mtc_.setFps(static_cast<uint8_t>(v(K::MtcFps)), now_);
   if (changed(K::LinkBridge)) link_.setBridgeMode(static_cast<proto::LinkBridge>(v(K::LinkBridge)));
   if (!force && changed(K::LinkGroup)) link_.setGroup(linkGroup(), now_);  // boot reads it in ensureStarted
@@ -397,6 +418,8 @@ void Engine::step(const RawInputs& in) {
   in_ = in;
   in_.faderRaw = in.faderRaw > 4095 ? static_cast<uint16_t>(4095) : in.faderRaw;
   in_.knobRaw = in.knobRaw > 4095 ? static_cast<uint16_t>(4095) : in.knobRaw;
+  in_.pitchRightRaw = in.pitchRightRaw > 4095 ? static_cast<uint16_t>(4095) : in.pitchRightRaw;
+  in_.crossfaderRaw = in.crossfaderRaw > 4095 ? static_cast<uint16_t>(4095) : in.crossfaderRaw;
   in_.angle12 = static_cast<uint16_t>(in.angle12 & 4095u);
   if (in_.touchCount > kMaxTouch) in_.touchCount = kMaxTouch;
   dacPresent_ = in.dacPresent;
@@ -423,6 +446,7 @@ void Engine::step(const RawInputs& in) {
   runJog();
   runFader();
   runKnob();
+  runTwin();
   runHousekeeping();
   runTempoAnnounce();
   if (isMaster()) {
@@ -439,8 +463,8 @@ void Engine::step(const RawInputs& in) {
 }
 
 void Engine::resendContinuous() {
-  faderSent_ = knobSent_ = -1;
-  faderForce_ = knobForce_ = true;
+  faderSent_ = knobSent_ = pitchRightSent_ = crossSent_ = -1;
+  faderForce_ = knobForce_ = pitchRightForce_ = crossForce_ = true;
   bpmSent_ = -1;
   if (isMaster()) bpmAnnouncePending_ = true;
 }
@@ -589,10 +613,65 @@ bool Engine::sendsUntouchedJog() const {
   return !(source == proto::PlatterSource::As5600 && in_.touchCount > 0 && padProven_);
 }
 
-void Engine::playPulse() {
-  noteOff(&heldPulse_);
-  noteOn(proto::note::kPlay, &heldPulse_);
-  pulseOffUs_ = now_ + kPlayPulseUs;
+void Engine::pulsePlay(HeldNote* held, uint64_t* offAtUs, uint8_t ch) {
+  noteOff(held);
+  noteOn(proto::note::kPlay, held, ch);
+  *offAtUs = now_ + kPlayPulseUs;
+}
+
+void Engine::playPulse() { pulsePlay(&heldPulse_, &pulseOffUs_, channel()); }
+
+namespace {
+constexpr uint8_t kTwinPlay = static_cast<uint8_t>(1u << 0);
+constexpr uint8_t kTwinLoopIn = static_cast<uint8_t>(1u << 1);
+constexpr uint8_t kTwinCueRight = static_cast<uint8_t>(1u << 2);
+constexpr uint8_t kTwinPlayRight = static_cast<uint8_t>(1u << 3);
+constexpr uint8_t kTwinLoopInRight = static_cast<uint8_t>(1u << 4);
+constexpr uint8_t kTwinLoopOutRight = static_cast<uint8_t>(1u << 5);
+}  // namespace
+
+void Engine::runTwin() {
+  if (!in_.twinWired) return;
+
+  const uint8_t raw = static_cast<uint8_t>((in_.play ? kTwinPlay : 0) | (in_.loopIn ? kTwinLoopIn : 0) |
+                                            (in_.cueRight ? kTwinCueRight : 0) | (in_.playRight ? kTwinPlayRight : 0) |
+                                            (in_.loopInRight ? kTwinLoopInRight : 0) |
+                                            (in_.loopOutRight ? kTwinLoopOutRight : 0));
+  const uint8_t down = twinDeb_.update(raw, now_);
+  const uint8_t pressed = static_cast<uint8_t>(down & ~twinDown_);
+  const uint8_t released = static_cast<uint8_t>(twinDown_ & ~down);
+  twinDown_ = down;
+
+  if (pressed & kTwinPlay) {
+    // Same message a platter tap sends. In SYNC_MASTER the tap also moves this unit's transport;
+    // the button does too. The right PLAY button does not: this unit has one transport.
+    if (isMaster()) {
+      doTransport(fsm_.state() == TransportState::Playing ? TransportFsm::Event::Pause : TransportFsm::Event::Play);
+    }
+    playPulse();
+  }
+  if (pressed & kTwinLoopIn) noteOn(proto::note::kLoopIn, &heldLoopIn_);
+  if (released & kTwinLoopIn) noteOff(&heldLoopIn_);
+
+  const uint8_t other = otherChannel();
+  if (pressed & kTwinCueRight) noteOn(proto::note::kCue, &heldCueRight_, other);
+  if (released & kTwinCueRight) noteOff(&heldCueRight_);
+  if (pressed & kTwinPlayRight) pulsePlay(&heldPulseRight_, &pulseOffRightUs_, other);
+  if (pressed & kTwinLoopInRight) noteOn(proto::note::kLoopIn, &heldLoopInRight_, other);
+  if (released & kTwinLoopInRight) noteOff(&heldLoopInRight_);
+  if (pressed & kTwinLoopOutRight) noteOn(proto::note::kLoopOut, &heldLoopOutRight_, other);
+  if (released & kTwinLoopOutRight) noteOff(&heldLoopOutRight_);
+
+  const AnalogControl::Result pitch = pitchRight_.update(in_.pitchRightRaw, now_);
+  if (pitch.changed || pitchRightForce_) {
+    pitchRightForce_ = false;
+    sendCc(other, proto::cc::kPitchMsb, proto::cc::kPitchLsb, pitch.value, &pitchRightSent_);
+  }
+  const AnalogControl::Result cross = crossfader_.update(in_.crossfaderRaw, now_);
+  if (cross.changed || crossForce_) {
+    crossForce_ = false;
+    sendCc(channel(), proto::cc::kCrossfaderMsb, proto::cc::kCrossfaderLsb, cross.value, &crossSent_);
+  }
 }
 
 void Engine::runJog() {
@@ -614,6 +693,12 @@ void Engine::sendFader(uint16_t v14) {
   uint8_t msb = proto::cc::kCrossfaderMsb, lsb = proto::cc::kCrossfaderLsb;
   switch (static_cast<proto::FaderRole>(cfg_.get(ConfigKey::FaderRole))) {
     case proto::FaderRole::Crossfader:
+      // The dedicated crossfader pot owns CC 23/55 while it is wired, so the left slide does not
+      // fight it. The left slide still tracks; it just sends nothing in this role.
+      if (in_.twinWired) {
+        faderSent_ = v14;
+        return;
+      }
       break;
     case proto::FaderRole::ChannelVolume:
       msb = proto::cc::kChannelVolumeMsb;
@@ -627,6 +712,13 @@ void Engine::sendFader(uint16_t v14) {
   midi::Message out[2];
   const size_t n = midi::cc14(channel(), msb, lsb, v14, faderSent_, out);
   faderSent_ = v14;
+  for (size_t i = 0; i < n; ++i) emitDeck(out[i]);
+}
+
+void Engine::sendCc(uint8_t ch, uint8_t msb, uint8_t lsb, uint16_t v14, int32_t* sent) {
+  midi::Message out[2];
+  const size_t n = midi::cc14(ch, msb, lsb, v14, *sent, out);
+  *sent = v14;
   for (size_t i = 0; i < n; ++i) emitDeck(out[i]);
 }
 
@@ -775,6 +867,7 @@ void Engine::runMtc() {
 
 void Engine::runHousekeeping() {
   if (heldPulse_.note != kNoNote && now_ >= pulseOffUs_) noteOff(&heldPulse_);
+  if (heldPulseRight_.note != kNoNote && now_ >= pulseOffRightUs_) noteOff(&heldPulseRight_);
   if (toneUntilUs_ != 0 && now_ >= toneUntilUs_) {
     toneUntilUs_ = 0;
     host_.testTone(false, 0, 0);

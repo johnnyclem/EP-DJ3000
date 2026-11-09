@@ -43,17 +43,21 @@ inline const char* magnetText(Magnet m) {
 }
 
 // ---- time budget -----------------------------------------------------------------------------------------------------
-// Every millisecond the engine task samples the fader and knob (ADC conversions, each with interrupts off, on the core
-// that also serves USB) and, in the default build, reads the AS5600 over I2C (interrupt-driven, the task sleeps on a
-// semaphore meanwhile). The two together are held to kTotalUs of each millisecond so the engine step and the output
-// still fit with room to spare; the I2C read comes off the top and the ADC gets what is left.
+// Every millisecond the engine task samples the slide pots and the knob (ADC conversions, each with interrupts off,
+// on the core that also serves USB) and, in the default build, reads the platter encoder over I2C (interrupt-driven,
+// the task sleeps on a semaphore meanwhile). The two together are held to kTotalUs of each millisecond so the engine
+// step and the output still fit with room to spare; the I2C read comes off the top and the ADC gets what is left.
+// `channels` is how many ADC pins are converted each sample: 2 in the arithmetic the host tests grew up with, 4 on
+// the Twin (left pitch, knob, right pitch, crossfader).
 constexpr unsigned kTotalUs = 400;
 
-// Conversions of each of the two ADC channels per sample: as many as fit after the I2C read, at most `maxOversample`,
-// at least 1. *squeezed is set when that is fewer than maxOversample (or the budget is already spent).
-inline unsigned adcOversample(unsigned i2cReadUs, unsigned conversionUs, unsigned maxOversample, bool* squeezed) {
+// Conversions of each ADC channel per sample: as many as fit after the I2C read, at most `maxOversample`, at least 1.
+// *squeezed is set when that is fewer than maxOversample (or the budget is already spent).
+inline unsigned adcOversample(unsigned i2cReadUs, unsigned conversionUs, unsigned maxOversample, bool* squeezed,
+                              unsigned channels = 2) {
+  if (channels < 1) channels = 1;
   const unsigned left = kTotalUs > i2cReadUs ? kTotalUs - i2cReadUs : 0;
-  unsigned n = conversionUs > 0 ? left / (2 * conversionUs) : maxOversample;
+  unsigned n = conversionUs > 0 ? left / (channels * conversionUs) : maxOversample;
   if (n > maxOversample) n = maxOversample;
   if (n < 1) n = 1;
   *squeezed = n < maxOversample;
@@ -73,8 +77,9 @@ inline unsigned i2cReserveUs(bool encoderExpected, bool answered, unsigned measu
 
 // Microseconds the sensors take in one engine tick with this oversampling. May exceed kTotalUs when even one conversion
 // per channel does not fit; callers report that.
-inline unsigned sensorUs(unsigned i2cReadUs, unsigned conversionUs, unsigned oversample) {
-  return i2cReadUs + 2 * oversample * conversionUs;
+inline unsigned sensorUs(unsigned i2cReadUs, unsigned conversionUs, unsigned oversample, unsigned channels = 2) {
+  if (channels < 1) channels = 1;
+  return i2cReadUs + channels * oversample * conversionUs;
 }
 
 }  // namespace sensor_budget

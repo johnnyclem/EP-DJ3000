@@ -49,10 +49,14 @@ void sensorLine(const Runtime& rt) {
     o += static_cast<size_t>(snprintf(touch + o, sizeof touch - o, "%u%s", static_cast<unsigned>(s.touchRaw[i].load()),
                                       i + 1 < rt.touch->count() ? " " : ""));
   }
-  ESP_LOGI(TAG, "sens: fader=%u knob=%u angle=%u%s cue=%d rev=%d touch=[%s]",
-           static_cast<unsigned>(s.fader.load()), static_cast<unsigned>(s.knob.load()), static_cast<unsigned>(s.angle.load()),
-           rt.as5600->present() ? (s.angleValid.load() ? "" : "(bad)") : "(none)", rt.buttons->cue() ? 1 : 0,
-           rt.buttons->rev() ? 1 : 0, touch);
+  ESP_LOGI(TAG,
+           "sens: fader=%u pitchR=%u cross=%u knob=%u angle=%u%s cue=%d rev=%d play=%d in=%d cueR=%d playR=%d inR=%d outR=%d touch=[%s]",
+           static_cast<unsigned>(s.fader.load()), static_cast<unsigned>(s.pitchRight.load()),
+           static_cast<unsigned>(s.crossfader.load()), static_cast<unsigned>(s.knob.load()),
+           static_cast<unsigned>(s.angle.load()), rt.as5600->present() ? (s.angleValid.load() ? "" : "(bad)") : "(none)",
+           rt.buttons->cue() ? 1 : 0, rt.buttons->rev() ? 1 : 0, rt.buttons->play() ? 1 : 0, rt.buttons->loopIn() ? 1 : 0,
+           rt.buttons->cueRight() ? 1 : 0, rt.buttons->playRight() ? 1 : 0, rt.buttons->loopInRight() ? 1 : 0,
+           rt.buttons->loopOutRight() ? 1 : 0, touch);
   static uint32_t reportedFailures = 0;  // this task only
   const uint32_t failures = rt.as5600->failures();
   if (failures != reportedFailures) {

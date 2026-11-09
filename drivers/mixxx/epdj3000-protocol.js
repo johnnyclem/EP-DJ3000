@@ -28,6 +28,8 @@ var EPDJ3000 = {
     "rev": 37,
     "touch": 38,
     "play": 39,
+    "loopIn": 42,
+    "loopOut": 43,
     "tap": 41
   },
   "usb": {

@@ -240,6 +240,16 @@ EPDJ_TEST(chord_held_time_tracks_progress_for_led_feedback) {
   CHECK_EQ(r.gest.chordHeldMs(r.nowUs), 0u);
 }
 
+EPDJ_TEST(mask_debouncer_locks_one_bit_and_lets_another_through) {
+  MaskDebouncer d;
+  d.setDebounceMs(10);
+  CHECK_EQ(d.update(0x01, 0), 0x01);
+  CHECK_EQ(d.update(0x00, 5000), 0x01);          // bit 0 is inside its lock
+  CHECK_EQ(d.update(0x02, 5000), 0x03);          // bit 1 is not locked
+  CHECK_EQ(d.update(0x00, 10000), 0x02);         // bit 0's lock ends; bit 1 is still locked
+  CHECK_EQ(d.update(0x00, 15000), 0x00);
+}
+
 EPDJ_TEST(held_buttons_at_power_up_are_reported_once) {
   Rig r;
   r.tick(pb::kCue);   // first sample already pressed

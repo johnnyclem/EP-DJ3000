@@ -33,3 +33,13 @@ The MT6701 still cannot sit on the platter axis. The round board is there, and i
 Stay on the ESP32-S3. This panel is SPI, 240 by 240, and the S3 drives it on a free SPI bus. A P4 is for a MIPI panel. This is not one.
 
 The 5000 mAh cell is the point of the thickness. With the screen dimmed for a train, the S3 is a long day, not an hour.
+
+## Platter retention and the magnet
+
+The LCD occupies the axis, so the magnet cannot sit there. The ring has a skirt that clears the 38 mm board, and a small flange at the bottom of the skirt. A lip on the underside of the lid catches that flange. The ring drops in and cannot lift off. It spins on the lip.
+
+The encoder is off-axis. A tooth ring on the underside of the platter, outside the LCD, turns a small gear. The diametric magnet is on the gear. The MT6701 sits under the gear, clear of the board. The firmware divides the ratio back to 1024 ticks a turn.
+
+## Copper tape
+
+A shallow annular groove on the underside of the lid, just outside the LCD pocket, is the seat for the copper tape. It is 0.4 mm deep so the tape sits flush and the ring does not rub it. A short channel runs from that ring toward the right edge for the lead. The tape is the stationary electrode. The conductive ring is the moving one.

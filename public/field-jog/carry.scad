@@ -85,6 +85,22 @@ module top_plate() {
         // Platter well.
         translate([cx, cy, body_h - 0.6])
             cylinder(d = platter_d + 1.1, h = 2, $fn = 120);
+        // Copper tape seat, underside of the lid, just outside the LCD pocket.
+        // 0.4 mm deep so the tape sits flush and the ring does not rub it.
+        translate([cx, cy, tray_h - 0.5])
+            difference() {
+                cylinder(d = 58, h = 0.7, $fn = 80);
+                translate([0, 0, -eps]) cylinder(d = 46, h = 1, $fn = 80);
+            }
+        // Lead channel from the tape ring toward the right edge, for the wire.
+        translate([cx + 22, cy - 2, tray_h - 0.5])
+            cube([70, 4, 0.7]);
+        // Retaining lip. The ring skirt hooks under this. Drop the ring in, it stays.
+        translate([cx, cy, tray_h - 0.2])
+            difference() {
+                cylinder(d = 48, h = 1.6, $fn = 80);
+                translate([0, 0, -eps]) cylinder(d = 40, h = 2, $fn = 80);
+            }
         // Through holes for the 12 mm switches. Cap is Ø6.9, body is 12.
         for (x = key_xs)
             translate([x, key_y, tray_h - 4])
@@ -104,10 +120,10 @@ module top_plate() {
         // Katakana pocket. Liberation has no Japanese, so a bar stands in.
         translate([18, 246, body_h - 0.7]) cube([52, 8, 0.9]);
         for (i = [0 : 5])
-            translate([key_xs[i], 46, body_h - 0.55])
+            translate([key_xs[i], 48, body_h - 0.55])
                 linear_extrude(0.6)
                     text(["CUE", "REV", "1", "2", "3", "4"][i],
-                         size = 2.6, font = "Liberation Sans",
+                         size = 5.0, font = "Liberation Sans",
                          halign = "center", valign = "center");
         // Orange rule pocket under the katakana.
         translate([18, 236, body_h - 0.5])
@@ -128,6 +144,9 @@ module ring() {
             cylinder(d = platter_d, h = platter_t, $fn = 160);
             translate([0, 0, -6])
                 cylinder(d = 44, h = 6.2, $fn = 80); // skirt, clears the 38 mm board
+            // Flange. Catches under the lip on the lid so the ring cannot lift off.
+            translate([0, 0, -6])
+                cylinder(d = 47, h = 1.2, $fn = 80);
         }
         translate([0, 0, -6.1])
             cylinder(d = hole_d + 1.2, h = 12, $fn = 80);
@@ -147,10 +166,10 @@ module letters() {
         // Katakana pocket. Liberation has no Japanese, so a bar stands in.
         translate([18, 246, body_h - 0.7]) cube([52, 8, 0.9]);
         for (i = [0 : 5])
-            translate([key_xs[i], 46, body_h - 0.55])
+            translate([key_xs[i], 48, body_h - 0.55])
                 linear_extrude(0.6)
                     text(["CUE", "REV", "1", "2", "3", "4"][i],
-                         size = 2.6, font = "Liberation Sans",
+                         size = 5.0, font = "Liberation Sans",
                          halign = "center", valign = "center");
         translate([18, 236, body_h - 0.5])
             cube([64, 1.4, 0.5]);

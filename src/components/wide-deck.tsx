@@ -3,9 +3,9 @@ import { RoundedBox } from "@react-three/drei";
 const W = 176;
 const H = 240.5;
 const T = 16.3;
-const GREY = "#d4d4ce";
+const GREY = "#ebe9e3";
 const BLACK = "#141416";
-const ORANGE = "#f05a1a";
+const ORANGE = "#ff4d1c";
 const SLOT = "#1a1a1c";
 
 export type WideLayout = "twin" | "six";
@@ -14,9 +14,9 @@ export type WidePart = "unit" | "case" | "platter" | "fader" | "pads" | "knob";
 export const WIDE_PARTS = [
   { id: "unit", label: "Unit" },
   { id: "case", label: "Case" },
-  { id: "platter", label: "Platter" },
-  { id: "fader", label: "Fader" },
-  { id: "pads", label: "Pads" },
+  { id: "platter", label: "Platters" },
+  { id: "fader", label: "Faders" },
+  { id: "pads", label: "Buttons" },
   { id: "knob", label: "Knob" },
 ] as const;
 

@@ -26,10 +26,10 @@ function Home() {
         <p className="font-mono text-xs tracking-widest text-accent uppercase">Unofficial companion</p>
         <h1 className="text-4xl leading-none font-semibold tracking-tight">Field Jog</h1>
         <p className="text-base leading-relaxed text-muted">
-          A scratch-deck shell in the Sidekick footprint. 88 mm wide, 240 mm long,
-          grey deck, orange marks, black jog and fader. Setup snaps gear onto the
-          amp. Wide is the same deck at the K.O. II size, 176 × 240.5, with the
-          controls that did not fit in 88 mm.
+          Carry is the one you hold. Same face as the first deck: the wordmark,
+          the katakana, the orange rule, the knurled knob. 214 × 300 × 22, a 6 inch
+          ring, and a round screen in the hole that does not spin.
+          The 88 mm shell still lines up with the Sidekick. Wide is the K.O. II size.
         </p>
       </header>
 

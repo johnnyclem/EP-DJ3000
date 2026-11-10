@@ -8,6 +8,7 @@ import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import type { FaceId, Slots, ViewId } from "./viewer-parts";
 import { Rig, jogPose } from "./rig";
 import { WideDeck, type WideLayout, type WidePart } from "./wide-deck";
+import { CarryDeck, type CarryPart } from "./carry-deck";
 
 const GREY = "#c8c8c2";
 const DECK = "#d4d4ce";
@@ -167,10 +168,11 @@ function Scene({
   spin,
   layout,
   wideFocus,
+  carryFocus,
   onReady,
   onPickFace,
 }: {
-  mode: "unit" | "rig" | "wide";
+  mode: "unit" | "rig" | "wide" | "carry";
   focus: ViewId;
   slots: Slots;
   activeFace: FaceId;
@@ -178,6 +180,7 @@ function Scene({
   spin: boolean;
   layout: WideLayout;
   wideFocus: WidePart;
+  carryFocus: CarryPart;
   onReady: () => void;
   onPickFace: (face: FaceId) => void;
 }) {
@@ -190,7 +193,7 @@ function Scene({
 
   return (
     <>
-      <color attach="background" args={["#1c1c19"]} />
+      <color attach="background" args={[mode === "carry" ? "#f4f2ec" : "#1c1c19"]} />
       <ambientLight intensity={0.62} />
       <hemisphereLight args={["#f3f1ea", "#2c2c28", 0.4]} />
       <directionalLight position={[90, 160, 70]} intensity={1.55} />
@@ -203,6 +206,7 @@ function Scene({
             </Suspense>
           ) : null}
           {mode === "wide" ? <WideDeck layout={layout} focus={wideFocus} /> : null}
+          {mode === "carry" ? <CarryDeck focus={carryFocus} /> : null}
           {mode === "rig" && jog && jogFace ? (
             <Suspense fallback={null}>
               <group position={jog.position} quaternion={jog.quaternion}>
@@ -219,7 +223,7 @@ function Scene({
         makeDefault
         enableDamping
         dampingFactor={0.08}
-        autoRotate={(mode === "unit" || mode === "wide") && spin}
+        autoRotate={(mode === "unit" || mode === "wide" || mode === "carry") && spin}
         autoRotateSpeed={0.45}
       />
     </>
@@ -235,11 +239,12 @@ export function UnitScene({
   spin,
   layout,
   wideFocus,
+  carryFocus,
   onReady,
   onInteract,
   onPickFace,
 }: {
-  mode: "unit" | "rig" | "wide";
+  mode: "unit" | "rig" | "wide" | "carry";
   focus: ViewId;
   slots: Slots;
   activeFace: FaceId;
@@ -247,6 +252,7 @@ export function UnitScene({
   spin: boolean;
   layout: WideLayout;
   wideFocus: WidePart;
+  carryFocus: CarryPart;
   onReady: () => void;
   onInteract: () => void;
   onPickFace: (face: FaceId) => void;
@@ -271,6 +277,7 @@ export function UnitScene({
         spin={spin}
         layout={layout}
         wideFocus={wideFocus}
+        carryFocus={carryFocus}
         onReady={onReady}
         onPickFace={onPickFace}
       />

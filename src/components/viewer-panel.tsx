@@ -10,8 +10,9 @@ import {
   type ViewId,
 } from "./viewer-parts";
 import { WIDE_PARTS, type WideLayout, type WidePart } from "./wide-deck";
+import { CARRY_PARTS, type CarryPart } from "./carry-deck";
 
-type Mode = "rig" | "unit" | "wide";
+type Mode = "rig" | "unit" | "wide" | "carry";
 
 type SceneProps = {
   mode: Mode;
@@ -22,6 +23,7 @@ type SceneProps = {
   spin: boolean;
   layout: WideLayout;
   wideFocus: WidePart;
+  carryFocus: CarryPart;
   onReady: () => void;
   onInteract: () => void;
   onPickFace: (face: FaceId) => void;
@@ -32,10 +34,11 @@ function slotKey(slots: Slots) {
 }
 
 export function ViewerPanel() {
-  const [mode, setMode] = useState<Mode>("rig");
+  const [mode, setMode] = useState<Mode>("carry");
   const [unitFocus, setUnitFocus] = useState<ViewId>("unit");
   const [layout, setLayout] = useState<WideLayout>("twin");
   const [wideFocus, setWideFocus] = useState<WidePart>("unit");
+  const [carryFocus, setCarryFocus] = useState<CarryPart>("unit");
   const [slots, setSlots] = useState<Slots>(EMPTY_SLOTS);
   const [activeFace, setActiveFace] = useState<FaceId>("right");
   const [spin, setSpin] = useState(true);
@@ -81,10 +84,11 @@ export function ViewerPanel() {
             focus={unitFocus}
             slots={slots}
             activeFace={activeFace}
-            watch={`${mode}:${unitFocus}:${wideFocus}:${layout}:${slotKey(slots)}:${fitTick}`}
+            watch={`${mode}:${unitFocus}:${wideFocus}:${carryFocus}:${layout}:${slotKey(slots)}:${fitTick}`}
             spin={spin}
             layout={layout}
             wideFocus={wideFocus}
+            carryFocus={carryFocus}
             onReady={onReady}
             onInteract={onInteract}
             onPickFace={onPickFace}
@@ -98,7 +102,11 @@ export function ViewerPanel() {
       </div>
       <div className="flex items-center justify-between gap-3">
         <p className="min-w-0 text-sm text-muted">
-          {mode === "wide"
+          {mode === "carry"
+            ? carryFocus === "unit"
+              ? "214 × 300 × 22. Brighter stone, cyan screen, orange hardware. Fader is 125 mm on the right. Caps are the 12 mm latching switches."
+              : `${CARRY_PARTS.find((part) => part.id === carryFocus)?.label ?? "Part"}. The rest of the deck is hidden.`
+            : mode === "wide"
             ? wideFocus === "unit"
               ? layout === "twin"
                 ? "176 × 240.5. Two 76 mm platters. Headphone jack is left of the crossfader. Card slot is the dark mark under the rear-left, clear of the magnet."
@@ -125,6 +133,7 @@ export function ViewerPanel() {
             ["rig", "Setup"],
             ["unit", "Parts"],
             ["wide", "Wide"],
+            ["carry", "Carry"],
           ] as const
         ).map(([item, label]) => (
           <button
@@ -240,7 +249,32 @@ export function ViewerPanel() {
             );
           })}
         </div>
-      ) : (
+      ) : mode === "carry" ? (
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {CARRY_PARTS.map((item) => {
+            const selected = item.id === carryFocus;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                aria-pressed={selected}
+                onClick={() => {
+                  setCarryFocus(item.id);
+                  setSpin(true);
+                  setFitTick((n) => n + 1);
+                }}
+                className={
+                  selected
+                    ? "h-11 shrink-0 bg-accent px-3 font-mono text-xs tracking-wide text-accent-fg uppercase"
+                    : "h-11 shrink-0 border border-line px-3 font-mono text-xs tracking-wide text-fg uppercase"
+                }
+              >
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
+      ) : mode === "unit" ? (
         <div className="flex gap-2 overflow-x-auto pb-1">
           {VIEW_ITEMS.map((item) => {
             const selected = item.id === unitFocus;
@@ -261,7 +295,7 @@ export function ViewerPanel() {
             );
           })}
         </div>
-      )}
+      ) : null}
     </section>
   );
 }

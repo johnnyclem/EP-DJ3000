@@ -47,6 +47,4 @@ A shallow annular groove on the underside of the lid, just outside the LCD pocke
 
 ## Ports
 
-Six holes. USB-C is a rectangular panel-mount cut on the bottom short edge, centered. It charges the 5000 mAh cell and carries data.
-
-Five 3.5 mm jacks sit on the right long edge, top to bottom: MIDI In, MIDI Out, Line In, Line Out, Headphones/Cue. They cut through the wall so they show in a side view.
+The back edge has USB-C centered, with MIDI In, MIDI Out, Line In and Line Out flanking it. The front edge has the headphone/cue jack, centered.

@@ -132,16 +132,18 @@ module top_plate() {
         // Orange rule pocket under the katakana.
         translate([18, 236, body_h - 0.5])
             cube([64, 1.4, 0.7]);
-        // USB-C panel mount, bottom short edge, centered.
-        // Rectangular cut for a panel-mount socket, through the wall.
-        translate([W / 2 - 7, -4, 8])
-            cube([14, 12, 6]);
-        // Five 3.5 mm jacks on the right long edge, top to bottom:
-        // MIDI In, MIDI Out, Line In, Line Out, Headphones/Cue.
-        for (y = [230, 190, 150, 110, 70])
-            translate([W - 8, y, 10])
-                rotate([0, 90, 0])
+        // Back edge (top of the board, y = H). USB-C centered.
+        translate([W / 2 - 7, H - 8, 8])
+            cube([14, 16, 6]);
+        // MIDI In, MIDI Out, Line In, Line Out, on the back, flanking USB-C.
+        for (x = [W / 2 - 42, W / 2 - 26, W / 2 + 26, W / 2 + 42])
+            translate([x, H - 8, 10])
+                rotate([-90, 0, 0])
                     cylinder(d = 6.4, h = 16, $fn = 28);
+        // Headphones/Cue, front edge (bottom of the board, y = 0), centered.
+        translate([W / 2, -8, 10])
+            rotate([-90, 0, 0])
+                cylinder(d = 6.4, h = 16, $fn = 28);
     }
 }
 

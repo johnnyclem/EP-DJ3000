@@ -35,12 +35,23 @@ function Home() {
 
       <ViewerPanel />
 
+      <section className="flex flex-col gap-2 text-sm leading-relaxed">
+        <h2 className="font-mono text-xs tracking-widest text-muted uppercase">Carry</h2>
+        <p className="text-muted">
+          214 × 300 × 22 mm. One 152 mm ring, a stationary GC9A01 in the hole, a 125 mm fader in the right lane, and six flush 12 mm latching switches. Print the top face up. Letters are pockets for a second color.
+        </p>
+        <p className="flex flex-wrap gap-x-4 gap-y-2">
+          <a className="text-fg underline" href="/field-jog/carry.scad" target="_blank" rel="noreferrer">SCAD</a>
+          <a className="text-fg underline" href="/field-jog/CARRY.md" target="_blank" rel="noreferrer">Notes</a>
+        </p>
+      </section>
+
       <RenderGallery />
 
       <dl className="grid grid-cols-3 divide-x divide-line border border-line">
-        <Spec k="Height" v="240 mm" />
-        <Spec k="Width" v="88 mm" />
-        <Spec k="Thick" v="16 / 22" />
+        <Spec k="Height" v="300 mm" />
+        <Spec k="Width" v="214 mm" />
+        <Spec k="Thick" v="22 mm" />
       </dl>
 
       <p className="text-sm leading-relaxed text-muted">
@@ -155,8 +166,14 @@ function Home() {
         <h2 className="font-mono text-xs tracking-widest uppercase">Also in the zip</h2>
         <p>OpenSCAD source, a Pro Micro MIDI sketch, and the print notes. Face-up, no supports, 0.2 mm layers.</p>
         <p className="flex gap-4">
+          <a className="text-fg underline" href="/field-jog/carry.scad" target="_blank" rel="noreferrer">
+            Carry SCAD
+          </a>
+          <a className="text-fg underline" href="/field-jog/wide.scad" target="_blank" rel="noreferrer">
+            Wide SCAD
+          </a>
           <a className="text-fg underline" href="/field-jog/field-jog.scad" target="_blank" rel="noreferrer">
-            SCAD
+            Slim SCAD
           </a>
           <a className="text-fg underline" href="/field-jog/field_jog.ino" target="_blank" rel="noreferrer">
             Firmware

@@ -132,13 +132,17 @@ module top_plate() {
         // Orange rule pocket under the katakana.
         translate([18, 236, body_h - 0.5])
             cube([64, 1.4, 0.7]);
-        // Headphone, top edge, clear of the wordmark.
-        translate([W - 28, H - 8, 11])
+        // USB-C, bottom short edge, centered. Charge and data.
+        translate([W / 2 - 4.5, -6, 9])
+            cube([9, 14, 3.2]);
+        // Headphone, top short edge, left of center.
+        translate([W / 2 - 28, H - 8, 11])
             rotate([-90, 0, 0])
-                cylinder(d = 6.2, h = 14, $fn = 28);
-        // USB-C, bottom edge.
-        translate([W / 2 - 5, -2, 9])
-            cube([10, 8, 3.2]);
+                cylinder(d = 6.4, h = 16, $fn = 28);
+        // TRS MIDI, top short edge, right of center.
+        translate([W / 2 + 22, H - 8, 11])
+            rotate([-90, 0, 0])
+                cylinder(d = 6.4, h = 16, $fn = 28);
     }
 }
 

@@ -43,3 +43,12 @@ The encoder is off-axis. A gear on the underside of the platter, outside the LCD
 ## Copper tape
 
 A shallow annular groove on the underside of the lid, just outside the LCD pocket, is the seat for the copper tape. It is 0.4 mm deep so the tape sits flush and the ring does not rub it. A short channel runs from that ring toward the right edge for the lead. The tape is the stationary electrode. The conductive ring is the moving one.
+
+
+## Ports
+
+Three jacks on the short edges.
+
+USB-C is centered on the bottom edge, under the button row. It charges the 5000 mAh cell and carries data. MIDI over USB rides the same port.
+
+The top edge, under the wordmark, has two 3.5 mm jacks. The left is headphones. The right is TRS MIDI, Type A. One cable, in or out, depending on how the firmware is set.

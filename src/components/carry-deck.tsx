@@ -3,8 +3,8 @@ import { RoundedBox } from "@react-three/drei";
 import * as THREE from "three";
 
 // The original face, grown so a 6 inch ring still has a field of grey
-// around it. 214 x 300 x 22. The wordmark lives above the disc.
-const W = 214;
+// around it. 230 x 300 x 22. The wordmark lives above the disc.
+const W = 230;
 const H = 300;
 const T = 22;
 const GREY = "#ebe9e3";
@@ -224,7 +224,7 @@ function Knob() {
     );
   }
   return (
-    <group position={[174, 252, T]}>
+    <group position={[190, 252, T]}>
       <mesh position={[0, 0, 4.2]} rotation={[Math.PI / 2, 0, 0]}>
         <cylinderGeometry args={[7.3, 7.3, 8, 40]} />
         {mat(ORANGE, 0.42)}
@@ -240,7 +240,7 @@ function Knob() {
 
 function Fader() {
   // 125 mm body, right lane, same place as the pitch fader on the six.
-  const x = 196;
+  const x = 212;
   const y0 = CY - 62.5;
   const len = 125;
   return (

@@ -2,11 +2,11 @@
 
 The original Field Jog face, held in one hand. Not the 88 mm Sidekick shell and not the 176 mm twin.
 
-214 × 300 × 22 mm. A 6 inch ring (152.4 mm) with a round screen in the hole. The screen is bolted to the case. The ring spins around it. Lighter stone body, black ring, orange knob and rule, cyan screen arc. Letters are pockets for a second color. No vinyl, no engraving.
+230 × 300 × 22 mm. A 6 inch ring (152.4 mm) with a round screen in the hole. The screen is bolted to the case. The ring spins around it. Lighter stone body, black ring, orange knob and rule, cyan screen arc. Letters are pockets for a second color. No vinyl, no engraving.
 
 ## Why this shape
 
-A 152 mm disc with the original's margins does not fit in 168. The cheeks and the knob lane are why. 214 is the ring, a cheek for the ticks, and a lane for the 125 mm fader on the right. The length is the wordmark, the disc, and a centered row of six flush switches.
+A 152 mm disc with the original's margins does not fit in 168. The cheeks and the knob lane are why. 230 is the ring, a cheek for the ticks, and a lane for the 125 mm fader on the right. The length is the wordmark, the disc, and a centered row of six flush switches.
 
 It is 22 mm thick so a 5000 mAh pouch (about 7 mm) can lie flat under the button row, next to the board, not stacked under the platter.
 

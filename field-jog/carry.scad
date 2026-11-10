@@ -3,7 +3,7 @@
 // One 152.4 mm ring. The GC9A01 sits in the hole and does not spin.
 // Letters are pockets for a second color. No vinyl, no engraving.
 //
-// 214 x 300 x 22 mm. Fader is 125 mm, in the right lane. Knob is upper right.
+// 230 x 300 x 22 mm. Fader is 125 mm, in the right lane. Knob is upper right.
 // Six 12 mm latching switches, flush, LED in the cap. 5000 mAh pouch under
 // the button row. ESP32-S3. A P4 is not justified for a SPI round panel.
 //
@@ -14,7 +14,7 @@
 part = "all"; // [all, top, bottom, ring, pinion, letters, knob]
 
 /* [Body] */
-W = 214;
+W = 230;
 H = 300;
 body_h = 22;
 skin = 3.6;
@@ -37,8 +37,8 @@ magnet_d = 6;         // small diametric magnet on the pinion
 gear_xy = [cx + 40, cy];  // pinion sits clear of the LCD board
 
 /* [Controls] */
-knob_xy = [174, 252];
-fader_x = 196;
+knob_xy = [190, 252];
+fader_x = 212;
 fader_y0 = 80.5;
 fader_len = 125;
 key_xs = [36, 66, 96, 126, 156, 186];

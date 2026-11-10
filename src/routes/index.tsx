@@ -27,7 +27,7 @@ function Home() {
         <h1 className="text-4xl leading-none font-semibold tracking-tight">Field Jog</h1>
         <p className="text-base leading-relaxed text-muted">
           Carry is the one you hold. Same face as the first deck: the wordmark,
-          the katakana, the orange rule, the knurled knob. 214 × 300 × 22, a 6 inch
+          the katakana, the orange rule, the knurled knob. 230 × 300 × 22, a 6 inch
           ring, and a round screen in the hole that does not spin.
           The 88 mm shell still lines up with the Sidekick. Wide is the K.O. II size.
         </p>
@@ -38,7 +38,7 @@ function Home() {
       <section className="flex flex-col gap-2 text-sm leading-relaxed">
         <h2 className="font-mono text-xs tracking-widest text-muted uppercase">Carry</h2>
         <p className="text-muted">
-          214 × 300 × 22 mm. One 152 mm ring, a stationary GC9A01 in the hole, a 125 mm fader in the right lane, and six flush 12 mm latching switches. Print the top face up. Letters are pockets for a second color.
+          230 × 300 × 22 mm. One 152 mm ring, a stationary GC9A01 in the hole, a 125 mm fader in the right lane, and six flush 12 mm latching switches. Print the top face up. Letters are pockets for a second color.
         </p>
         <p className="flex flex-wrap gap-x-4 gap-y-2">
           <a className="text-fg underline" href="/field-jog/carry.scad" target="_blank" rel="noreferrer">SCAD</a>
@@ -50,7 +50,7 @@ function Home() {
 
       <dl className="grid grid-cols-3 divide-x divide-line border border-line">
         <Spec k="Height" v="300 mm" />
-        <Spec k="Width" v="214 mm" />
+        <Spec k="Width" v="230 mm" />
         <Spec k="Thick" v="22 mm" />
       </dl>
 

@@ -104,7 +104,7 @@ export function ViewerPanel() {
         <p className="min-w-0 text-sm text-muted">
           {mode === "carry"
             ? carryFocus === "unit"
-              ? "214 × 300 × 22. Brighter stone, cyan screen, orange hardware. Fader is 125 mm on the right. Caps are the 12 mm latching switches."
+              ? "230 × 300 × 22. Brighter stone, cyan screen, orange hardware. Fader is 125 mm on the right. Caps are the 12 mm latching switches."
               : `${CARRY_PARTS.find((part) => part.id === carryFocus)?.label ?? "Part"}. The rest of the deck is hidden.`
             : mode === "wide"
             ? wideFocus === "unit"

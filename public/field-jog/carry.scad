@@ -11,7 +11,7 @@
 //   openscad -D 'part="ring"' -o carry-ring.stl carry.scad
 
 /* [Export] */
-part = "all"; // [all, top, bottom, ring, letters, knob]
+part = "all"; // [all, top, bottom, ring, pinion, letters, knob]
 
 /* [Body] */
 W = 214;
@@ -31,6 +31,10 @@ pcb_d = 38;
 pcb_len = 45.5;
 cx = 96;
 cy = 143;
+gear_d = 62;          // tooth ring on the underside of the platter
+pinion_d = 14;        // driven gear
+magnet_d = 6;         // small diametric magnet on the pinion
+gear_xy = [cx + 40, cy];  // pinion sits clear of the LCD board
 
 /* [Controls] */
 knob_xy = [174, 252];
@@ -138,6 +142,13 @@ module top_plate() {
     }
 }
 
+module gear_teeth(d, n, tooth_h, tooth_w) {
+    for (i = [0 : n - 1])
+        rotate([0, 0, i * 360 / n])
+            translate([d / 2, 0, 0])
+                cube([tooth_w, 1.6, tooth_h], center = true);
+}
+
 module ring() {
     difference() {
         union() {
@@ -147,6 +158,11 @@ module ring() {
             // Flange. Catches under the lip on the lid so the ring cannot lift off.
             translate([0, 0, -6])
                 cylinder(d = 47, h = 1.2, $fn = 80);
+            // Gear on the underside. Drives the small pinion. Clear of the LCD.
+            translate([0, 0, -2.4])
+                cylinder(d = gear_d, h = 2.2, $fn = 80);
+            translate([0, 0, -2.2])
+                gear_teeth(gear_d, 48, 2.0, 1.4);
         }
         translate([0, 0, -6.1])
             cylinder(d = hole_d + 1.2, h = 12, $fn = 80);
@@ -157,6 +173,20 @@ module ring() {
                     translate([0, 0, -eps])
                         cylinder(d = r * 2 - 0.7, h = 0.65, $fn = 120);
                 }
+    }
+}
+
+module pinion() {
+    // Small gear. The 6 mm diametric magnet sits on top. MT6701 is under it.
+    difference() {
+        union() {
+            cylinder(d = pinion_d, h = 4, $fn = 40);
+            translate([0, 0, 3.6])
+                cylinder(d = magnet_d + 0.4, h = 1.2, $fn = 24);
+            gear_teeth(pinion_d, 12, 3.6, 1.2);
+        }
+        translate([0, 0, 4.2])
+            cylinder(d = magnet_d, h = 1.4, $fn = 24);
     }
 }
 
@@ -195,6 +225,7 @@ if (part == "all") {
     color([0.92, 0.91, 0.89]) bottom();
     color([0.92, 0.91, 0.89]) top_plate();
     color([0.08, 0.08, 0.09]) translate([cx, cy, body_h - 0.7]) ring();
+    color([0.3, 0.3, 0.32]) translate([gear_xy[0], gear_xy[1], body_h - 6]) pinion();
     letters();
 } else if (part == "top") {
     translate([0, 0, -tray_h]) top_plate();
@@ -202,6 +233,8 @@ if (part == "all") {
     bottom();
 } else if (part == "ring") {
     ring();
+} else if (part == "pinion") {
+    pinion();
 } else if (part == "letters") {
     letters();
 } else if (part == "knob") {

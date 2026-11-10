@@ -38,7 +38,7 @@ The 5000 mAh cell is the point of the thickness. With the screen dimmed for a tr
 
 The LCD occupies the axis, so the magnet cannot sit there. The ring has a skirt that clears the 38 mm board, and a small flange at the bottom of the skirt. A lip on the underside of the lid catches that flange. The ring drops in and cannot lift off. It spins on the lip.
 
-The encoder is off-axis. A tooth ring on the underside of the platter, outside the LCD, turns a small gear. The diametric magnet is on the gear. The MT6701 sits under the gear, clear of the board. The firmware divides the ratio back to 1024 ticks a turn.
+The encoder is off-axis. A gear on the underside of the platter, outside the LCD, turns a small pinion. The magnet is 6 mm, on the pinion, not on the platter. The MT6701 sits under the pinion, clear of the board. The firmware divides the ratio back to 1024 ticks a turn.
 
 ## Copper tape
 

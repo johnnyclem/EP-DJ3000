@@ -42,6 +42,11 @@ function Home() {
         </p>
         <p className="flex flex-wrap gap-x-4 gap-y-2">
           <a className="text-fg underline" href="/field-jog/carry.scad" target="_blank" rel="noreferrer">SCAD</a>
+          <a className="text-fg underline" href="/field-jog/stl/carry-top.stl" target="_blank" rel="noreferrer">Top</a>
+          <a className="text-fg underline" href="/field-jog/stl/carry-bottom.stl" target="_blank" rel="noreferrer">Tray</a>
+          <a className="text-fg underline" href="/field-jog/stl/carry-ring.stl" target="_blank" rel="noreferrer">Ring</a>
+          <a className="text-fg underline" href="/field-jog/stl/carry-pinion.stl" target="_blank" rel="noreferrer">Pinion</a>
+          <a className="text-fg underline" href="/field-jog/stl/carry-knob.stl" target="_blank" rel="noreferrer">Knob</a>
           <a className="text-fg underline" href="/field-jog/CARRY.md" target="_blank" rel="noreferrer">Notes</a>
         </p>
       </section>

@@ -57,9 +57,9 @@ pot_body_l = 75;
 pot_body_w = 9.6;
 pot_body_h = 8.2;
 pot_rail = 1.6;
-// Short pitch, only on the 6 inch deck. 46 mm slot, 58 mm body. Measure it.
-short_slot_l = 46;
-short_body_l = 58;
+// 125 mm pitch on the 6 inch deck, horizontal, bottom row.
+long_slot_l = 100;
+long_body_l = 125;
 
 /* [Screen] */
 // Real 0.91" glass, centered on the mark in the viewer.
@@ -197,7 +197,7 @@ function platter_list() =
 function plunger_buttons() =
     layout == "twin"
         ? [[40, 40, 18], [66, 40, 18], [110, 40, 18], [136, 40, 18]]
-        : [[26, 24, 20], [52, 24, 20]];
+        : [[18, 18, 16], [18, 40, 16]];
 
 function toggle_buttons() =
     layout == "twin"
@@ -207,17 +207,17 @@ function toggle_buttons() =
 function led_list() =
     layout == "twin"
         ? [[40, 88], [66, 88], [110, 88], [136, 88]]
-        : [[58, 210], [68, 210]];
+        : [[8, 18], [8, 40]];
 
 function pad_list() =
     layout == "twin"
         ? [for (x = [36, 50, 64, 78, 98, 112, 126, 140]) [x, 100, 11]]
-        : [for (x = [104, 120, 136, 152]) [x, 32, 12]];
+        : [for (x = [104, 120, 136, 152]) [x, 56, 12]];
 
 function pitch_list() =
     layout == "twin"
         ? [[18, 35, 97], [158, 35, 97]]
-        : [[167, 64, 64 + short_slot_l]];
+        : [];
 
 function knob_at() = layout == "twin" ? [158, 210] : [148, 212];
 function screen_at() = layout == "twin" ? [88, 208] : [96, 210];
@@ -364,12 +364,28 @@ module top_plate() {
                 translate([88 + dx, 16, tray_h - eps])
                     cylinder(d = 2.2, h = skin + 2 * eps, $fn = 14);
         }
+        if (layout == "six") {
+            // 125 mm pitch, horizontal, to the right of the stacked buttons.
+            x0 = 46;
+            x1 = 46 + long_slot_l;
+            translate([0, 0, tray_h - eps])
+                x_slot(28, x0, x1, 0, skin + 2 * eps, fader_slot_w);
+            for (dx = [-long_body_l / 2 + 4, long_body_l / 2 - 4])
+                translate([46 + long_slot_l / 2 + dx, 28, tray_h - eps])
+                    cylinder(d = 2.2, h = skin + 2 * eps, $fn = 14);
+        }
 
         for (b = plunger_buttons()) {
-            translate([b[0], b[1], tray_h - eps])
-                cylinder(d = stem_hole, h = skin + guide_h + 2 * eps, $fn = 20);
-            translate([b[0], b[1], body_h - 0.7])
-                cylinder(d = b[2] + 0.4, h = 0.7 + guide_h + eps, $fn = 36);
+            if (layout == "six") {
+                // 16 mm through hole. LED is 10 mm left, cut by led_list.
+                translate([b[0], b[1], tray_h - 2])
+                    cylinder(d = b[2], h = skin + 6, $fn = 36);
+            } else {
+                translate([b[0], b[1], tray_h - eps])
+                    cylinder(d = stem_hole, h = skin + guide_h + 2 * eps, $fn = 20);
+                translate([b[0], b[1], body_h - 0.7])
+                    cylinder(d = b[2] + 0.4, h = 0.7 + guide_h + eps, $fn = 36);
+            }
         }
         for (b = toggle_buttons())
             tact12_pocket(b[0], b[1]);
@@ -380,8 +396,8 @@ module top_plate() {
                 cube([b[2], b[2], 0.8 + guide_h + eps]);
         }
         for (p = led_list())
-            translate([p[0], p[1], tray_h - eps])
-                cylinder(d = led_d, h = skin + 2 * eps, $fn = 16);
+            translate([p[0], p[1], tray_h - 2])
+                cylinder(d = layout == "six" ? 3.125 : led_d, h = skin + 6, $fn = 16);
 
         k = knob_at();
         translate([k[0], k[1], tray_h - eps])

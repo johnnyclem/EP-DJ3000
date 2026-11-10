@@ -233,7 +233,16 @@ function Twin({ focus }: { focus: WidePart }) {
           {show(focus, "fader") ? <Pitch x={d.pitch} y0={35} y1={97} /> : null}
         </group>
       ))}
-      {show(focus, "fader") ? <Crossfader /> : null}
+      {show(focus, "fader") ? (
+        <group>
+          <RoundedBox args={[100, 3.4, 1.1]} radius={0.5} smoothness={2} position={[96, 28, T + 0.55]}>
+            {mat(SLOT, 0.6)}
+          </RoundedBox>
+          <RoundedBox args={[18, 12, 5]} radius={1} smoothness={2} position={[110, 28, T + 3.2]}>
+            {mat("#c4c4be", 0.4)}
+          </RoundedBox>
+        </group>
+      ) : null}
       {show(focus, "case") ? <Screen x={88} y={208} /> : null}
       {show(focus, "knob") ? <Cap x={158} y={210} d={14} h={8} color={ORANGE} /> : null}
     </group>
@@ -246,21 +255,30 @@ function Six({ focus }: { focus: WidePart }) {
       {show(focus, "platter") ? <Platter x={82} y={124} d={152.4} /> : null}
       {show(focus, "pads") ? (
         <>
-          <Cap x={26} y={24} d={20} h={5.5} />
-          <Cap x={52} y={24} d={20} h={5.5} />
+          <Cap x={18} y={18} d={16} h={5.5} />
+          <Cap x={18} y={40} d={16} h={5.5} />
+          <Led x={8} y={18} />
+          <Led x={8} y={40} />
           <Tact x={74} y={30} />
           {[104, 120, 136, 152].map((x) => (
-            <RoundedBox key={x} args={[12, 12, 2.2]} radius={0.8} smoothness={2} position={[x, 32, T + 1.1]}>
+            <RoundedBox key={x} args={[12, 12, 2.2]} radius={0.8} smoothness={2} position={[x, 56, T + 1.1]}>
               {mat("#2c2c2e", 0.5)}
             </RoundedBox>
           ))}
           <Tact x={22} y={214} />
           <Tact x={42} y={214} />
-          <Led x={58} y={210} />
-          <Led x={68} y={210} />
         </>
       ) : null}
-      {show(focus, "fader") ? <Pitch x={167} y0={64} y1={110} /> : null}
+      {show(focus, "fader") ? (
+        <group>
+          <RoundedBox args={[100, 3.4, 1.1]} radius={0.5} smoothness={2} position={[96, 28, T + 0.55]}>
+            {mat(SLOT, 0.6)}
+          </RoundedBox>
+          <RoundedBox args={[18, 12, 5]} radius={1} smoothness={2} position={[110, 28, T + 3.2]}>
+            {mat("#c4c4be", 0.4)}
+          </RoundedBox>
+        </group>
+      ) : null}
       {show(focus, "case") ? <Screen x={96} y={210} /> : null}
       {show(focus, "knob") ? <Cap x={148} y={212} d={12} h={7} color={ORANGE} /> : null}
     </group>

@@ -67,35 +67,38 @@ module top_plate() {
     difference() {
         union() {
             translate([0, 0, tray_h]) body_slab(skin);
-            // Stationary hub. The ring rides the outside. The board does not spin.
-            translate([cx, cy, tray_h - 1])
-                cylinder(d = 28, h = skin + 1.2, $fn = 80);
+            // Lip under the glass. The board seats from below. The ring rides outside.
+            translate([cx, cy, tray_h - 1.2])
+                difference() {
+                    cylinder(d = 42, h = 1.4, $fn = 80);
+                    translate([0, 0, -eps]) cylinder(d = hole_d, h = 2, $fn = 80);
+                }
         }
-        // Flex bore. Wires leave at six o'clock through the tab pocket.
-        translate([cx, cy, tray_h - 2])
-            cylinder(d = 8, h = skin + 8, $fn = 24);
-        // PCB pocket, tab pointing down toward the buttons.
-        translate([cx, cy, body_h - 3.6])
-            cylinder(d = pcb_d + 1.2, h = 2.2, $fn = 80);
-        translate([cx - 14, cy - pcb_len / 2 - 1, body_h - 3.6])
-            cube([28, 16, 2.2]);
+        // 35 mm glass hole. The 32.4 mm glass shows. The 38 mm board stays under.
+        translate([cx, cy, tray_h - 4])
+            cylinder(d = hole_d, h = skin + 10, $fn = 80);
+        // PCB pocket from below, tab pointing at the buttons.
+        translate([cx, cy, tray_h - 2.4])
+            cylinder(d = pcb_d + 1.4, h = 2.6, $fn = 80);
+        translate([cx - 14, cy - pcb_len / 2 - 1, tray_h - 2.4])
+            cube([28, 16, 2.6]);
         // Platter well.
         translate([cx, cy, body_h - 0.6])
             cylinder(d = platter_d + 1.1, h = 2, $fn = 120);
-        // Flush 12 mm switches. Body under the skin, Ø6.9 cap through the face.
+        // Through holes for the 12 mm switches. Cap is Ø6.9, body is 12.
         for (x = key_xs)
-            translate([x, key_y, tray_h - eps])
-                cylinder(d = 7.2, h = skin + 3, $fn = 24);
-        // 125 mm pitch fader, right lane.
-        translate([fader_x, fader_y0 + fader_len / 2, body_h - 1.2])
-            cube([3.4, fader_len, 2.4], center = true);
-        // Encoder.
-        translate([knob_xy[0], knob_xy[1], tray_h - eps])
-            cylinder(d = 7.2, h = skin + 2, $fn = 28);
-        // Corner screws.
+            translate([x, key_y, tray_h - 4])
+                cylinder(d = 7.4, h = skin + 8, $fn = 24);
+        // 125 mm pitch fader, cut through the skin.
+        translate([fader_x, fader_y0 + fader_len / 2, tray_h - 2])
+            cube([3.6, fader_len, skin + 6], center = true);
+        // Encoder, through.
+        translate([knob_xy[0], knob_xy[1], tray_h - 4])
+            cylinder(d = 7.4, h = skin + 8, $fn = 28);
+        // Corner screws, through.
         for (p = [[14, 14], [W - 14, 14], [14, H - 14], [W - 14, H - 14]])
-            translate([p[0], p[1], body_h - 2.2])
-                cylinder(d = 4.2, h = 3, $fn = 20);
+            translate([p[0], p[1], tray_h - 2])
+                cylinder(d = 3.4, h = skin + 6, $fn = 20);
         // Letter pockets. SCRATCH, katakana, the six labels.
         translate([18, 278, body_h - 0.7]) letter("SCRATCH", 12);
         // Katakana pocket. Liberation has no Japanese, so a bar stands in.

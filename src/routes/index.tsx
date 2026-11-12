@@ -36,6 +36,25 @@ function Home() {
       <ViewerPanel />
 
       <section className="flex flex-col gap-2 text-sm leading-relaxed">
+        <h2 className="font-mono text-xs tracking-widest text-muted uppercase">Go</h2>
+        <p className="text-muted">
+          150 × 74 × 16 mm. Fits a Mars 5 Ultra plate, 153 × 78 mm. Round 1.28 inch screen, the 75 mm fader, an encoder, cue and play, two small buttons with 3 mm LEDs, USB-C and a headphone jack. Print each half with the face on the plate.
+        </p>
+        <p className="flex flex-wrap gap-x-4 gap-y-2">
+          <a className="text-fg underline" href="/field-jog/go.scad" target="_blank" rel="noreferrer">SCAD</a>
+          <a className="text-fg underline" href="/field-jog/stl/go-top.stl" target="_blank" rel="noreferrer">Top</a>
+          <a className="text-fg underline" href="/field-jog/stl/go-bottom.stl" target="_blank" rel="noreferrer">Tray</a>
+          <a className="text-fg underline" href="/field-jog/stl/go-knob.stl" target="_blank" rel="noreferrer">Knob</a>
+          <a className="text-fg underline" href="/field-jog/stl/go-cap.stl" target="_blank" rel="noreferrer">Fader cap</a>
+          <a className="text-fg underline" href="/field-jog/stl/go-cue.stl" target="_blank" rel="noreferrer">Cue</a>
+          <a className="text-fg underline" href="/field-jog/stl/go-play.stl" target="_blank" rel="noreferrer">Play</a>
+          <a className="text-fg underline" href="/field-jog/stl/go-util.stl" target="_blank" rel="noreferrer">Utility</a>
+          <a className="text-fg underline" href="/field-jog/stl/go-bezel.stl" target="_blank" rel="noreferrer">Bezel</a>
+          <a className="text-fg underline" href="/field-jog/GO.md" target="_blank" rel="noreferrer">Notes</a>
+        </p>
+      </section>
+
+      <section className="flex flex-col gap-2 text-sm leading-relaxed">
         <h2 className="font-mono text-xs tracking-widest text-muted uppercase">Carry</h2>
         <p className="text-muted">
           230 × 300 × 22 mm. One 152 mm ring, a stationary GC9A01 in the hole, a 125 mm fader in the right lane, and six flush 12 mm latching switches. Print the top face up. Letters are pockets for a second color.

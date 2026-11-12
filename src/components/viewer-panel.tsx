@@ -11,8 +11,9 @@ import {
 } from "./viewer-parts";
 import { WIDE_PARTS, type WideLayout, type WidePart } from "./wide-deck";
 import { CARRY_PARTS, type CarryPart } from "./carry-deck";
+import { GO_PARTS, type GoPart } from "./go-deck";
 
-type Mode = "rig" | "unit" | "wide" | "carry";
+type Mode = "rig" | "unit" | "wide" | "carry" | "go";
 
 type SceneProps = {
   mode: Mode;
@@ -24,6 +25,7 @@ type SceneProps = {
   layout: WideLayout;
   wideFocus: WidePart;
   carryFocus: CarryPart;
+  goFocus: GoPart;
   onReady: () => void;
   onInteract: () => void;
   onPickFace: (face: FaceId) => void;
@@ -34,11 +36,12 @@ function slotKey(slots: Slots) {
 }
 
 export function ViewerPanel() {
-  const [mode, setMode] = useState<Mode>("carry");
+  const [mode, setMode] = useState<Mode>("go");
   const [unitFocus, setUnitFocus] = useState<ViewId>("unit");
   const [layout, setLayout] = useState<WideLayout>("twin");
   const [wideFocus, setWideFocus] = useState<WidePart>("unit");
   const [carryFocus, setCarryFocus] = useState<CarryPart>("unit");
+  const [goFocus, setGoFocus] = useState<GoPart>("unit");
   const [slots, setSlots] = useState<Slots>(EMPTY_SLOTS);
   const [activeFace, setActiveFace] = useState<FaceId>("right");
   const [spin, setSpin] = useState(true);
@@ -84,11 +87,12 @@ export function ViewerPanel() {
             focus={unitFocus}
             slots={slots}
             activeFace={activeFace}
-            watch={`${mode}:${unitFocus}:${wideFocus}:${carryFocus}:${layout}:${slotKey(slots)}:${fitTick}`}
+            watch={`${mode}:${unitFocus}:${wideFocus}:${carryFocus}:${goFocus}:${layout}:${slotKey(slots)}:${fitTick}`}
             spin={spin}
             layout={layout}
             wideFocus={wideFocus}
             carryFocus={carryFocus}
+            goFocus={goFocus}
             onReady={onReady}
             onInteract={onInteract}
             onPickFace={onPickFace}
@@ -102,7 +106,11 @@ export function ViewerPanel() {
       </div>
       <div className="flex items-center justify-between gap-3">
         <p className="min-w-0 text-sm text-muted">
-          {mode === "carry"
+          {mode === "go"
+            ? goFocus === "unit"
+              ? "150 × 74 × 16. Prints flat on a Mars 5 Ultra. Grey shell, cream bezel, orange knob and fader, black caps."
+              : `${GO_PARTS.find((part) => part.id === goFocus)?.label ?? "Part"}. The rest of the unit is hidden.`
+            : mode === "carry"
             ? carryFocus === "unit"
               ? "230 × 300 × 22. Brighter stone, cyan screen, orange hardware. Fader is 125 mm on the right. Caps are the 12 mm latching switches."
               : `${CARRY_PARTS.find((part) => part.id === carryFocus)?.label ?? "Part"}. The rest of the deck is hidden.`
@@ -134,6 +142,7 @@ export function ViewerPanel() {
             ["unit", "Parts"],
             ["wide", "Wide"],
             ["carry", "Carry"],
+            ["go", "Go"],
           ] as const
         ).map(([item, label]) => (
           <button
@@ -235,6 +244,31 @@ export function ViewerPanel() {
                 aria-pressed={selected}
                 onClick={() => {
                   setWideFocus(item.id);
+                  setSpin(true);
+                  setFitTick((n) => n + 1);
+                }}
+                className={
+                  selected
+                    ? "h-11 shrink-0 bg-accent px-3 font-mono text-xs tracking-wide text-accent-fg uppercase"
+                    : "h-11 shrink-0 border border-line px-3 font-mono text-xs tracking-wide text-fg uppercase"
+                }
+              >
+                {item.label}
+              </button>
+            );
+          })}
+        </div>
+      ) : mode === "go" ? (
+        <div className="flex gap-2 overflow-x-auto pb-1">
+          {GO_PARTS.map((item) => {
+            const selected = item.id === goFocus;
+            return (
+              <button
+                key={item.id}
+                type="button"
+                aria-pressed={selected}
+                onClick={() => {
+                  setGoFocus(item.id);
                   setSpin(true);
                   setFitTick((n) => n + 1);
                 }}

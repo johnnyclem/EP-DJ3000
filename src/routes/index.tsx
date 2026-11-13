@@ -38,12 +38,14 @@ function Home() {
       <section className="flex flex-col gap-2 text-sm leading-relaxed">
         <h2 className="font-mono text-xs tracking-widest text-muted uppercase">Go</h2>
         <p className="text-muted">
-          150 × 74 × 16 mm. Fits a Mars 5 Ultra plate, 153 × 78 mm. Round 1.28 inch screen, the 75 mm fader, an encoder, cue and play, two small buttons with 3 mm LEDs, USB-C and a headphone jack. Print each half with the face on the plate.
+          150 × 108 × 18 mm. A 72 mm platter spins around the 1.28 inch screen, which does not. Same 75 mm fader, encoder, cue and play, two small buttons with 3 mm LEDs. The shell stands on its long edge to fit a Mars 5 Ultra. The platter prints flat.
         </p>
         <p className="flex flex-wrap gap-x-4 gap-y-2">
           <a className="text-fg underline" href="/field-jog/go.scad" target="_blank" rel="noreferrer">SCAD</a>
           <a className="text-fg underline" href="/field-jog/stl/go-top.stl" target="_blank" rel="noreferrer">Top</a>
           <a className="text-fg underline" href="/field-jog/stl/go-bottom.stl" target="_blank" rel="noreferrer">Tray</a>
+          <a className="text-fg underline" href="/field-jog/stl/go-ring.stl" target="_blank" rel="noreferrer">Platter</a>
+          <a className="text-fg underline" href="/field-jog/stl/go-pinion.stl" target="_blank" rel="noreferrer">Pinion</a>
           <a className="text-fg underline" href="/field-jog/stl/go-knob.stl" target="_blank" rel="noreferrer">Knob</a>
           <a className="text-fg underline" href="/field-jog/stl/go-cap.stl" target="_blank" rel="noreferrer">Fader cap</a>
           <a className="text-fg underline" href="/field-jog/stl/go-cue.stl" target="_blank" rel="noreferrer">Cue</a>

@@ -108,7 +108,7 @@ export function ViewerPanel() {
         <p className="min-w-0 text-sm text-muted">
           {mode === "go"
             ? goFocus === "unit"
-              ? "150 × 74 × 16. Prints flat on a Mars 5 Ultra. Grey shell, cream bezel, orange knob and fader, black caps."
+              ? "150 × 108 × 18. A 72 mm platter spins around the round screen. The shell stands on its long edge to fit the Mars 5 Ultra. The platter prints flat."
               : `${GO_PARTS.find((part) => part.id === goFocus)?.label ?? "Part"}. The rest of the unit is hidden.`
             : mode === "carry"
             ? carryFocus === "unit"
